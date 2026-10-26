@@ -51,10 +51,17 @@ function renderPage() {
     fs.readFileSync(PAGE, 'utf8') + '</body></html>';
 }
 
+// JPEG starts FF D8 FF; PNG starts 89 50 4E 47.
+function isImage(b) { return b.length > 4 && ((b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) || (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47)); }
+
 function start(opts) {
   const log = opts.quiet ? () => {} : (...a) => console.log(...a);
   const merger = new Merger();
   const clients = new Set();
+  // Live video: TouchDesigner (or anything else) connects a WebSocket to any path other than /dmx and /video
+  // and sends each frame as one binary JPEG or PNG message. Pages watching /video get every frame.
+  const viewers = new Set(), feeds = new Set();
+  const video = { sources: 0, frames: 0, fps: 0, last: null, w: 0, h: 0 };
   const sockets = [];
   const dirty = new Set();
   const seen = new Set();
@@ -96,16 +103,33 @@ function start(opts) {
       res.end(fs.readFileSync(VENUES, 'utf8'));
     } else if (url === '/status.json') {
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ sources: merger.status(), clients: clients.size }));
+      res.end(JSON.stringify({ sources: merger.status(), clients: clients.size, video: videoStatus() }));
     } else {
       res.writeHead(404, { 'content-type': 'text/plain' });
       res.end('Not found');
     }
   });
   server.on('upgrade', (req, socket) => {
-    if (req.url !== '/dmx') { socket.destroy(); return; }
+    const url = req.url.split('?')[0];
     const c = ws.upgrade(req, socket);
     if (!c) return;
+    if (url === '/video') {
+      viewers.add(c);
+      socket.on('close', () => viewers.delete(c));
+      if (video.last) c.sendBinary(video.last);
+      return;
+    }
+    if (url !== '/dmx') {
+      video.sources++; feeds.add(c);
+      log('Video source connected (TouchDesigner feed)');
+      socket.on('close', () => { video.sources--; feeds.delete(c); log('Video source disconnected'); });
+      c.onmessage = (msg, binary) => {
+        if (!binary || !isImage(msg)) return;
+        video.last = msg; video.frames++;
+        for (const v of viewers) v.sendBinary(msg);
+      };
+      return;
+    }
     clients.add(c);
     socket.on('close', () => clients.delete(c));
     c.sendText(JSON.stringify({ sources: merger.status() }));
@@ -125,8 +149,10 @@ function start(opts) {
     }
     dirty.clear();
   }, 23);
+  function videoStatus() { return { sources: video.sources, fps: video.fps }; }
   const status = setInterval(() => {
-    const msg = JSON.stringify({ sources: merger.status() });
+    video.fps = video.frames; video.frames = 0;
+    const msg = JSON.stringify({ sources: merger.status(), video: videoStatus() });
     for (const c of clients) c.sendText(msg);
   }, 1000);
 
@@ -136,6 +162,8 @@ function start(opts) {
     close() {
       clearInterval(push); clearInterval(status);
       for (const c of clients) c.close();
+      for (const v of viewers) v.close();
+      for (const f of feeds) f.close();
       sockets.forEach((s) => s.close());
       return new Promise((r) => server.close(r));
     },

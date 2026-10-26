@@ -203,7 +203,9 @@ details .btn { margin: 0 10px 10px; }
           <option value="tunnel">Tunnel</option>
           <option value="text">Text marquee</option>
           <option value="media">Your image or video</option>
+          <option value="td">TouchDesigner (live)</option>
         </select></div>
+      <p class="note" id="tdNote" hidden></p>
       <div class="row two" id="textRow" hidden><label for="wallText">Text</label><input id="wallText" type="text" value="STAGE VISUALS" maxlength="60"></div>
       <div class="row two" id="mediaRow" hidden><label for="media">File</label><input id="media" type="file" accept="image/*,video/*"></div>
       <div class="row"><label for="wallW">Wall width</label><input id="wallW" type="range" min="2" max="50" step="0.5"><output for="wallW"></output></div>
@@ -398,8 +400,10 @@ const pctx = pc.getContext('2d');
 const sc = document.createElement('canvas'); sc.width = sc.height = 1;
 const sctx = sc.getContext('2d', { willReadFrequently: true });
 const wallTex = { value: null };
+// Generated looks are cheap at low resolution; your media and live TouchDesigner frames get a sharper canvas.
 function sizeWallCanvas(aspect) {
-  const w = 384, h = Math.max(48, Math.min(768, Math.round(w / aspect)));
+  const sharp = state.visual === 'media' || state.visual === 'td';
+  const w = sharp ? 1280 : 384, h = Math.max(48, Math.min(sharp ? 1280 : 768, Math.round(w / aspect)));
   if (wc.width === w && wc.height === h && wallTex.value) return;
   wc.width = w; wc.height = h;
   pc.width = 96; pc.height = Math.max(12, Math.round(96 / aspect));
@@ -1185,6 +1189,16 @@ function drawWall(t, beat, drop) {
     ctx.textBaseline = 'middle';
     const txt = (state.text || ' ').toUpperCase(), tw = ctx.measureText(txt).width, x = w - ((t * w * 0.35) % (tw + w));
     ctx.shadowColor = B; ctx.shadowBlur = 18 * pulse; ctx.fillStyle = A; ctx.fillText(txt, x, h / 2); ctx.shadowBlur = 0;
+  } else if (state.visual === 'td') {
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h);
+    const img = tdFeed.img;
+    if (img) {
+      const s = Math.max(w / img.width, h / img.height);
+      ctx.drawImage(img, (w - img.width * s) / 2, (h - img.height * s) / 2, img.width * s, img.height * s);
+    } else {
+      ctx.fillStyle = '#9a9ca6'; ctx.font = `600 ${Math.round(h * 0.1)}px "IBM Plex Sans", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(BRIDGE ? 'Waiting for TouchDesigner…' : 'TouchDesigner needs the local bridge', w / 2, h / 2, w * 0.9); ctx.textAlign = 'left';
+    }
   } else {
     ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h);
     const el = media.el, ready = el && (el.tagName === 'IMG' ? el.complete && el.naturalWidth : el.readyState >= 2);
@@ -1305,8 +1319,8 @@ function connectLive() {
   sock.onopen = () => { live.state = 'open'; renderLive(); };
   sock.onmessage = (e) => {
     if (typeof e.data === 'string') {
-      try { live.sources = JSON.parse(e.data).sources || []; } catch (_) { live.sources = []; }
-      renderLive();
+      try { const st = JSON.parse(e.data); live.sources = st.sources || []; if (st.video) Object.assign(tdFeed, { sources: st.video.sources, fps: st.video.fps }); } catch (_) { live.sources = []; }
+      renderLive(); renderTd();
       return;
     }
     const u = new DataView(e.data).getUint16(0);
@@ -1327,6 +1341,32 @@ function renderLive() {
   else { st = 'rx'; html = live.sources.map((s) => `${esc(s.name)} · ${s.proto} U${s.universe} · ${s.pps} pkt/s`).join('<br>'); }
   el.dataset.state = st;
   el.innerHTML = html;
+}
+/* ---------- Live video from TouchDesigner (via the local bridge) ---------- */
+// TouchDesigner sends each frame as a JPEG over a WebSocket to the bridge (see touchdesigner/README.md);
+// the page decodes the newest frame and skips any that arrive while it is still decoding.
+const tdFeed = { img: null, busy: false, sources: 0, fps: 0, touched: false };
+function connectVideo() {
+  if (!BRIDGE) return;
+  const sock = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/video');
+  sock.binaryType = 'arraybuffer';
+  sock.onmessage = (e) => {
+    if (typeof e.data === 'string' || tdFeed.busy || !window.createImageBitmap) return;
+    tdFeed.busy = true;
+    createImageBitmap(new Blob([e.data])).then((bm) => {
+      if (tdFeed.img && tdFeed.img.close) tdFeed.img.close();
+      tdFeed.img = bm;
+      if (!tdFeed.touched && state.visual !== 'td') { state.visual = 'td'; syncInputs(); sizeWallCanvas(state.wallW / state.wallH); }
+    }).catch(() => {}).then(() => { tdFeed.busy = false; });
+  };
+  sock.onclose = () => setTimeout(connectVideo, 2000);
+}
+function renderTd() {
+  const el = $('#tdNote');
+  el.hidden = state.visual !== 'td';
+  if (!BRIDGE) el.textContent = 'Live TouchDesigner video needs the local bridge: run npm start and open http://localhost:8080. The touchdesigner folder has the sender script.';
+  else if (!tdFeed.sources) el.textContent = 'Waiting for TouchDesigner. Point its WebSocket DAT at this computer, port 8080, and run the sender script.';
+  else el.textContent = `TouchDesigner connected · ${tdFeed.fps} fps`;
 }
 const esc = (t) => String(t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 
@@ -1562,6 +1602,7 @@ function syncInputs() {
   ['program', 'dimfx', 'colorMode', 'visual', 'lasers'].forEach((k) => { $('#' + k).value = state[k]; });
   $('#textRow').hidden = state.visual !== 'text';
   $('#mediaRow').hidden = state.visual !== 'media';
+  renderTd();
 }
 let pending = 0;
 function scheduleBuild(cam) { cancelAnimationFrame(pending); pending = requestAnimationFrame(() => { build(); if (cam) goCam(activeCam === 'crowd' ? 'foh' : activeCam, false); }); }
@@ -1579,7 +1620,7 @@ Object.keys(fmt).forEach((k) => {
 ['program', 'dimfx', 'colorMode', 'lasers'].forEach((k) => $('#' + k).addEventListener('change', (e) => { state[k] = e.target.value; }));
 $('#quality').addEventListener('change', (e) => setQuality(e.target.value));
 $('#control').addEventListener('change', (e) => { state.control = e.target.value; live.touched = true; });
-$('#visual').addEventListener('change', (e) => { state.visual = e.target.value; syncInputs(); if ($('#sceneDetails').open) $('#sceneJson').textContent = sceneJSON(); });
+$('#visual').addEventListener('change', (e) => { state.visual = e.target.value; tdFeed.touched = true; syncInputs(); sizeWallCanvas(state.wallW / state.wallH); if ($('#sceneDetails').open) $('#sceneJson').textContent = sceneJSON(); });
 $('#colA').addEventListener('input', (e) => { state.colA = e.target.value; });
 $('#colB').addEventListener('input', (e) => { state.colB = e.target.value; });
 $('#laserCol').addEventListener('input', (e) => { state.laserCol = e.target.value; });
@@ -1635,6 +1676,7 @@ $('#quality').value = state.quality;
 renderMusic();
 renderLive();
 connectLive();
+connectVideo();
 build();
 setQuality(state.quality);
 goCam('foh', true);
