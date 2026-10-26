@@ -60,6 +60,10 @@ Patch the rig as the generic **16-channel spot** below, starting at universe 1, 
 
 Free consoles that can drive this: **QLC+** (sACN or Art-Net output plugin) and **grandMA3 onPC** (sACN output in DMX protocols). Real fixture types will replace this profile once GDTF import lands.
 
+## Live TouchDesigner video
+
+With the bridge running, TouchDesigner can send its output straight onto the LED walls as JPEG frames over a WebSocket. This works on macOS and Windows without Syphon, Spout or NDI. Setup takes a WebSocket DAT and an Execute DAT; see [touchdesigner/README.md](touchdesigner/README.md).
+
 ## Layout
 
 ```
@@ -69,12 +73,12 @@ bridge/server.js     HTTP page + WebSocket /dmx + UDP receivers, merges sources,
 bridge/dmx.js        sACN and Art-Net parsers and builders, source merge
 bridge/ws.js         minimal WebSocket server
 tools/fake-console.js  sends a test show over sACN or Art-Net
+touchdesigner/       sender script for live TouchDesigner video
 test/                node --test suite (npm test)
 ```
 
 ## Roadmap
 
-1. Live TouchDesigner video on the LED walls (NDI or Spout/Syphon through the bridge).
-2. MVR import and export, so rigs from Capture, Vectorworks or grandMA3 load directly.
-3. GDTF fixture types in place of the generic spot, including real beam angles and DMX modes.
-4. Real venue library built from published tech specs.
+1. MVR import and export, so rigs from Capture, Vectorworks or grandMA3 load directly.
+2. GDTF fixture types in place of the generic spot, including real beam angles and DMX modes.
+3. Real venue library built from published tech specs.
