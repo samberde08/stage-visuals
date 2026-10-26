@@ -86,3 +86,12 @@ test('outdoor scenery uses shipped HDRIs and known feature types', () => {
     }
   }
 });
+
+test('venue photos name a Commons file and what it shows', () => {
+  const withPhoto = VENUES.filter((v) => v.photo);
+  assert.ok(withPhoto.length >= 15, 'most venues have a photo');
+  for (const v of withPhoto) {
+    assert.match(v.photo.file, /^[^/\s]+\.(jpe?g|png)$/i, v.id);
+    assert.ok(['show', 'site', 'outside'].includes(v.photo.view), v.id);
+  }
+});

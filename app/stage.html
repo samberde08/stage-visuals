@@ -59,6 +59,11 @@ input[type="color"] { width: 100%; height: 30px; padding: 0 2px; background: var
 input[type="file"] { font: 12px var(--body); color: var(--muted); width: 100%; }
 .readout { font-family: var(--mono); font-size: 11.5px; color: var(--steel); font-variant-numeric: tabular-nums; }
 .note { font-size: 12px; color: var(--muted); margin: 0; }
+.venue-photo { margin: 0 0 10px; display: grid; gap: 5px; }
+.venue-photo img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 4px; background: rgba(255,255,255,.04); }
+.venue-photo img[hidden] { display: none; }
+.venue-photo figcaption { font-size: 11px; line-height: 1.4; color: var(--muted); }
+.venue-photo a { color: inherit; }
 .venue-note p { margin: 0 0 6px; }
 .venue-note ul { margin: 0 0 6px; padding-left: 16px; }
 .venue-note li { margin-bottom: 3px; }
@@ -106,6 +111,8 @@ details .btn { margin: 0 10px 10px; }
     <div class="cams" id="cams">
       <button type="button" data-cam="foh" aria-pressed="true">FOH</button>
       <button type="button" data-cam="crowd" aria-pressed="false">Crowd</button>
+      <button type="button" data-cam="dj" aria-pressed="false">DJ view</button>
+      <button type="button" data-cam="behind" aria-pressed="false">Behind DJ</button>
       <button type="button" data-cam="walk" aria-pressed="false">Walk</button>
       <button type="button" data-cam="wide" aria-pressed="false">Wide</button>
       <button type="button" data-cam="drone" aria-pressed="false">Drone</button>
@@ -120,6 +127,10 @@ details .btn { margin: 0 10px 10px; }
     <section class="group">
       <div class="eyebrow"><span>Venue</span><span>real venue or template</span></div>
       <div class="row two"><label for="venuePick">Real venue</label><select id="venuePick"></select></div>
+      <figure class="venue-photo" id="venuePhoto" hidden>
+        <img id="venueImg" alt="" decoding="async">
+        <figcaption id="venueCap"></figcaption>
+      </figure>
       <div class="note venue-note" id="venueNote" hidden></div>
       <div class="chips" id="templates"></div>
     </section>
@@ -204,7 +215,8 @@ details .btn { margin: 0 10px 10px; }
       <div class="row"><label for="tod">Time of day</label><input id="tod" type="range" min="0" max="24" step="0.25" value="21.5"><output for="tod"></output></div>
       <div class="row two"><label for="surround">Surroundings</label>
         <select id="surround">
-          <option value="on">Real location: HDRI sky and scenery</option>
+          <option value="on">Real location: rendered sky and scenery</option>
+          <option value="photo">Real location: photo sky (HDRI)</option>
           <option value="off">Off: plain sky</option>
         </select></div>
       <div class="row two"><label for="lens">Lens</label>
@@ -454,7 +466,6 @@ const HDRI = {
   moonless_golf: { sky: 0.162, night: true },
 };
 const GENERIC_SCENERY = { hdri: 'quarry_01', dusk: 'spruit_sunrise', night: 'dikhololo_night', ground: 'grass', features: [] };
-const GROUND = { grass: 0x1c2618, dirt: 0x4a3a2a, sand: 0x6e6049, rock: 0x553425, asphalt: 0x222327, concrete: 0x37373a };
 const HDRI_BASE = window.STAGE_HDRI_BASE || 'hdri/';
 const hdriCache = {};
 function loadHdri(name) {
@@ -509,6 +520,34 @@ void main(){
 }));
 dome.renderOrder = -10; dome.frustumCulled = false; dome.visible = false;
 scene.add(dome);
+// Clouds over the rendered sky, sharp at any zoom where a 1k photo sky is a blur. A layer of drifting noise projected
+// onto a flat cloud deck, shaded towards and away from the sun, fading into the horizon haze. The haze band also hides
+// where the ground plane ends.
+const clouds = new THREE.Mesh(new THREE.SphereGeometry(500, 48, 24), new THREE.ShaderMaterial({
+  uniforms: { uSun: { value: new THREE.Vector3(0, 1, 0) }, uLit: { value: new THREE.Color() }, uShade: { value: new THREE.Color() }, uFogC: { value: new THREE.Color() }, uCover: { value: 0.3 }, uTime: shared.uTime, ...outU },
+  vertexShader: `varying vec3 vDir; void main(){ vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `${OUT_GLSL}
+uniform vec3 uSun, uLit, uShade, uFogC; uniform float uCover, uTime; varying vec3 vDir;
+float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float n2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h2(i), h2(i + vec2(1, 0)), f.x), mix(h2(i + vec2(0, 1)), h2(i + vec2(1, 1)), f.x), f.y); }
+float fbm(vec2 p){ float s = 0.0, a = 0.5; mat2 r = mat2(0.8, -0.6, 0.6, 0.8); for (int i = 0; i < 6; i++) { s += a * n2(p); p = r * p * 2.03; a *= 0.5; } return s; }
+void main(){
+  vec3 d = normalize(vDir);
+  float up = max(d.y, 0.0);
+  vec2 uv = d.xz / (up + 0.07) * 0.9 + vec2(uTime * 0.006, uTime * 0.0021);
+  float n = fbm(uv), th = 0.62 - 0.3 * uCover, c = smoothstep(th, th + 0.16, n) * smoothstep(0.0, 0.1, up);
+  // Thicker cloud is darker underneath; the side towards the sun catches light.
+  float n2s = fbm(uv + normalize(uSun.xz + 1e-4) * 0.12);
+  float lit = clamp(0.55 + (n - n2s) * 4.0, 0.15, 1.0), toward = pow(max(dot(d, uSun), 0.0), 6.0);
+  vec3 col = mix(uShade, uLit, lit) * (1.0 + 0.8 * toward) * (1.0 - 0.35 * smoothstep(th + 0.1, th + 0.35, n));
+  float haze = 1.0 - smoothstep(-0.01, 0.1, d.y);
+  col = mix(col, uFogC, haze); float a = max(c * 0.96, haze);
+  gl_FragColor = vec4(outColor(col), a);
+}`,
+  side: THREE.BackSide, transparent: true, depthWrite: false, fog: false,
+}));
+clouds.renderOrder = -8; clouds.frustumCulled = false; clouds.visible = false;
+scene.add(clouds);
 const pmrem = new THREE.PMREMGenerator(renderer), envCache = new Map();
 const surround = { key: '', spec: null, day: null, dusk: null, night: null, env: null, glow: [] };
 const sceneryU = { uDay: { value: 0 }, uLight: { value: 0 }, uSun: { value: new THREE.Vector3(0, 1, 0) }, uFog: { value: new THREE.Color() }, uTime: shared.uTime };
@@ -669,15 +708,10 @@ const SCENERY = {
     if (kind === 'palm') {
       trunk = new THREE.CylinderGeometry(0.22, 0.34, 1, 6); trunk.translate(0, 0.5, 0);
       crown = palmCrown();
-      cMat = new THREE.MeshStandardMaterial({ color: 0x2c4a22, roughness: 0.9, side: THREE.DoubleSide, flatShading: true });
-    } else if (kind === 'broad') {
-      trunk = new THREE.CylinderGeometry(0.25, 0.4, 5, 6); trunk.translate(0, 2.5, 0);
-      crown = new THREE.IcosahedronGeometry(4.2, 1); crown.scale(1, 0.85, 1); crown.translate(0, 8, 0);
-      cMat = new THREE.MeshStandardMaterial({ color: 0x24361c, roughness: 1, flatShading: true });
+      cMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, side: THREE.DoubleSide, flatShading: true });
     } else {
-      trunk = new THREE.CylinderGeometry(0.22, 0.38, 9, 6); trunk.translate(0, 4.5, 0);
-      crown = new THREE.ConeGeometry(3, 11, 7); crown.translate(0, 12.5, 0);
-      cMat = new THREE.MeshStandardMaterial({ color: 0x15231a, roughness: 1, flatShading: true });
+      ({ trunk, crown } = treeParts(kind));
+      cMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1 });
     }
     const trunks = new THREE.InstancedMesh(trunk, new THREE.MeshStandardMaterial({ color: kind === 'palm' ? 0x5a4a3a : 0x2a2018, roughness: 1 }), n);
     const crowns = new THREE.InstancedMesh(crown, cMat, n), m = state.venueMeta || {};
@@ -703,6 +737,7 @@ const SCENERY = {
       k++;
     }
     trunks.count = crowns.count = k;
+    tintTrees(crowns, kind === 'palm' ? 0x2c4a22 : kind === 'broad' ? 0x2a3d1f : 0x17271b, n);
     g.add(trunks, crowns);
     g.userData.treeSpots = (g.userData.treeSpots || []).concat(spots);
   },
@@ -754,23 +789,165 @@ function buildScenery() {
   venue.add(g);
 }
 
+/* ---------- Surfaces: procedural textures, mapped by world position ---------- */
+// Boxes and lathes have no sensible uvs at venue scale, so surfaces are textured by world position instead: each
+// pixel blends three projections by its normal (triplanar), at a real size in metres per tile. A second, much larger
+// sample breaks up the repeat, and the texture's brightness bumps the surface and varies its roughness, so concrete
+// looks poured, decks look scuffed and rock looks layered. The textures are drawn once, on first use, from tileable noise.
+function tileNoise(n, seed) {
+  // n x n lattice of random values that wraps, read back with smooth interpolation.
+  const v = new Float32Array(n * n);
+  let s = seed * 9301 + 49297;
+  for (let i = 0; i < v.length; i++) { s = (s * 9301 + 49297) % 233280; v[i] = s / 233280; }
+  return (x, y) => {
+    const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi, ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy);
+    const a = ((xi % n) + n) % n, b = ((yi % n) + n) % n, a1 = (a + 1) % n, b1 = (b + 1) % n;
+    const p = v[b * n + a], q = v[b * n + a1], r = v[b1 * n + a], t = v[b1 * n + a1];
+    return p + (q - p) * ux + (r - p) * uy + (p - q - r + t) * ux * uy;
+  };
+}
+// Sum of octaves over a unit tile; u, v in 0..1 and the result wraps at the tile edge.
+function fbmTile(seed, base, oct) {
+  const layers = Array.from({ length: oct }, (_, i) => ({ f: base << i, n: tileNoise(base << i, seed + i * 17) }));
+  return (u, v) => { let s = 0, a = 0.5, w = 0; layers.forEach((l) => { s += l.n(u * l.f, v * l.f) * a; w += a; a *= 0.5; }); return s / w; };
+}
+const SURF_SIZE = 512;
+const SURF = {
+  // Poured concrete: mottled, with darker stains and a few pits.
+  concrete(u, v, f) { const m = f.a(u, v), st = f.b(u, v), g = f.c(u, v); const pit = g > 0.78 ? 0.7 : 1; const c = (0.42 + 0.22 * (m - 0.5) - 0.18 * Math.max(0, st - 0.58) * 3) * pit * (0.94 + 0.12 * g); return [c, c * 0.985, c * 0.96]; },
+  // Polished dark concrete floor, the usual club floor: low contrast, a few saw cuts on a 3 m grid.
+  floor(u, v, f) { const m = f.a(u, v), g = f.c(u, v), cut = (u * 2 % 1 < 0.004 || v * 2 % 1 < 0.004) ? 0.55 : 1; const c = (0.2 + 0.1 * (m - 0.5) + 0.04 * (g - 0.5)) * cut; return [c, c, c * 1.03]; },
+  // Black stage marley over ply: near black, with pale scuffs and the sheet seams of 8 x 4 ft boards.
+  deck(u, v, f) { const m = f.a(u, v), sc = f.b(u * 3, v), g = f.c(u, v); const seam = (u * 2 % 1 < 0.003 || v * 1 % 1 < 0.003) ? 0.6 : 1; const c = (0.07 + 0.02 * m + 0.05 * Math.max(0, sc - 0.62) * 4 + 0.012 * g) * seam; return [c, c, c * 1.04]; },
+  // Painted black brick, as in most clubs: 215 x 65 mm bricks with lighter mortar showing through the paint.
+  brick(u, v, f) {
+    const rows = 30, row = Math.floor(v * rows), bx = u * 8 + (row % 2) * 0.5, fy = v * rows % 1, fx = bx % 1;
+    const mortar = fy < 0.13 || fx < 0.04, g = f.c(u, v), id = f.a((Math.floor(bx) + 0.5) / 8, (row + 0.5) / rows);
+    const c = mortar ? 0.1 + 0.03 * g : 0.06 + 0.04 * id + 0.02 * g; return [c, c * 0.97, c * 0.95];
+  },
+  // Red sandstone, layered: horizontal strata of varying tone, weathering streaks and cracks.
+  sandstone(u, v, f) {
+    // A few broad beds of differing tone, dark streaks of desert varnish running down, and fine grain.
+    const w = f.a(u, v), bed = 0.5 + 0.5 * Math.sin((v + 0.08 * w) * Math.PI * 2 * 4);
+    const streak = f.b(u * 4, v * 0.25), varnish = Math.max(0, streak - 0.55) * 1.6, g = f.c(u, v);
+    const crack = Math.abs(f.b(u * 2, v * 2) - 0.5) < 0.01 ? 0.7 : 1;
+    const k = (0.82 + 0.16 * bed + 0.3 * (w - 0.5)) * (1 - varnish * 0.5) * crack * (0.92 + 0.16 * g);
+    return [0.58 * k, 0.29 * k, 0.19 * k];
+  },
+  // Field grass, worn in patches to dry stalks and dirt.
+  grass(u, v, f) {
+    const m = f.a(u, v), d = f.b(u, v), g = f.c(u, v), bare = Math.max(0, Math.min(1, (d - 0.6) * 5));
+    const gr = [0.13 + 0.06 * m, 0.2 + 0.08 * m, 0.08], dry = [0.32, 0.27, 0.15], dirt = [0.25, 0.19, 0.13];
+    const k = 0.8 + 0.4 * g, t = Math.max(0, (m - 0.55) * 2);
+    return [0, 1, 2].map((i) => ((gr[i] * (1 - t) + dry[i] * t) * (1 - bare) + dirt[i] * bare) * k);
+  },
+  dirt(u, v, f) { const m = f.a(u, v), g = f.c(u, v), stone = g > 0.8 ? 1.25 : 1; const k = (0.85 + 0.3 * m) * (0.9 + 0.2 * g) * stone; return [0.3 * k, 0.23 * k, 0.16 * k]; },
+  sand(u, v, f) { const m = f.a(u, v), g = f.c(u, v), rip = 0.5 + 0.5 * Math.sin((v + 0.08 * m) * Math.PI * 2 * 9); const k = (0.88 + 0.16 * m + 0.05 * rip) * (0.95 + 0.1 * g); return [0.52 * k, 0.44 * k, 0.32 * k]; },
+  // Red desert soil with clumps of scrub, as on the foothills around Red Rocks.
+  rock(u, v, f) {
+    const m = f.a(u, v), scrub = Math.max(0, Math.min(1, (f.b(u, v) - 0.56) * 6)), g = f.c(u, v);
+    const soil = [0.42, 0.22, 0.14].map((x) => x * (0.8 + 0.35 * m) * (0.9 + 0.2 * g)), bush = [0.12, 0.15, 0.08].map((x) => x * (0.8 + 0.4 * g));
+    return soil.map((x, i) => x * (1 - scrub) + bush[i] * scrub);
+  },
+  asphalt(u, v, f) { const m = f.a(u, v), g = f.c(u, v), agg = g > 0.72 ? 1.5 : 1; const c = (0.11 + 0.04 * m) * agg; return [c, c, c * 1.02]; },
+  // Weathered bench slats: long planks with grain, greyed by sun.
+  wood(u, v, f) { const plank = Math.floor(v * 10), grain = f.b(u * 0.25, v * 6 + plank * 0.37), gap = v * 10 % 1 < 0.05 ? 0.6 : 1; const k = (0.85 + 0.25 * grain + 0.1 * f.a((plank + 0.5) / 10, u)) * gap; return [0.34 * k, 0.27 * k, 0.2 * k]; },
+  // Pleated black stage skirt: soft vertical folds.
+  skirt(u, v, f) { const p = 0.5 + 0.5 * Math.sin(u * Math.PI * 2 * 24 + 1.5 * f.a(u, v)); const c = 0.025 + 0.035 * p; return [c, c, c * 1.05]; },
+  // Speaker grille: black perforated steel.
+  grille(u, v, f) { const hole = Math.hypot((u * 48) % 1 - 0.5, (v * 48) % 1 - 0.5) < 0.3; const c = hole ? 0.015 : 0.07 + 0.02 * f.c(u, v); return [c, c, c]; },
+};
+const surfTex = {};
+function surfTexture(kind) {
+  if (surfTex[kind]) return surfTex[kind];
+  const c = document.createElement('canvas'); c.width = c.height = SURF_SIZE;
+  const x = c.getContext('2d'), img = x.createImageData(SURF_SIZE, SURF_SIZE), seed = kind.length * 13 + kind.charCodeAt(0);
+  let avg = 0;
+  const f = { a: fbmTile(seed, 4, 5), b: fbmTile(seed + 50, 8, 4), c: fbmTile(seed + 90, 64, 2) }, fn = SURF[kind];
+  for (let j = 0; j < SURF_SIZE; j++) for (let i = 0; i < SURF_SIZE; i++) {
+    const rgb = fn(i / SURF_SIZE, j / SURF_SIZE, f), o = (j * SURF_SIZE + i) * 4;
+    // The canvas holds sRGB, so the linear values are encoded on the way in.
+    for (let k = 0; k < 3; k++) img.data[o + k] = Math.round(255 * Math.pow(Math.min(1, Math.max(0, rgb[k])), 1 / 2.2));
+    img.data[o + 3] = 255; avg += Math.max(0.002, rgb[1]);
+  }
+  x.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.avg = avg / (SURF_SIZE * SURF_SIZE);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.encoding = THREE.sRGBEncoding; t.anisotropy = 8;
+  return (surfTex[kind] = t);
+}
+// A standard material textured by world position. tile: metres per repeat. bump: how strongly brightness reads as
+// relief. tint multiplies the texture.
+function surf(kind, tile, opt = {}) {
+  const m = new THREE.MeshStandardMaterial({ color: opt.tint ?? 0xffffff, roughness: opt.roughness ?? 0.9, metalness: opt.metalness ?? 0, side: opt.side ?? THREE.FrontSide });
+  m.map = surfTexture(kind);
+  const u = { uAvg: { value: m.map.avg }, uTile: { value: tile }, uBump: { value: opt.bump ?? 1 }, uRVar: { value: opt.rvar ?? 0.35 } };
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, u);
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vTpP; varying vec3 vTpN;')
+      .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+  vec4 tpw = vec4(transformed, 1.0);
+  #ifdef USE_INSTANCING
+  tpw = instanceMatrix * tpw;
+  #endif
+  vTpP = (modelMatrix * tpw).xyz; vTpN = normalize(mat3(modelMatrix) * objectNormal);`);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uTile, uBump, uRVar, uAvg; varying vec3 vTpP; varying vec3 vTpN; float tpH;')
+      .replace('#include <map_fragment>', `
+  vec3 tw = pow(abs(normalize(vTpN)), vec3(4.0)); tw /= tw.x + tw.y + tw.z;
+  vec3 tp = vTpP / uTile;
+  vec4 tc = texture2D(map, tp.zy) * tw.x + texture2D(map, tp.xz) * tw.y + texture2D(map, tp.xy) * tw.z;
+  // Large-scale variation, sampled on a rotated, 7.3x larger grid so the two repeats never line up.
+  vec2 big = mat2(0.8, -0.6, 0.6, 0.8) * (tp.xz * tw.y + tp.zy * tw.x + tp.xy * tw.z) / 7.3;
+  float macro = mapTexelToLinear(texture2D(map, big)).g / uAvg;
+  tc = mapTexelToLinear(tc);
+  tc.rgb *= mix(1.0, clamp(macro, 0.6, 1.4), 0.5);
+  tpH = dot(tc.rgb, vec3(0.3, 0.59, 0.11));
+  diffuseColor *= tc;`)
+      .replace('#include <roughnessmap_fragment>', `float roughnessFactor = roughness * (1.0 + uRVar * (0.5 - smoothstep(0.0, 0.25, tpH)) * 2.0);`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+  {
+    // Bump from brightness: lighter is higher. Screen-space derivatives keep it cheap.
+    vec3 tpDx = dFdx(-vViewPosition), tpDy = dFdy(-vViewPosition);
+    float tpHx = dFdx(tpH), tpHy = dFdy(tpH);
+    vec3 tpR1 = cross(tpDy, normal), tpR2 = cross(normal, tpDx);
+    float tpDet = dot(tpDx, tpR1);
+    normal = normalize(abs(tpDet) * normal - uBump * sign(tpDet) * (tpHx * tpR1 + tpHy * tpR2));
+  }`);
+  };
+  m.customProgramCacheKey = () => 'surf';
+  m.userData.surf = kind;
+  return m;
+}
+
 const M = {
-  floor: new THREE.MeshStandardMaterial({ color: 0x101116, roughness: 0.42, metalness: 0.25 }),
-  deck: new THREE.MeshStandardMaterial({ color: 0x24252b, roughness: 0.65 }),
+  floor: surf('floor', 6, { roughness: 0.32, rvar: 0.8, bump: 0.25, metalness: 0.1 }),
+  deck: surf('deck', 4.88, { roughness: 0.6, rvar: 0.6, bump: 0.25 }),
   deckEdge: new THREE.MeshStandardMaterial({ color: 0x0c0c0e, roughness: 0.9 }),
-  wall: new THREE.MeshStandardMaterial({ color: 0x15161b, roughness: 0.95 }),
+  skirt: surf('skirt', 2.4, { roughness: 1, bump: 2, rvar: 0 }),
+  wall: surf('brick', 1.72, { roughness: 0.92, bump: 0.7 }),
   seat: new THREE.MeshStandardMaterial({ color: 0x3a2228, roughness: 0.85 }),
-  bowl: new THREE.MeshStandardMaterial({ color: 0x2a2d36, roughness: 0.9, side: THREE.DoubleSide }),
+  bowl: surf('concrete', 5, { tint: 0x8a8a8a, roughness: 0.95, bump: 0.3, side: THREE.DoubleSide }),
   truss: new THREE.MeshStandardMaterial({ color: 0xb4b7bf, roughness: 0.35, metalness: 0.85 }),
   lacing: new THREE.LineBasicMaterial({ color: 0x80838c }),
   body: new THREE.MeshStandardMaterial({ color: 0x1c1d22, roughness: 0.45, metalness: 0.5 }),
   pa: new THREE.MeshStandardMaterial({ color: 0x0d0d10, roughness: 0.7 }),
+  grille: surf('grille', 0.6, { roughness: 0.6, metalness: 0.4, bump: 0, rvar: 0 }),
   frame: new THREE.MeshStandardMaterial({ color: 0x0a0a0c, roughness: 0.6 }),
-  concrete: new THREE.MeshStandardMaterial({ color: 0x2c2d31, roughness: 0.95 }),
-  stand: new THREE.MeshStandardMaterial({ color: 0x23252d, roughness: 0.9 }),
-  turf: new THREE.MeshStandardMaterial({ color: 0x141c16, roughness: 0.9 }),
+  concrete: surf('concrete', 4, { roughness: 0.95, bump: 0.6 }),
+  stand: surf('concrete', 5, { tint: 0x6a6c72, roughness: 0.95 }),
+  turf: surf('grass', 5, { tint: 0x9aa59a, roughness: 0.95 }),
+  sandstone: surf('sandstone', 30, { roughness: 0.95, bump: 0.8, rvar: 0.2 }),
+  metal: new THREE.MeshStandardMaterial({ color: 0x8b8f96, roughness: 0.45, metalness: 0.8 }),
+  ceiling: surf('concrete', 4, { tint: 0x2a2a2e, roughness: 0.95 }),
   fabric: new THREE.MeshStandardMaterial({ color: 0x1b1c24, roughness: 1, side: THREE.DoubleSide, transparent: true, opacity: 0.6, depthWrite: false }),
+  roof: new THREE.MeshStandardMaterial({ color: 0x0b0c0f, roughness: 0.85, side: THREE.DoubleSide }),
+  wood: surf('wood', 3, { roughness: 0.85, bump: 0.3 }),
 };
+const GROUND_SURF = { grass: ['grass', 5], dirt: ['dirt', 4], sand: ['sand', 5], rock: ['rock', 9], asphalt: ['asphalt', 4], concrete: ['concrete', 4] };
+const groundMats = {};
+function groundMat(kind) { const [k, t] = GROUND_SURF[kind] || GROUND_SURF.grass; return groundMats[k] || (groundMats[k] = surf(k, t, { roughness: 0.95, bump: 1.2 })); }
 
 /* ---------- LED content canvas ---------- */
 const wc = document.createElement('canvas');
@@ -893,10 +1070,15 @@ let venue = new THREE.Group(); scene.add(venue);
 let receivers = [], fixtures = [], trussList = [], screens = [], hangLines = [], camSet = {}, mainWall = null;
 let crowds = [], laserSpots = [], lasers = [], glowMats = [];
 
+const PA_MATS = [M.pa, M.pa, M.pa, M.pa, M.grille, M.pa];
 function box(w, h, d, x, y, z, mat, recv) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
   m.position.set(x, y, z);
   venue.add(m);
+  // Stage decks get a pleated black skirt on every side.
+  if (mat === M.deck && h > 0.3) [[w + 0.03, 0.02, 0, d / 2 + 0.012], [w + 0.03, 0.02, 0, -d / 2 - 0.012], [0.02, d, w / 2 + 0.012, 0], [0.02, d, -w / 2 - 0.012, 0]].forEach(([sw, sd, dx, dz]) => {
+    const k = new THREE.Mesh(new THREE.BoxGeometry(sw, h - 0.04, sd), M.skirt); k.position.set(x + dx, y - 0.02, z + dz); venue.add(k);
+  });
   if (recv) receivers.push(m);
   return m;
 }
@@ -1113,10 +1295,10 @@ function seatRow(w, x, y, z, rotY = 0) {
 // Trees around a festival field, with a few standing in the crowd. Everything inside cw x cd stays clear.
 function forest(cw, cd) {
   const n = 170, inside = 14, mtx = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), p = new THREE.Vector3();
-  const trunk = new THREE.CylinderGeometry(0.22, 0.38, 9, 6); trunk.translate(0, 4.5, 0);
-  const crown = new THREE.ConeGeometry(3, 10, 7); crown.translate(0, 12, 0);
+  const { trunk, crown } = treeParts('pine');
   const trunks = new THREE.InstancedMesh(trunk, new THREE.MeshStandardMaterial({ color: 0x1d1712, roughness: 1 }), n);
-  const crowns = new THREE.InstancedMesh(crown, new THREE.MeshStandardMaterial({ color: 0x0e1811, roughness: 1 }), n);
+  const crowns = new THREE.InstancedMesh(crown, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1 }), n);
+  tintTrees(crowns, 0x12201a, n);
   for (let i = 0, k = 0; k < n && i < n * 20; i++) {
     let x, z;
     if (k < inside) { x = (Math.random() - 0.5) * cw * 0.9; z = 8 + Math.random() * (cd - 6); if (Math.abs(x) < 7) continue; }
@@ -1127,6 +1309,252 @@ function forest(cw, cd) {
     trunks.count = crowns.count = k;
   }
   venue.add(trunks); venue.add(crowns);
+}
+
+/* ---------- DJ booth ---------- */
+// A DJ table with two media players and a four-channel mixer, booth monitors either side and the DJ behind it.
+// Big stages put it on a riser with an LED fascia. The decks are drawn on canvases: jog wheels, waveform screens,
+// knobs, faders and level meters, with the lit parts in an emissive map so they glow in the dark.
+function gearCanvas(kind, lit) {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 320;
+  const x = c.getContext('2d'), W = 256, H = 320;
+  x.fillStyle = lit ? '#000' : '#1b1c20'; x.fillRect(0, 0, W, H);
+  const glow = (col) => (lit ? col : '#2a2d33');
+  if (kind === 'player') {
+    // Screen across the top, a waveform on it; jog wheel below; play and cue at bottom left; tempo fader on the right.
+    x.fillStyle = lit ? '#061a33' : '#0b0d10'; x.fillRect(28, 18, 200, 92);
+    x.strokeStyle = glow('#39a7ff'); x.lineWidth = 2; x.beginPath();
+    for (let i = 0; i < 196; i++) { const h = 6 + 26 * Math.abs(Math.sin(i * 0.31) * Math.sin(i * 0.071 + 1)); x.moveTo(30 + i, 64 - h); x.lineTo(30 + i, 64 + h); }
+    x.stroke();
+    x.fillStyle = glow('#ff3b30'); x.fillRect(118, 22, 2, 84);
+    const cx = 116, cy = 205, R = 76;
+    x.fillStyle = lit ? '#000' : '#2b2e34'; x.beginPath(); x.arc(cx, cy, R, 0, Math.PI * 2); x.fill();
+    x.strokeStyle = lit ? '#000' : '#5b6068'; x.lineWidth = 5; x.beginPath(); x.arc(cx, cy, R - 4, 0, Math.PI * 2); x.stroke();
+    x.fillStyle = lit ? '#0b2a52' : '#111317'; x.beginPath(); x.arc(cx, cy, 26, 0, Math.PI * 2); x.fill();
+    x.strokeStyle = glow('#5fb8ff'); x.lineWidth = 3; x.beginPath(); x.arc(cx, cy, 30, -1.2, 1.9); x.stroke();
+    [['#33d17a', 38], ['#ff9f0a', 76]].forEach(([col, dx]) => { x.fillStyle = glow(col); x.beginPath(); x.arc(dx - 10, 296, 13, 0, Math.PI * 2); x.fill(); });
+    x.fillStyle = lit ? '#000' : '#0d0e11'; x.fillRect(214, 140, 12, 150);
+    x.fillStyle = lit ? '#000' : '#9aa0a8'; x.fillRect(206, 206, 28, 12);
+    for (let i = 0; i < 4; i++) { x.fillStyle = glow(['#ff375f', '#30d158', '#0a84ff', '#ffd60a'][i]); x.fillRect(30 + i * 48, 120, 38, 9); }
+  } else {
+    // Four channel strips: gain and three EQ knobs, a level meter, a channel fader; crossfader along the bottom.
+    for (let ch = 0; ch < 4; ch++) {
+      const cx = 40 + ch * 58;
+      for (let k = 0; k < 4; k++) {
+        x.fillStyle = lit ? '#000' : '#3a3d44'; x.beginPath(); x.arc(cx, 34 + k * 40, 13, 0, Math.PI * 2); x.fill();
+        x.strokeStyle = lit ? '#000' : '#d8dce2'; x.lineWidth = 2; x.beginPath(); x.moveTo(cx, 34 + k * 40); const a = -2 + ch * 0.7 + k * 0.9; x.lineTo(cx + Math.cos(a) * 11, 34 + k * 40 + Math.sin(a) * 11); x.stroke();
+      }
+      for (let i = 0; i < 12; i++) { const on = i < 4 + ((ch * 5 + 3) % 7); x.fillStyle = on ? glow(i > 9 ? '#ff3b30' : i > 7 ? '#ffcc00' : '#34c759') : (lit ? '#000' : '#121316'); x.fillRect(cx + 16, 196 - i * 6, 6, 4); }
+      x.fillStyle = lit ? '#000' : '#0c0d10'; x.fillRect(cx - 3, 196, 6, 76);
+      x.fillStyle = lit ? '#000' : '#a9aeb6'; x.fillRect(cx - 11, 210 + ((ch * 13) % 40), 22, 10);
+    }
+    x.fillStyle = lit ? '#000' : '#0c0d10'; x.fillRect(68, 296, 120, 5);
+    x.fillStyle = lit ? '#000' : '#a9aeb6'; x.fillRect(118, 289, 18, 18);
+    x.fillStyle = lit ? '#04131f' : '#0b0d10'; x.fillRect(96, 4, 64, 14);
+    x.fillStyle = glow('#64d2ff'); x.fillRect(100, 8, 40, 6);
+  }
+  // Turned half a turn so the screen sits at the far edge and the jog wheel nearest the DJ.
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 8; t.center.set(0.5, 0.5); t.rotation = Math.PI;
+  return t;
+}
+const DJ_MAT = (() => {
+  const top = (k) => new THREE.MeshStandardMaterial({ map: gearCanvas(k, false), emissiveMap: gearCanvas(k, true), emissive: 0xffffff, emissiveIntensity: 1.4, roughness: 0.5, metalness: 0.2 });
+  return {
+    player: top('player'), mixer: top('mixer'),
+    gear: new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: 0.45, metalness: 0.35 }),
+    table: new THREE.MeshStandardMaterial({ color: 0x0b0b0d, roughness: 0.8 }),
+    hoodie: new THREE.MeshStandardMaterial({ color: 0x111215, roughness: 0.95 }),
+    jeans: new THREE.MeshStandardMaterial({ color: 0x1a2130, roughness: 0.9 }),
+    skin: new THREE.MeshStandardMaterial({ color: 0x8d5a3c, roughness: 0.7 }),
+    hair: new THREE.MeshStandardMaterial({ color: 0x0d0a08, roughness: 0.9 }),
+    phones: new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.35, metalness: 0.6 }),
+    laptop: new THREE.MeshStandardMaterial({ color: 0x3b3d42, roughness: 0.4, metalness: 0.6 }),
+  };
+})();
+let djRig = null;
+// A box whose top face (+y) uses its own material: gear tops get the drawn canvas, the sides stay plain.
+function gearBox(w, h, d, topMat) { return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), [DJ_MAT.gear, DJ_MAT.gear, topMat, DJ_MAT.gear, DJ_MAT.gear, DJ_MAT.gear]); }
+function limb(r0, r1, len, mat) { const g = new THREE.CylinderGeometry(r1, r0, len, 10); g.translate(0, -len / 2, 0); return new THREE.Mesh(g, mat); }
+// The DJ, built to stand at the origin facing +z, 1.78 m tall. Arms hang from shoulder pivots so they can reach the
+// decks or go up on a drop.
+function makeDJ() {
+  const root = new THREE.Group(), body = new THREE.Group(); root.add(body);
+  [-1, 1].forEach((sx) => { const l = limb(0.075, 0.065, 0.86, DJ_MAT.jeans); l.position.set(sx * 0.1, 0.88, 0); root.add(l); const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.08, 0.28), DJ_MAT.table); shoe.position.set(sx * 0.1, 0.04, 0.05); root.add(shoe); });
+  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.16, 0.62, 14), DJ_MAT.hoodie); torso.position.y = 1.18; torso.scale.z = 0.7; body.add(torso);
+  const hood = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.05, 8, 16), DJ_MAT.hoodie); hood.rotation.x = Math.PI / 2 + 0.3; hood.position.set(0, 1.5, -0.06); body.add(hood);
+  const head = new THREE.Group(); head.position.y = 1.55; body.add(head);
+  const skull = new THREE.Mesh(new THREE.SphereGeometry(0.105, 18, 14), DJ_MAT.skin); skull.scale.set(0.92, 1.12, 1); skull.position.y = 0.1; head.add(skull);
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.11, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), DJ_MAT.hair); hair.position.set(0, 0.12, -0.012); hair.scale.set(0.95, 1.1, 1.02); head.add(hair);
+  const band = new THREE.Mesh(new THREE.TorusGeometry(0.115, 0.012, 6, 20, Math.PI), DJ_MAT.phones); band.position.y = 0.11; band.rotation.y = Math.PI / 2; head.add(band);
+  [-1, 1].forEach((sx) => { const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.035, 14), DJ_MAT.phones); cup.rotation.z = Math.PI / 2; cup.position.set(sx * 0.11, 0.09, 0); head.add(cup); });
+  const arms = [-1, 1].map((sx) => {
+    const sh = new THREE.Group(); sh.position.set(sx * 0.22, 1.44, 0); body.add(sh);
+    const upper = limb(0.05, 0.045, 0.3, DJ_MAT.hoodie); sh.add(upper);
+    const elbow = new THREE.Group(); elbow.position.y = -0.3; sh.add(elbow);
+    const fore = limb(0.042, 0.035, 0.27, DJ_MAT.hoodie); elbow.add(fore);
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.04, 10, 8), DJ_MAT.skin); hand.position.y = -0.29; elbow.add(hand);
+    return { sh, elbow, sx };
+  });
+  return { root, body, head, arms };
+}
+// Builds the booth at p (deck level, centre of the table), facing the crowd along +z turned by yaw.
+function djBooth(p, yaw, big) {
+  const g = new THREE.Group(); g.position.copy(p); g.rotation.y = yaw; venue.add(g);
+  const add = (m, x, y, z) => { m.position.set(x, y, z); g.add(m); return m; };
+  let y0 = 0;
+  if (big) {
+    // Riser 4 x 2.4 m, 0.6 m high, its front an LED strip running the show's visuals.
+    y0 = 0.6;
+    const riser = add(new THREE.Mesh(new THREE.BoxGeometry(4, y0, 2.4), M.deck), 0, y0 / 2, -0.35); receivers.push(riser);
+    add(new THREE.Mesh(new THREE.PlaneGeometry(4, y0 - 0.06), wallMaterial(4, y0)), 0, y0 / 2, 0.851);
+  }
+  const top = y0 + 0.98;
+  add(new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.05, 0.8), DJ_MAT.table), 0, top - 0.025, 0);
+  // Fascia: LED on big stages, black scrim in clubs.
+  add(new THREE.Mesh(new THREE.BoxGeometry(2.6, top - y0 - 0.05, 0.04), M.skirt), 0, y0 + (top - y0 - 0.05) / 2, 0.38);
+  if (big) add(new THREE.Mesh(new THREE.PlaneGeometry(2.5, 0.5), wallMaterial(2.5, 0.5)), 0, top - 0.32, 0.405);
+  [-1, 1].forEach((sx) => add(new THREE.Mesh(new THREE.BoxGeometry(0.04, top - y0 - 0.05, 0.76), DJ_MAT.table), sx * 1.28, y0 + (top - y0) / 2, 0));
+  // Players either side of the mixer, tilted a touch towards the DJ, and a laptop on a stand to one side.
+  // Four players, two either side of the mixer: the usual festival and club install.
+  [-0.72, -0.37, 0.37, 0.72].forEach((x) => { const m = add(gearBox(0.33, 0.11, 0.45, DJ_MAT.player), x, top + 0.055, 0.02); m.rotation.x = 0.04; });
+  add(gearBox(0.36, 0.1, 0.45, DJ_MAT.mixer), 0, top + 0.05, 0.02);
+  // Laptop on a stand at the end of the table, angled in towards the DJ.
+  const lap = new THREE.Group(); lap.position.set(-1.15, top, -0.05); lap.rotation.y = 0.6; g.add(lap);
+  const lapAdd = (m, x, y, z) => { m.position.set(x, y, z); lap.add(m); return m; };
+  lapAdd(new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.14, 0.2), DJ_MAT.laptop), 0, 0.07, 0);
+  lapAdd(new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.015, 0.22), DJ_MAT.laptop), 0, 0.15, -0.02);
+  const lid = lapAdd(new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.21, 0.01), DJ_MAT.laptop), 0, 0.26, 0.09); lid.rotation.x = 0.3;
+  const scr = lapAdd(new THREE.Mesh(new THREE.PlaneGeometry(0.29, 0.18), new THREE.MeshBasicMaterial({ color: 0x24344a })), 0, 0.26, 0.083); scr.rotation.set(0.3, Math.PI, 0);
+  // Booth monitors on stands, angled in at the DJ's head.
+  [-1, 1].forEach((sx) => {
+    const mon = new THREE.Group(); mon.position.set(sx * 1.7, y0, -0.35); mon.rotation.y = Math.PI + sx * 0.55; g.add(mon);
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.9, 8), M.metal); leg.position.y = 0.45; mon.add(leg);
+    const cab = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.62, 0.38), [M.pa, M.pa, M.pa, M.pa, M.grille, M.pa]); cab.position.y = 1.22; cab.rotation.x = -0.12; mon.add(cab);
+  });
+  const dj = makeDJ(); dj.root.position.set(0, y0, -0.62); g.add(dj.root);
+  djRig = { ...dj, group: g, y0 };
+  camSet.dj = { group: g, y0 };
+}
+// Arms on the decks, a nod and a bounce on the beat, and both hands up for the drop.
+function animateDJ(beat, energy, drop) {
+  if (!djRig) return;
+  djRig.root.visible = activeCam !== 'dj';
+  const ph = beat * Math.PI, bounce = Math.pow(Math.abs(Math.sin(ph)), 2) * (0.02 + 0.03 * energy), hype = drop === 'on' && (beat % 8) < 2;
+  djRig.body.position.y = -bounce; djRig.body.rotation.x = 0.12 + bounce * 2;
+  djRig.head.rotation.x = 0.25 + Math.pow(Math.abs(Math.sin(ph)), 3) * 0.22 * (0.4 + energy);
+  djRig.arms.forEach((a, i) => {
+    if (hype) { a.sh.rotation.set(Math.PI * 0.95, 0, a.sx * 0.25); a.elbow.rotation.x = 0.2; return; }
+    // Hands rest on the players and mixer: upper arm forward and down, forearm reaching to the table.
+    const reach = 0.55 + 0.12 * Math.sin(beat * Math.PI * 0.25 + i * 2);
+    a.sh.rotation.set(-reach, 0, a.sx * -0.18); a.elbow.rotation.x = -0.9 - 0.15 * Math.sin(beat * Math.PI * 0.5 + i);
+  });
+}
+
+/* ---------- Detail geometry: rock, trees, barriers, FOH, club fit-out ---------- */
+// Smooth 3D value noise and its octave sum, for shaping rock and foliage.
+function hash3(x, y, z) { const h = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453; return h - Math.floor(h); }
+function noise3(x, y, z) {
+  const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z), fx = x - xi, fy = y - yi, fz = z - zi;
+  const u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy), w = fz * fz * (3 - 2 * fz), L = (a, b, t) => a + (b - a) * t;
+  const c = (dx, dy, dz) => hash3(xi + dx, yi + dy, zi + dz);
+  return L(L(L(c(0, 0, 0), c(1, 0, 0), u), L(c(0, 1, 0), c(1, 1, 0), u), v), L(L(c(0, 0, 1), c(1, 0, 1), u), L(c(0, 1, 1), c(1, 1, 1), u), v), w);
+}
+function fbm3(x, y, z, oct = 4) { let s = 0, a = 0.5, f = 1, n = 0; for (let i = 0; i < oct; i++) { s += a * noise3(x * f, y * f, z * f); n += a; a *= 0.5; f *= 2.03; } return s / n; }
+// Joins geometries into one, each placed by a matrix, so a barrier run or a tree is a single draw.
+function mergeGeos(list) {
+  const pos = [], nor = [];
+  list.forEach(([geo, mtx]) => {
+    const g = (geo.index ? geo.toNonIndexed() : geo.clone()); if (mtx) g.applyMatrix4(mtx);
+    pos.push(...g.attributes.position.array); nor.push(...g.attributes.normal.array);
+  });
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); out.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  return out;
+}
+const MX = (x, y, z, rx = 0, ry = 0, rz = 0, s = 1) => new THREE.Matrix4().compose(V(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), V(s, s, s));
+// A sandstone monolith on a unit sphere: lumpy at the large scale, ledged along tilted strata, buried at the base.
+// The faces stay flat-shaded, which reads as fractured rock.
+function rockGeo(seed, tilt) {
+  const g = new THREE.IcosahedronGeometry(1, 5), p = g.attributes.position, v = new THREE.Vector3();
+  const ax = V(Math.sin(tilt), Math.cos(tilt), 0.25).normalize();
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i);
+    const n = fbm3(v.x * 1.6 + seed, v.y * 1.6, v.z * 1.6, 5), fine = fbm3(v.x * 7 + seed, v.y * 7, v.z * 7, 3);
+    const s = v.dot(ax) * 9 + n * 2, ledge = (s - Math.floor(s)) * 0.035;
+    v.multiplyScalar(0.62 + 0.75 * n + 0.1 * fine + ledge);
+    // Tilted like the real fins: the top slopes up towards the far end.
+    v.y += 0.3 * v.z + 0.25;
+    if (v.y < -0.3) v.y = -0.3 - (v.y + 0.3) * 0.05;
+    p.setXYZ(i, v.x, v.y, v.z);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+// Tree shapes: a pine of five jagged tiers, a broadleaf of clustered lumpy crowns. Instances get a tint each.
+const TREE_GEO = {};
+function treeParts(kind) {
+  if (TREE_GEO[kind]) return TREE_GEO[kind];
+  const jag = (g, amt, seed) => { const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i), z = p.getZ(i), n = noise3(x * 1.3 + seed, y * 1.3, z * 1.3) - 0.5; p.setXYZ(i, x * (1 + n * amt), y + n * amt * 0.6, z * (1 + n * amt)); } g.computeVertexNormals(); return g; };
+  let crown, trunk;
+  if (kind === 'broad') {
+    trunk = new THREE.CylinderGeometry(0.22, 0.42, 6, 7); trunk.translate(0, 3, 0);
+    crown = mergeGeos([[2.6, 0, 8.6, 0], [1.9, 1.6, 7.6, 0.6], [2.0, -1.5, 7.8, -0.5], [1.7, 0.2, 7.4, -1.6], [1.5, -0.3, 10.3, 0.4]].map(([r, x, y, z], i) => [jag(new THREE.IcosahedronGeometry(r, 2), 0.55, i * 3.1).toNonIndexed(), MX(x, y, z)]));
+  } else {
+    trunk = new THREE.CylinderGeometry(0.18, 0.36, 10, 7); trunk.translate(0, 5, 0);
+    crown = mergeGeos([0, 1, 2, 3, 4].map((i) => { const r = 3.1 - i * 0.55, h = 4.2 - i * 0.35; const c = jag(new THREE.ConeGeometry(r, h, 11, 3), 0.45, i * 5.3); return [c.toNonIndexed(), MX(0, 4.6 + i * 2.15 + h / 2, 0, 0, i * 0.7)]; }));
+  }
+  crown.computeVertexNormals();
+  return (TREE_GEO[kind] = { trunk, crown });
+}
+function tintTrees(mesh, base, n) {
+  const c = new THREE.Color(), hsl = {}; new THREE.Color(base).getHSL(hsl);
+  for (let i = 0; i < n; i++) { c.setHSL(hsl.h + rnd(-0.03, 0.03), hsl.s * rnd(0.8, 1.15), hsl.l * rnd(0.7, 1.3)); mesh.setColorAt(i, c); }
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+}
+// Crowd barrier ("mojo") along x from x0 to x1 at z: 1 m steel sections with a top rail and a sloped foot plate
+// running towards the crowd, which the front row stands on.
+function barrier(x0, x1, z) {
+  const seg = mergeGeos([
+    [new THREE.BoxGeometry(1.0, 1.05, 0.05), MX(0, 0.62, 0)],
+    [new THREE.CylinderGeometry(0.035, 0.035, 1.0, 8), MX(0, 1.17, 0, 0, 0, Math.PI / 2)],
+    [new THREE.BoxGeometry(1.0, 0.03, 0.95), MX(0, 0.07, 0.48, 0.1)],
+    [new THREE.BoxGeometry(0.05, 1.2, 0.05), MX(-0.48, 0.6, -0.08, -0.35)],
+    [new THREE.BoxGeometry(0.05, 1.2, 0.05), MX(0.48, 0.6, -0.08, -0.35)],
+  ]);
+  const n = Math.max(1, Math.round(x1 - x0)), m = new THREE.InstancedMesh(seg, M.metal, n);
+  for (let i = 0; i < n; i++) m.setMatrixAt(i, MX(x0 + (i + 0.5) * (x1 - x0) / n, 0, z));
+  venue.add(m);
+}
+// Front of house: a riser under a canopy with the lighting and sound desks, screens glowing.
+function fohTent(x, z) {
+  const g = new THREE.Group(); g.position.set(x, 0, z); venue.add(g);
+  const add = (m, px, py, pz) => { m.position.set(px, py, pz); g.add(m); return m; };
+  add(new THREE.Mesh(new THREE.BoxGeometry(6.4, 0.5, 4.4), M.deck), 0, 0.25, 0);
+  [[-3, -2], [3, -2], [-3, 2], [3, 2]].forEach(([px, pz]) => add(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3.2, 8), M.metal), px, 1.6, pz));
+  add(new THREE.Mesh(new THREE.BoxGeometry(7, 0.15, 5), M.roof), 0, 3.25, 0);
+  add(new THREE.Mesh(new THREE.BoxGeometry(6.4, 2.7, 0.04), M.skirt), 0, 1.85, 2.2);
+  [-1.4, 1.4].forEach((px) => { add(gearBox(2.0, 0.25, 0.9, DJ_MAT.mixer), px, 1.38, -0.6); add(new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.85, 0.9), DJ_MAT.table), px, 0.92, -0.6); });
+}
+// Club fit-out: a ceiling with ductwork, a bar with a lit back shelf, lit exit signs and subs at the stage front.
+function clubFitOut(roomW, z0, z1, ceil, stageW, opts = {}) {
+  if (ceil) {
+    const c = new THREE.Mesh(new THREE.PlaneGeometry(roomW, z1 - z0), M.ceiling); c.rotation.x = Math.PI / 2; c.position.set(0, ceil, (z0 + z1) / 2); venue.add(c);
+    if (opts.ducts !== false) [-0.3, 0.3].forEach((u) => { const d = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, z1 - z0, 14), M.metal); d.rotation.x = Math.PI / 2; d.position.set(u * roomW, ceil - 0.45, (z0 + z1) / 2); venue.add(d); });
+  }
+  if (opts.bar !== false && z1 - z0 > 12) {
+    const len = Math.min(9, (z1 - z0) * 0.35), bz = z1 - len / 2 - 1.5, bx = -(roomW / 2 - 0.35);
+    box(0.6, 1.08, len, bx + 1.4, 0.54, bz, DJ_MAT.table);
+    box(0.7, 0.05, len, bx + 1.4, 1.1, bz, M.metal);
+    // Back bar: shelves lit from behind, bottles silhouetted against them.
+    const glow = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 0.75, 0.3) });
+    [1.25, 1.75].forEach((y) => box(0.05, 0.3, len, bx, y, bz, glow));
+    const bottles = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.04, 0.045, 0.28, 8), DJ_MAT.table, 60);
+    for (let i = 0; i < 60; i++) bottles.setMatrixAt(i, MX(bx + 0.12, i < 30 ? 1.25 : 1.75, bz - len / 2 + ((i % 30) + 0.5) * len / 30));
+    venue.add(bottles);
+  }
+  const exit = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.1, 2.2, 0.45) });
+  [-1, 1].forEach((sx) => box(0.04, 0.16, 0.4, sx * (roomW / 2 - 0.17), 2.4, z1 - 2, exit));
+  [-1, 1].forEach((sx) => [0, 1].forEach((k) => box(1.1, 0.6, 0.75, sx * (stageW / 2 - 0.7 - k * 1.15), 0.3, 0.45, PA_MATS)));
 }
 
 /* ---------- Template builders ---------- */
@@ -1187,7 +1615,7 @@ const BUILD = {
     const lid = new THREE.Mesh(new THREE.BoxGeometry(s.wallW, 0.2, s.wallW), M.frame); lid.position.set(0, cy + s.wallH / 2 + 0.1, 0); venue.add(lid);
     [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(([a, b]) => { const x = a * (W / 2 - 0.3), z = b * (D / 2 - 0.3); laser(x, H, z, Math.atan2(x, z)); });
     crowd(900, () => { const a = Math.random() * Math.PI * 2, r = Math.max(W, D) / 2 + 3 + Math.random() * 11; return V(Math.sin(a) * r, 0, Math.cos(a) * r); });
-    return { target: V(0, H + 4, 0), front: R0 + 12, fohY: 15, crowdEye: V(3, 6.5, R0 + 8 * 0.85) };
+    return { target: V(0, H + 4, 0), front: R0 + 12, fohY: 15, crowdEye: V(3, 6.5, R0 + 8 * 0.85), djAt: V(0, H, 0.6) };
   },
   festival(s, opts = {}) {
     const o = { ...s.room, ...opts }, { W, D, H, trim } = s, top = H + trim, wing = 6;
@@ -1203,18 +1631,29 @@ const BUILD = {
     const lx = W * 0.44;
     [-1.2, -D * 0.32, -D * 0.58].forEach((z, i) => truss(`Pod ${'ABC'[i]}`, V(-lx, top, z), V(lx, top, z), 0.4, { hang: true }));
     floorLine('Deck US', V(-W * 0.42, H, -D + 2.2), V(W * 0.42, H, -D + 2.2));
-    const roof = new THREE.Mesh(new THREE.PlaneGeometry(W + 1.2, D + 0.4), new THREE.MeshStandardMaterial({ color: 0x0b0c10, roughness: 1, side: THREE.DoubleSide, transparent: true, opacity: 0.55, depthWrite: false }));
-    roof.rotation.x = -Math.PI / 2; roof.position.set(0, top + 2.75, -D / 2 + 0.3); venue.add(roof);
+    // Black scrim upstage and down the back half of each side, as on a touring roof.
+    const sh = top + 2.4 - H;
+    box(W + 0.8, sh, 0.08, 0, H + sh / 2, -D - 0.05, M.skirt);
+    [-1, 1].forEach((sx) => box(0.08, sh, D * 0.55, sx * (gx + 0.32), H + sh / 2, -D * 0.72 + 0.3, M.skirt));
+    box(W + 1.2, 0.5, D + 0.4, 0, top + 2.95, -D / 2 + 0.3, M.roof);
     [-1, 1].forEach((sx) => {
-      for (let i = 0; i < 12; i++) { const m = box(1.3, 0.38, 0.9, sx * (W / 2 + 2.2), top + 1.2 - i * 0.4, 0.2, M.pa); m.rotation.x = i * 0.6 * DEG; }
-      box(1.2, 1.2, 1.2, sx * (W / 2 + 2.2), H + 0.6 + 0.0, -0.4, M.pa);
+      for (let i = 0; i < 12; i++) { const m = box(1.3, 0.38, 0.9, sx * (W / 2 + 2.2), top + 1.2 - i * 0.4, 0.2, PA_MATS); m.rotation.x = i * 0.6 * DEG; }
+      box(1.2, 1.2, 1.2, sx * (W / 2 + 2.2), H + 0.6 + 0.0, -0.4, PA_MATS);
       const sw = s.wallH * 0.62 * 16 / 9, sh = s.wallH * 0.62;
-      screen(sx < 0 ? 'IMAG SL' : 'IMAG SR', sw, sh, V(sx * (W / 2 + wing + sw / 2 - 1.5), H + 2.2 + sh / 2, -1.5));
+      const ix = sx * (W / 2 + wing + sw / 2 - 1.5);
+      screen(sx < 0 ? 'IMAG SL' : 'IMAG SR', sw, sh, V(ix, H + 2.2 + sh / 2, -1.5));
+      [-1, 1].forEach((k) => truss(`IMAG leg ${sx < 0 ? 'SL' : 'SR'}${k < 0 ? 'a' : 'b'}`, V(ix + k * (sw / 2 - 0.6), 0, -1.75), V(ix + k * (sw / 2 - 0.6), H + 2.2, -1.75), 0.4));
     });
     mainWall = screen('Upstage LED', s.wallW, s.wallH, V(0, H + 0.6 + s.wallH / 2, -D + 0.6));
-    box(W + 2 * wing, 1.1, 0.4, 0, 0.55, 3, M.frame);
+    barrier(-(W / 2 + wing), W / 2 + wing, 3);
     const cw = o.crowdW || W + 2 * wing + 6, cd = o.crowdDepth || 28, fz = o.fohZ || 34;
-    box(6, 2.6, 4, 0, 1.3, fz, M.pa);
+    fohTent(0, fz);
+    // Delay towers part way back on big fields: a scaffold tower carrying a short line array, aimed at the back.
+    if (cd > 50) [-1, 1].forEach((sx) => {
+      const x = sx * Math.min(cw * 0.32, 40), z = 4 + cd * 0.55;
+      truss(`Delay ${sx < 0 ? 'L' : 'R'}`, V(x, 0, z), V(x, 14, z), 0.6);
+      for (let i = 0; i < 6; i++) { const m = box(1.3, 0.38, 0.9, x, 13 - i * 0.4, z + 0.6, PA_MATS); m.rotation.x = i * 1.0 * DEG; }
+    });
     [-0.42, -0.15, 0.15, 0.42].forEach((u) => laser(u * W, H, -0.5, 0));
     laser(-(W / 2 + wing / 2), H, -1, 0.3); laser(W / 2 + wing / 2, H, -1, -0.3);
     crowd(o.crowdN || 1600, () => { const x = (Math.random() - 0.5) * cw, z = 4 + Math.random() * cd; return Math.abs(x) < 3.5 && Math.abs(z - fz) < 3 ? null : V(x, 0, z); });
@@ -1244,7 +1683,6 @@ const BUILD = {
     const { W, D, H, trim } = s, o = s.room, roomW = Math.max(o.w || W + 18, W + 6, 28 * !o.w), roomL = o.l || 56, top = H + trim, zc = roomL / 2 - D - 1.2;
     const open = o.ceil === 0, ceil = Math.max(o.ceil || 0, top + 2.5), wallH = open ? 5 : ceil, floorL = roomL - D - 4;
     box(W, H, D, 0, H / 2, -D / 2, M.deck, true);
-    box(3, 1.05, 1, 0, H + 0.52, -D * 0.4, M.body);
     box(0.6, wallH, roomL, -roomW / 2, wallH / 2, zc, M.concrete);
     box(0.6, wallH, roomL, roomW / 2, wallH / 2, zc, M.concrete);
     box(roomW, open ? top + 3 : ceil, 0.6, 0, (open ? top + 3 : ceil) / 2, -D - 1.2, M.concrete);
@@ -1271,6 +1709,7 @@ const BUILD = {
     grid.forEach((z, i) => { if (open) [-1, 1].forEach((sx) => truss(`Tower ${i + 1}${sx < 0 ? 'L' : 'R'}`, V(sx * tx, 0, z), V(sx * tx, top, z), 0.4)); truss(`Grid ${i + 1}`, V(-tx, top, z), V(tx, top, z), 0.4, { hang: true }); });
     truss('Stage', V(-W * 0.45, top, -D * 0.5), V(W * 0.45, top, -D * 0.5), 0.4, { hang: true });
     mainWall = screen('Stage LED', s.wallW, s.wallH, V(0, H + 0.4 + s.wallH / 2, -D + 0.5));
+    clubFitOut(roomW, -D - 1.2, roomL - D - 1.2, open ? 0 : ceil + 0.01, W, { ducts: false });
     [-1, -0.33, 0.33, 1].forEach((u) => laser(u * W * 0.42, H, -0.4, 0));
     const back = Math.min(34, floorL);
     laser(-roomW * 0.4, open ? 4 : top + 0.6, back, Math.PI); laser(roomW * 0.4, open ? 4 : top + 0.6, back, Math.PI);
@@ -1280,7 +1719,6 @@ const BUILD = {
   booth(s) {
     const { W, D, H, trim } = s, o = s.room, top = H + trim, room = o.w || 22, wallH = top + 2.5;
     box(W, H, D, 0, H / 2, 0, M.deck, true);
-    box(W * 0.8, 1.0, D * 0.35, 0, H + 0.5, 0, M.body);
     box(room, wallH, 0.4, 0, wallH / 2, -room / 2, M.wall);
     box(0.4, wallH, room, -room / 2, wallH / 2, 0, M.wall);
     box(0.4, wallH, room, room / 2, wallH / 2, 0, M.wall);
@@ -1295,7 +1733,7 @@ const BUILD = {
     const lid = new THREE.Mesh(new THREE.BoxGeometry(s.wallW, 0.12, s.wallW), M.frame); lid.position.set(0, cy + s.wallH / 2 + 0.06, 0); venue.add(lid);
     [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(([a, b]) => { const x = a * (W / 2 - 0.25), z = b * (D / 2 - 0.25); laser(x, H, z, Math.atan2(x, z)); });
     crowd(o.crowdN || 380, () => { const x = (Math.random() - 0.5) * (room - 2), z = (Math.random() - 0.5) * (room - 2); return Math.abs(x) < W / 2 + 0.7 && Math.abs(z) < D / 2 + 0.7 ? null : V(x, 0, z); });
-    return { target: V(0, H + 1.4, 0), front: room / 2 + 5, fohY: 7.5, crowdEye: V(1.2, 1.85, D / 2 + 2.6) };
+    return { target: V(0, H + 1.4, 0), front: room / 2 + 5, fohY: 7.5, crowdEye: V(1.2, 1.85, D / 2 + 2.6), djAt: V(0, H, 0.3) };
   },
   arch(s) {
     const { W, D, H, trim } = s, o = s.room, R = o.w ? o.w / 2 : W / 2 + 7, Hr = Math.max(o.h || 0, H + trim + 2), L = o.l || 42;
@@ -1327,28 +1765,31 @@ const BUILD = {
     const { W, D, H, trim } = s, o = s.room, top = H + trim;
     const rows = o.rows || 40, rd = o.rowDepth || 1, rise = o.rise || 0.4, fan = (o.fan || 70) * DEG, r0 = o.r0 || Math.max(10, W * 0.6);
     box(W, H, D, 0, H / 2, -D / 2, M.deck, true);
-    box(W + 4, top + 3, 0.4, 0, (top + 3) / 2, -D - 0.5, M.wall);
+    box(W + 4, top + 3, 0.4, 0, (top + 3) / 2, -D - 0.5, M.skirt);
     const gx = W / 2 + 0.4;
     [[-gx, 0.3], [gx, 0.3], [-gx, -D + 0.3], [gx, -D + 0.3]].forEach(([x, z], i) => truss(`Tower ${i + 1}`, V(x, H, z), V(x, top + 2.4, z), 0.52));
     truss('Roof DS', V(-gx, top + 2.4, 0.3), V(gx, top + 2.4, 0.3), 0.52);
     truss('Roof US', V(-gx, top + 2.4, -D + 0.3), V(gx, top + 2.4, -D + 0.3), 0.52);
-    const roof = new THREE.Mesh(new THREE.PlaneGeometry(W + 1.2, D + 0.4), new THREE.MeshStandardMaterial({ color: 0x0b0c10, roughness: 1, side: THREE.DoubleSide, transparent: true, opacity: 0.55, depthWrite: false }));
-    roof.rotation.x = -Math.PI / 2; roof.position.set(0, top + 2.75, -D / 2 + 0.3); venue.add(roof);
+    box(W + 1.2, 0.5, D + 0.4, 0, top + 2.95, -D / 2 + 0.3, M.roof);
     const lx = W * 0.44;
     [-1.2, -D * 0.36, -D * 0.66].forEach((z, i) => truss(`Pod ${'ABC'[i]}`, V(-lx, top, z), V(lx, top, z), 0.4, { hang: true }));
-    [-1, 1].forEach((sx) => { for (let i = 0; i < 10; i++) { const m = box(1.3, 0.38, 0.9, sx * (W / 2 + 2), top + 1 - i * 0.4, 0.2, M.pa); m.rotation.x = i * 0.8 * DEG; } });
+    [-1, 1].forEach((sx) => { for (let i = 0; i < 10; i++) { const m = box(1.3, 0.38, 0.9, sx * (W / 2 + 2), top + 1 - i * 0.4, 0.2, PA_MATS); m.rotation.x = i * 0.8 * DEG; } });
     // Centre array for a left-centre-right system, flown from the front of the roof above the LED wall.
-    if (o.pa === 'lcr') for (let i = 0; i < 6; i++) { const m = box(1.3, 0.38, 0.9, 0, top + 1.6 - i * 0.4, 0.4, M.pa); m.rotation.x = i * 1.2 * DEG; }
+    if (o.pa === 'lcr') for (let i = 0; i < 6; i++) { const m = box(1.3, 0.38, 0.9, 0, top + 1.6 - i * 0.4, 0.4, PA_MATS); m.rotation.x = i * 1.2 * DEG; }
     mainWall = screen('Upstage LED', s.wallW, s.wallH, V(0, H + 0.5 + s.wallH / 2, -D + 0.5));
     const prof = [];
     for (let i = 0; i < rows; i++) { const r = r0 + i * rd, y = i * rise; prof.push(new THREE.Vector2(r, y), new THREE.Vector2(r + rd, y), new THREE.Vector2(r + rd, y + rise)); }
     const bowlMat = o.lawn ? new THREE.MeshStandardMaterial({ color: 0x16211a, roughness: 1, side: THREE.DoubleSide }) : M.bowl;
     const bowl = new THREE.Mesh(new THREE.LatheGeometry(prof, 64, -fan / 2, fan), bowlMat);
     venue.add(bowl); receivers.push(bowl);
+    // Bench seating along the front of each stone row, as at Red Rocks. Lawns have none.
+    if (!o.lawn) {
+      const benches = mergeGeos(Array.from({ length: rows }, (_, i) => { const r = r0 + i * rd + 0.06, y = (i + 1) * rise; return [new THREE.LatheGeometry([new THREE.Vector2(r, y), new THREE.Vector2(r, y + 0.42), new THREE.Vector2(r + 0.32, y + 0.42), new THREE.Vector2(r + 0.32, y + 0.36)], 48, -fan / 2, fan), null]; }));
+      venue.add(new THREE.Mesh(benches, M.wood));
+    }
     const rEnd = r0 + rows * rd, yEnd = rows * rise;
     if (o.rocks) {
       // Two sandstone monoliths flanking the bowl and stage.
-      const rock = new THREE.MeshStandardMaterial({ color: 0x5b2c1d, roughness: 1, flatShading: true });
       [-1, 1].forEach((sx) => {
         // Slab whose inner face runs from beside the stage to the outer corner of the bowl.
         const p0 = V(sx * (W / 2 + 6), 0, -D), p1 = V(sx * (Math.sin(fan / 2) * rEnd + 4), 0, Math.cos(fan / 2) * rEnd);
@@ -1356,9 +1797,9 @@ const BUILD = {
         const h = typeof o.rocks === 'object' ? (sx < 0 ? o.rocks.left : o.rocks.right) : yEnd + 30;
         const along = p1.clone().sub(p0), len = along.length() + 20, yaw = Math.atan2(along.x, along.z);
         const out = V(along.z, 0, -along.x).normalize().multiplyScalar(sx * Math.sign(along.z) * 15);
-        const m = new THREE.Mesh(new THREE.DodecahedronGeometry(1, 1), rock);
-        m.scale.set(16, h / 2, len / 2);
-        m.position.copy(p0).add(p1).multiplyScalar(0.5).add(out).setY(h * 0.42);
+        const m = new THREE.Mesh(rockGeo(sx * 7.3 + 11, 0.55 * sx), M.sandstone);
+        m.scale.set(16, h / 1.6, len / 2);
+        m.position.copy(p0).add(p1).multiplyScalar(0.5).add(out).setY(h * 0.106);
         m.rotation.set(0, yaw, sx * 0.06);
         venue.add(m); receivers.push(m);
       });
@@ -1372,7 +1813,6 @@ const BUILD = {
     const { W, D, H, trim } = s, o = s.room, roomW = Math.max(o.w || W + 8, W + 2, 16 * !o.w), roomD = o.l || 22;
     const open = o.ceil === 0, ceil = open ? 4 : Math.max(o.ceil || 0, H + trim + 0.9);
     box(W, H, D, 0, H / 2, -D / 2, M.deck, true);
-    box(2.4, 1.05, 0.9, 0, H + 0.52, -D * 0.45, M.body);
     box(0.3, ceil, roomD, -roomW / 2, ceil / 2, roomD / 2 - D - 0.5, M.wall);
     box(0.3, ceil, roomD, roomW / 2, ceil / 2, roomD / 2 - D - 0.5, M.wall);
     box(roomW, Math.max(ceil, H + trim + 0.9), 0.3, 0, Math.max(ceil, H + trim + 0.9) / 2, -D - 0.6, M.wall);
@@ -1385,9 +1825,9 @@ const BUILD = {
     }
     if (o.balcony) {
       // Mezzanine across the back of the room, on columns, with a rail.
-      box(roomW, 0.4, balD, 0, balY, back - balD / 2, M.wall);
+      box(roomW, 0.4, balD, 0, balY, back - balD / 2, M.ceiling);
       box(roomW, 1.05, 0.08, 0, balY + 0.72, back - balD, M.frame);
-      [-0.35, 0, 0.35].forEach((u) => box(0.4, balY, 0.4, u * roomW, balY / 2, back - balD + 0.4, M.wall));
+      [-0.35, 0, 0.35].forEach((u) => box(0.4, balY, 0.4, u * roomW, balY / 2, back - balD + 0.4, M.ceiling));
     }
     const t = H + trim, x0 = Math.min(roomW / 2 - 1.5, Math.max(W * 0.55, 3)), z0 = 1.2, z1 = Math.min(9, floorD - 2);
     truss('Box DS', V(-x0, t, z1), V(x0, t, z1), 0.3, { hang: true });
@@ -1395,15 +1835,16 @@ const BUILD = {
     truss('Box SL', V(-x0, t, z0), V(-x0, t, z1), 0.3, { hang: true });
     truss('Box SR', V(x0, t, z0), V(x0, t, z1), 0.3, { hang: true });
     truss('Stage pipe', V(-W * 0.45, t, -D * 0.5), V(W * 0.45, t, -D * 0.5), 0.3);
-    if (o.pa === 'lr') [-1, 1].forEach((sx) => { for (let i = 0; i < 8; i++) { const m = box(1.0, 0.3, 0.7, sx * (W / 2 + 0.9), t - 0.2 - i * 0.32, 0.4, M.pa); m.rotation.x = i * 1.0 * DEG; } });
+    if (o.pa === 'lr') [-1, 1].forEach((sx) => { for (let i = 0; i < 8; i++) { const m = box(1.0, 0.3, 0.7, sx * (W / 2 + 0.9), t - 0.2 - i * 0.32, 0.4, PA_MATS); m.rotation.x = i * 1.0 * DEG; } });
     mainWall = screen('DJ wall', s.wallW, s.wallH, V(0, H + 0.2 + s.wallH / 2, -D + 0.35));
+    clubFitOut(roomW, -D - 0.6, back, open ? 0 : ceil, W);
     [-0.35, 0.35].forEach((u) => laser(u * W, H, -0.3, 0));
     const floorEnd = o.balcony ? back - balD - 0.5 : floorD;
     crowd(o.crowdN || 260, () => o.balcony && Math.random() < 0.15
       ? V((Math.random() - 0.5) * (roomW - 2), balY + 0.2, back - 1 - Math.random() * (balD - 2))
       : V((Math.random() - 0.5) * (roomW - 2), 0, 1 + Math.random() * (floorEnd - 1)));
     const cam = o.balcony ? { front: back - balD + 1, fohY: balY + 1.9 } : { front: Math.min(Math.max(14, floorD * 0.8), floorD + 1), fohY: open ? 4.5 : Math.min(t - 0.6, 3.2 + floorD * 0.05) };
-    return { target: V(0, H + 1.6, -D / 2 + 1), ...cam, crowdEye: V(1, 1.85, Math.min(7.5, floorD * 0.6)) };
+    return { target: V(0, H + 1.6, -D / 2 + 1), ...cam, crowdEye: V(1, 1.85, Math.min(7.5, floorD * 0.6)), djAt: V(0, H, -D * 0.45 + 0.3) };
   },
 };
 
@@ -1498,17 +1939,19 @@ function animateLasers(beat, drop) {
 /* ---------- Build ---------- */
 function build() {
   scene.remove(venue);
-  const keepGeo = new Set([beamGeo, poolGeo, lensGeo, headGeo, laserGeo, PERSON]), keepMat = new Set([...Object.values(M), crowdMat, crowdDepth]);
+  const keepGeo = new Set([beamGeo, poolGeo, lensGeo, headGeo, laserGeo, PERSON, ...Object.values(TREE_GEO).flatMap((t) => [t.trunk, t.crown])]), keepMat = new Set([...Object.values(M), ...Object.values(groundMats), ...Object.values(DJ_MAT), crowdMat, crowdDepth]);
   venue.traverse((o) => { if (o.geometry && !keepGeo.has(o.geometry)) o.geometry.dispose(); if (o.material && o.material.dispose && !keepMat.has(o.material)) o.material.dispose(); });
   venue = new THREE.Group(); scene.add(venue);
   receivers = []; fixtures = []; trussList = []; screens = []; hangLines = [];
   crowds = []; laserSpots = []; lasers = []; glowMats = [];
   const spec = scenerySpec();
-  const floor = spec ? new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), new THREE.MeshStandardMaterial({ color: GROUND[spec.ground] || GROUND.grass, roughness: 0.95 })) : new THREE.Mesh(new THREE.PlaneGeometry(400, 400), M.floor);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(spec ? 1000 : 400, spec ? 1000 : 400), spec ? groundMat(spec.ground) : M.floor);
   floor.rotation.x = -Math.PI / 2; venue.add(floor); receivers.push(floor);
   sizeWallCanvas(state.wallW / state.wallH);
   camSet = BUILD[state.tpl](state);
   finishCrowds(camSet.target);
+  djRig = null;
+  djBooth(camSet.djAt || V(0, state.H, -state.D * 0.38), camSet.djYaw || 0, state.W >= 14);
   distribute(state.count).forEach((s, i) => fixtures.push(makeFixture(s, i)));
   if (!laserSpots.length) [-0.3, 0.3].forEach((u) => laser(u * state.W, state.H, -0.3, 0));
   lasers = laserSpots.map(makeLaser);
@@ -1537,12 +1980,27 @@ function camPose(kind) {
     case 'wide': return { pos: V(span * 0.95, H + trim + 7, t.z + span * 1.05), target: t.clone() };
     case 'side': return { pos: V(W / 2 + 2.5, H + 2.2, t.z + D * 0.45 + 1), target: V(-W * 0.1, H + trim * 0.45, t.z) };
     case 'drone': { const o = droneOrbit(); return { pos: V(t.x, o.h, t.z + o.R), target: t.clone() }; }
+    case 'dj': case 'behind': {
+      const g = camSet.dj.group, y0 = camSet.dj.y0, L = (x, y, z) => g.localToWorld(V(x, y, z));
+      g.updateMatrixWorld(true);
+      if (kind === 'dj') return { pos: L(0, y0 + 1.68, -0.5), target: L(0, y0 + 0.25, 6) };
+      // Over the DJ's shoulder from between them and the back wall, as far back as the room allows.
+      const head = L(0, y0 + 1.9, -0.62), back = L(0, y0 + 1.9, -1.62).sub(head).normalize();
+      camRay.set(head, back); camRay.far = 6; camRay.camera = camera;
+      const hit = camRay.intersectObjects(venue.children, true).find((h) => !isDJ(h.object));
+      const d = Math.min(2.4, Math.max(0.8, (hit ? hit.distance : 3) - 0.45));
+      return { pos: L(0.7, y0 + 2.65, -0.62 - d), target: L(0, y0 + 0.6, 10) };
+    }
     case 'top': return { pos: V(0, Math.max(W, D) * 1.5 + trim + 18, t.z + 0.01), target: V(0, 0, t.z) };
     default: return { pos: V(0, camSet.fohY || H + 4.5, camSet.front), target: t.clone() };
   }
 }
+function isDJ(o) { for (let p = o; p; p = p.parent) if (djRig && p === djRig.group) return true; return false; }
+const CAM_FOV = { dj: 72, behind: 62 }, camRay = new THREE.Raycaster();
 function goCam(kind, instant) {
   activeCam = kind;
+  const fov = CAM_FOV[kind] || 50;
+  if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
   droneAng = 0;
   document.querySelectorAll('[data-cam]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.cam === kind)));
   $('#camHint').textContent = kind === 'walk' ? 'WASD or arrow keys to walk · Shift to run · drag to look around' : 'Drag to orbit · scroll to zoom · right-drag to pan';
@@ -1637,15 +2095,18 @@ function updateLook() {
   const day = look.day = out ? smooth(-4, 14, el) : 0;
   const glow = out ? smooth(-12, -1, el) * (1 - smooth(4, 20, el)) : 0;
   const hd = out && surround.spec && (surround.day || surround.dusk) ? surround : null, hi = hd && HDRI[hd.spec.hdri];
-  if (sky) { sky.visible = out && el > -8 && !(hd && hd.day); sky.material.uniforms.sunPosition.value.copy(sunDir); }
-  dome.visible = !!hd;
+  // The photo sky (HDRI) is shown only when chosen; otherwise it lights the scene and the rendered sky is what you see.
+  const photo = state.surround === 'photo';
+  if (sky) { sky.visible = out && el > -8 && !(photo && hd && hd.day); sky.material.uniforms.sunPosition.value.copy(sunDir); }
+  dome.visible = !!hd && (photo || !!hd.night || !sky);
   if (hd) {
     // Midday image above about 10 degrees of sun, the golden-hour image around sunrise and sunset, the night image after dusk.
     const u = dome.material.uniforms, ni = hd.night && HDRI[hd.spec.night], ki = hd.dusk && HDRI[hd.spec.dusk], light = 0.3 + 0.7 * smooth(-2, 18, el);
     const dayF = ki ? smooth(3, 14, el) : smooth(-7, 10, el), duskF = ki ? smooth(-7, 2, el) * (1 - dayF) : 0, sunPh = Math.atan2(sunDir.z, sunDir.x);
     u.tDay.value = hd.day; u.tDusk.value = hd.dusk; u.tNight.value = hd.night;
-    u.uDayW.value = hd.day ? (1.5 / hi.sky) * dayF * light : 0;
-    u.uDuskW.value = ki ? (0.95 / ki.sky) * duskF * light : 0;
+    const showDay = photo || !sky;
+    u.uDayW.value = hd.day && showDay ? (1.5 / hi.sky) * dayF * light : 0;
+    u.uDuskW.value = ki && showDay ? (0.95 / ki.sky) * duskF * light : 0;
     u.uNightW.value = hd.night ? (0.03 / ni.sky) * (1 - smooth(-9, 1, el)) : 0;
     u.uGradW.value = hd.night ? 0 : 1 - smooth(-9, 1, el);
     u.uTint.value.setRGB(1, 0.62, 0.45).lerp(new THREE.Color(1, 1, 1), smooth(0, 22, el));
@@ -1670,6 +2131,15 @@ function updateLook() {
   // High quality writes linear light and encodes at the end, so the fog and clear colours are decoded to match.
   if (highOn()) scene.fog.color.convertSRGBToLinear();
   scene.background.copy(scene.fog.color);
+  clouds.visible = out && state.surround !== 'off' && !(photo && hd && hd.day && el > -2);
+  if (clouds.visible) {
+    const cu = clouds.material.uniforms, sp = surround.spec || {};
+    cu.uSun.value.copy(sunDir); cu.uCover.value = sp.clouds ?? 0.32;
+    cu.uLit.value.copy(sun.color).multiplyScalar(0.12 + 1.15 * smooth(-4, 25, el)).convertSRGBToLinear();
+    cu.uShade.value.copy(SKY.day).multiplyScalar(0.06 + 0.5 * smooth(-4, 25, el)).convertSRGBToLinear();
+    if (el < -4) { cu.uLit.value.setRGB(0.012, 0.011, 0.013); cu.uShade.value.setRGB(0.004, 0.0045, 0.006); }
+    cu.uFogC.value.copy(scene.fog.color);
+  }
   // Without daylight the audience is mostly silhouette, lit only by spill from the stage.
   const skinLevel = 0.14 + 0.86 * day;
   crowdMat.color.setScalar(skinLevel);
@@ -1847,6 +2317,7 @@ function tick(now) {
   });
   animateLasers(beat, drop);
   const energy = drop === 'on' ? 1.6 : drop === 'pre' ? 0.15 : audio.playing ? audio.energy : 0.5;
+  animateDJ(beat, energy, drop);
   crowdU.uBeat.value = beat; crowdU.uEnergy.value = energy; crowdU.uLift.value = Math.min(1, Math.max(0, energy - 0.35));
   glowMats.forEach((m) => m.color.copy(wallLight.color).multiplyScalar(1.3));
   drawWall(time, beat, drop);
@@ -2343,7 +2814,26 @@ function setVenue(v, tpl) {
       + `<p>${conf === 'estimated' ? 'All sizes are estimates from public information.' : `Estimated: ${esc(v.estimated || 'other sizes.')}`}</p>`
       + (v.scenery ? `<p>Surroundings: ${esc(v.scenery.basis)}</p>` : '');
   }
+  showVenuePhoto(v);
   window.dispatchEvent(new CustomEvent('stagevenue', { detail: state.venueMeta }));
+}
+// A real photo of the place from Wikimedia Commons, loaded from there at view time. Hosts that block outside images
+// (the online preview) get the link instead. Every venue also links to a photo search for more.
+const PHOTO_VIEW = { show: 'During a show', site: 'The venue', outside: 'Outside: the building the venue is in' };
+function showVenuePhoto(v) {
+  const fig = $('#venuePhoto'), img = $('#venueImg'), cap = $('#venueCap');
+  fig.hidden = !v;
+  if (!v) return;
+  const more = `<a href="https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${v.name.split(':')[0]} ${v.city} inside`)}" target="_blank" rel="noopener">More photos</a>`;
+  const p = v.photo;
+  img.onload = img.onerror = null;
+  if (!p) { img.hidden = true; img.removeAttribute('src'); cap.innerHTML = `No freely licensed photo of this venue yet. ${more}`; return; }
+  const page = `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(p.file)}`;
+  const credit = `${PHOTO_VIEW[p.view] || 'Photo'}. <a href="${page}" target="_blank" rel="noopener">Photo and licence on Wikimedia Commons</a> · ${more}`;
+  img.hidden = false; img.alt = `Photo of ${v.name}`;
+  img.onerror = () => { img.hidden = true; cap.innerHTML = `This page can't load outside images. ${credit}`; };
+  img.src = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(p.file)}?width=640`;
+  cap.innerHTML = credit;
 }
 function applyTemplate(k, v) {
   const t = TEMPLATES[k], src = v ? { ...v.stage, ...v.led, ...v.rig } : t;
