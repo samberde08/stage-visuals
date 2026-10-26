@@ -59,6 +59,12 @@ input[type="color"] { width: 100%; height: 30px; padding: 0 2px; background: var
 input[type="file"] { font: 12px var(--body); color: var(--muted); width: 100%; }
 .readout { font-family: var(--mono); font-size: 11.5px; color: var(--steel); font-variant-numeric: tabular-nums; }
 .note { font-size: 12px; color: var(--muted); margin: 0; }
+.btns { display: flex; gap: 8px; }
+.btns .btn { flex: 1; padding: 9px 10px; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn.drop { background: var(--amber); color: var(--amber-ink); border-color: var(--amber); font-weight: 600; }
+.btn.drop[aria-pressed="true"] { background: #fff; border-color: #fff; }
+#beatOut[data-on="1"] { color: var(--amber); }
 .live { margin: 0; font: 11.5px/1.5 var(--mono); color: var(--muted); padding: 7px 9px; border: 1px solid var(--line); border-radius: 4px; background: var(--rack-2); }
 .live[data-state="rx"] { color: #7fd99a; border-color: #2d5a3a; }
 .live[data-state="rx"]::before { content: "● "; }
@@ -95,6 +101,7 @@ details .btn { margin: 0 10px 10px; }
       <button type="button" data-cam="foh" aria-pressed="true">FOH</button>
       <button type="button" data-cam="crowd" aria-pressed="false">Crowd</button>
       <button type="button" data-cam="wide" aria-pressed="false">Wide</button>
+      <button type="button" data-cam="drone" aria-pressed="false">Drone</button>
       <button type="button" data-cam="side" aria-pressed="false">Stage left</button>
       <button type="button" data-cam="top" aria-pressed="false">Plan</button>
       <button type="button" id="pause" aria-pressed="false">Pause</button>
@@ -110,10 +117,10 @@ details .btn { margin: 0 10px 10px; }
 
     <section class="group">
       <div class="eyebrow"><span>Stage</span><span>metres</span></div>
-      <div class="row"><label for="W">Width</label><input id="W" type="range" min="4" max="40" step="0.5"><output for="W"></output></div>
-      <div class="row"><label for="D">Depth</label><input id="D" type="range" min="3" max="24" step="0.5"><output for="D"></output></div>
+      <div class="row"><label for="W">Width</label><input id="W" type="range" min="2" max="70" step="0.5"><output for="W"></output></div>
+      <div class="row"><label for="D">Depth</label><input id="D" type="range" min="2" max="30" step="0.5"><output for="D"></output></div>
       <div class="row"><label for="H">Deck height</label><input id="H" type="range" min="0.2" max="3" step="0.1"><output for="H"></output></div>
-      <div class="row"><label for="trim">Truss trim</label><input id="trim" type="range" min="2.5" max="20" step="0.5"><output for="trim"></output></div>
+      <div class="row"><label for="trim">Truss trim</label><input id="trim" type="range" min="2.5" max="30" step="0.5"><output for="trim"></output></div>
     </section>
 
     <section class="group">
@@ -124,7 +131,7 @@ details .btn { margin: 0 10px 10px; }
           <option value="live">Live DMX from console</option>
         </select></div>
       <p class="live" id="liveOut" data-state="off"></p>
-      <div class="row"><label for="count">Fixtures</label><input id="count" type="range" min="4" max="48" step="1"><output for="count"></output></div>
+      <div class="row"><label for="count">Fixtures</label><input id="count" type="range" min="4" max="64" step="1"><output for="count"></output></div>
       <div class="row two"><label for="program">Movement</label>
         <select id="program">
           <option value="fan">Fan</option>
@@ -150,6 +157,27 @@ details .btn { margin: 0 10px 10px; }
       <div class="row"><label for="bpm">Tempo</label><input id="bpm" type="range" min="60" max="180" step="1" value="124"><output for="bpm"></output></div>
       <div class="row"><label for="zoom">Beam angle</label><input id="zoom" type="range" min="3" max="35" step="1" value="9"><output for="zoom"></output></div>
       <div class="row"><label for="haze">Haze</label><input id="haze" type="range" min="0" max="1" step="0.05" value="0.55"><output for="haze"></output></div>
+      <div class="row two"><label for="lasers">Lasers</label>
+        <select id="lasers">
+          <option value="off">Off</option>
+          <option value="fan">Fan</option>
+          <option value="sweep">Sweep</option>
+          <option value="scan">Crowd scan</option>
+        </select></div>
+      <div class="row two"><label for="laserCol">Laser colour</label><input id="laserCol" type="color" value="#22ff66"></div>
+    </section>
+
+    <section class="group">
+      <div class="eyebrow"><span>Music</span><span id="beatOut" data-on="0">124 BPM</span></div>
+      <div class="row two"><label for="music">Source</label>
+        <select id="music">
+          <option value="none">Tempo only (silent)</option>
+          <option value="demo">Demo beat</option>
+          <option value="track">Your track</option>
+        </select></div>
+      <div class="row two" id="trackRow" hidden><label for="track">File</label><input id="track" type="file" accept="audio/*"></div>
+      <div class="btns"><button type="button" class="btn" id="play">Play music</button><button type="button" class="btn drop" id="drop">Drop</button></div>
+      <p class="note" id="musicNote"></p>
     </section>
 
     <section class="group">
@@ -164,8 +192,8 @@ details .btn { margin: 0 10px 10px; }
         </select></div>
       <div class="row two" id="textRow" hidden><label for="wallText">Text</label><input id="wallText" type="text" value="STAGE VISUALS" maxlength="60"></div>
       <div class="row two" id="mediaRow" hidden><label for="media">File</label><input id="media" type="file" accept="image/*,video/*"></div>
-      <div class="row"><label for="wallW">Wall width</label><input id="wallW" type="range" min="2" max="30" step="0.5"><output for="wallW"></output></div>
-      <div class="row"><label for="wallH">Wall height</label><input id="wallH" type="range" min="1" max="14" step="0.5"><output for="wallH"></output></div>
+      <div class="row"><label for="wallW">Wall width</label><input id="wallW" type="range" min="2" max="50" step="0.5"><output for="wallW"></output></div>
+      <div class="row"><label for="wallH">Wall height</label><input id="wallH" type="range" min="1" max="18" step="0.5"><output for="wallH"></output></div>
       <div class="row two"><label for="pitch">Pixel pitch</label>
         <select id="pitch">
           <option value="2.6">2.6 mm (broadcast)</option>
@@ -201,15 +229,19 @@ if (!window.THREE || !THREE.OrbitControls) {
 
 /* ---------- Templates ---------- */
 const TEMPLATES = {
-  proscenium: { label: 'Proscenium', blurb: 'Theatre with arch', W: 14, D: 10, H: 1.0, trim: 7, wallW: 10, wallH: 5.5, count: 16, program: 'fan', visual: 'tunnel' },
-  thrust:     { label: 'Thrust', blurb: 'Audience on 3 sides', W: 10, D: 8, H: 0.8, trim: 6.5, wallW: 8, wallH: 4.5, count: 14, program: 'ballyhoo', visual: 'plasma' },
-  arena:      { label: 'Arena', blurb: 'In the round', W: 12, D: 12, H: 1.5, trim: 14, wallW: 6, wallH: 3.5, count: 24, program: 'audience', visual: 'bars' },
-  festival:   { label: 'Festival', blurb: 'Main stage, roof', W: 24, D: 16, H: 2.2, trim: 13, wallW: 18, wallH: 9, count: 32, program: 'fan', visual: 'plasma' },
-  club:       { label: 'Club', blurb: 'DJ booth, low ceiling', W: 8, D: 4, H: 0.6, trim: 3.6, wallW: 6, wallH: 3, count: 10, program: 'cross', visual: 'text' },
+  club:       { label: 'Club', blurb: 'DJ stage, low ceiling', W: 8, D: 4, H: 0.6, trim: 3.6, wallW: 6, wallH: 3, count: 10, program: 'cross', visual: 'text', lasers: 'sweep' },
+  booth:      { label: 'DJ booth', blurb: 'In the round, LED cube', W: 3.5, D: 3.5, H: 0.9, trim: 3.4, wallW: 2.5, wallH: 1.5, count: 12, program: 'ballyhoo', visual: 'bars', lasers: 'fan' },
+  warehouse:  { label: 'Warehouse', blurb: 'Concrete hall, pillars', W: 12, D: 5, H: 1.2, trim: 8, wallW: 12, wallH: 4, count: 24, program: 'wave', visual: 'tunnel', lasers: 'sweep' },
+  arch:       { label: 'Arch tent', blurb: 'Festival tent, lit ribs', W: 18, D: 10, H: 1.8, trim: 11, wallW: 14, wallH: 7, count: 28, program: 'audience', visual: 'plasma', lasers: 'fan' },
+  festival:   { label: 'Festival', blurb: 'Main stage, roof', W: 24, D: 16, H: 2.2, trim: 13, wallW: 18, wallH: 9, count: 32, program: 'fan', visual: 'plasma', lasers: 'fan' },
+  stadium:    { label: 'Stadium', blurb: 'Field crowd, stands', W: 56, D: 24, H: 3, trim: 22, wallW: 40, wallH: 14, count: 48, program: 'fan', visual: 'plasma', lasers: 'fan' },
+  proscenium: { label: 'Proscenium', blurb: 'Theatre with arch', W: 14, D: 10, H: 1.0, trim: 7, wallW: 10, wallH: 5.5, count: 16, program: 'fan', visual: 'tunnel', lasers: 'off' },
+  thrust:     { label: 'Thrust', blurb: 'Audience on 3 sides', W: 10, D: 8, H: 0.8, trim: 6.5, wallW: 8, wallH: 4.5, count: 14, program: 'ballyhoo', visual: 'plasma', lasers: 'off' },
+  arena:      { label: 'Arena', blurb: 'In the round', W: 12, D: 12, H: 1.5, trim: 14, wallW: 6, wallH: 3.5, count: 24, program: 'audience', visual: 'bars', lasers: 'scan' },
 };
-const NAMES = { proscenium: 'Proscenium theatre', thrust: 'Thrust stage', arena: 'Arena in the round', festival: 'Festival main stage', club: 'Club stage' };
+const NAMES = { club: 'Club stage', booth: 'DJ booth in the round', warehouse: 'Warehouse rave', arch: 'Arch tent', festival: 'Festival main stage', stadium: 'Stadium show', arena: 'Arena in the round', proscenium: 'Proscenium theatre', thrust: 'Thrust stage' };
 
-const state = { tpl: 'festival', ...pick(TEMPLATES.festival), program: 'fan', dimfx: 'steady', colorMode: 'alt', colA: '#ff7a1a', colB: '#2f6bff', bpm: 124, zoom: 9, haze: 0.55, visual: 'plasma', text: 'STAGE VISUALS', pitch: 3.9, control: 'effects' };
+const state = { tpl: 'festival', ...pick(TEMPLATES.festival), program: 'fan', dimfx: 'steady', colorMode: 'alt', colA: '#ff7a1a', colB: '#2f6bff', bpm: 124, zoom: 9, haze: 0.55, visual: 'plasma', text: 'STAGE VISUALS', pitch: 3.9, control: 'effects', lasers: 'fan', laserCol: '#22ff66' };
 function pick(t) { return { W: t.W, D: t.D, H: t.H, trim: t.trim, wallW: t.wallW, wallH: t.wallH, count: t.count }; }
 
 /* ---------- Renderer ---------- */
@@ -244,9 +276,13 @@ const M = {
   truss: new THREE.MeshStandardMaterial({ color: 0xb4b7bf, roughness: 0.35, metalness: 0.85 }),
   lacing: new THREE.LineBasicMaterial({ color: 0x80838c }),
   body: new THREE.MeshStandardMaterial({ color: 0x1c1d22, roughness: 0.45, metalness: 0.5 }),
-  crowd: new THREE.MeshStandardMaterial({ color: 0x1b1c22, roughness: 1 }),
+  crowd: new THREE.MeshStandardMaterial({ color: 0x0f1014, roughness: 1 }),
   pa: new THREE.MeshStandardMaterial({ color: 0x0d0d10, roughness: 0.7 }),
   frame: new THREE.MeshStandardMaterial({ color: 0x0a0a0c, roughness: 0.6 }),
+  concrete: new THREE.MeshStandardMaterial({ color: 0x2c2d31, roughness: 0.95 }),
+  stand: new THREE.MeshStandardMaterial({ color: 0x23252d, roughness: 0.9 }),
+  turf: new THREE.MeshStandardMaterial({ color: 0x141c16, roughness: 0.9 }),
+  fabric: new THREE.MeshStandardMaterial({ color: 0x1b1c24, roughness: 1, side: THREE.DoubleSide, transparent: true, opacity: 0.6, depthWrite: false }),
 };
 
 /* ---------- LED content canvas ---------- */
@@ -333,6 +369,7 @@ const poolGeo = new THREE.PlaneGeometry(1, 1);
 /* ---------- Scene state ---------- */
 let venue = new THREE.Group(); scene.add(venue);
 let receivers = [], fixtures = [], trussList = [], screens = [], hangLines = [], camSet = {}, mainWall = null;
+let crowds = [], laserSpots = [], lasers = [], glowMats = [];
 
 function box(w, h, d, x, y, z, mat, recv) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
@@ -383,19 +420,40 @@ function screen(name, w, h, pos, rotY = 0, frame = true) {
   return mesh;
 }
 
+// Each person is x, y, z, height scale and a dance phase; poses are rewritten every frame.
 function crowd(n, fn) {
   const geo = new THREE.CylinderGeometry(0.15, 0.19, 1.65, 6); geo.translate(0, 0.83, 0);
   const im = new THREE.InstancedMesh(geo, M.crowd, n);
-  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3();
+  im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  im.frustumCulled = false;
+  const data = new Float32Array(n * 5);
   let k = 0;
   for (let i = 0; i < n * 3 && k < n; i++) {
     const p = fn(); if (!p) continue;
-    const sc = 0.88 + Math.random() * 0.22; s.set(1, sc, 1);
-    m.compose(p, q, s); im.setMatrixAt(k++, m);
+    data.set([p.x, p.y, p.z, 0.88 + Math.random() * 0.22, Math.random()], k * 5);
+    k++;
   }
   im.count = k;
   venue.add(im);
+  const c = { im, data, k };
+  crowds.push(c);
+  posePeople(c, 0, 0.5);
 }
+const cm4 = new THREE.Matrix4(), cq = new THREE.Quaternion(), cs = new THREE.Vector3(), cp = new THREE.Vector3();
+function posePeople(c, beat, energy) {
+  const d = c.data;
+  for (let i = 0; i < c.k; i++) {
+    const o = i * 5, ph = d[o + 4];
+    const hop = Math.pow(Math.abs(Math.sin(Math.PI * (beat + ph * 0.2))), 3) * 0.22 * energy;
+    cq.setFromAxisAngle(up, Math.sin(beat * Math.PI * 0.5 + ph * 6.3) * 0.3 * Math.min(1, energy));
+    cp.set(d[o], d[o + 1] + hop, d[o + 2]);
+    cs.set(1, d[o + 3] * (1 + hop * 0.15), 1);
+    cm4.compose(cp, cq, cs);
+    c.im.setMatrixAt(i, cm4);
+  }
+  c.im.instanceMatrix.needsUpdate = true;
+}
+function laser(x, y, z, yaw = 0) { laserSpots.push({ pos: V(x, y, z), yaw }); }
 function seatRow(w, x, y, z, rotY = 0) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.45, 0.5), M.seat);
   m.position.set(x, y + 0.22, z); m.rotation.y = rotY; venue.add(m);
@@ -459,10 +517,11 @@ const BUILD = {
     for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2; screen(`Centre-hung ${'NESW'[i]}`, s.wallW, s.wallH, V(Math.sin(a) * hw, cy, Math.cos(a) * hw), a, false); }
     mainWall = screens[0].mesh;
     const lid = new THREE.Mesh(new THREE.BoxGeometry(s.wallW, 0.2, s.wallW), M.frame); lid.position.set(0, cy + s.wallH / 2 + 0.1, 0); venue.add(lid);
+    [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(([a, b]) => { const x = a * (W / 2 - 0.3), z = b * (D / 2 - 0.3); laser(x, H, z, Math.atan2(x, z)); });
     crowd(900, () => { const a = Math.random() * Math.PI * 2, r = Math.max(W, D) / 2 + 3 + Math.random() * 11; return V(Math.sin(a) * r, 0, Math.cos(a) * r); });
     return { target: V(0, H + 4, 0), front: R0 + 12, fohY: 15, crowdEye: V(3, 6.5, R0 + 8 * 0.85) };
   },
-  festival(s) {
+  festival(s, o = {}) {
     const { W, D, H, trim } = s, top = H + trim, wing = 6;
     box(W, H, D, 0, H / 2, -D / 2, M.deck, true);
     box(wing, H, D * 0.7, -(W / 2 + wing / 2), H / 2, -D * 0.35, M.deck, true);
@@ -486,9 +545,93 @@ const BUILD = {
     });
     mainWall = screen('Upstage LED', s.wallW, s.wallH, V(0, H + 0.6 + s.wallH / 2, -D + 0.6));
     box(W + 2 * wing, 1.1, 0.4, 0, 0.55, 3, M.frame);
-    box(6, 2.6, 4, 0, 1.3, 34, M.pa);
-    crowd(1600, () => { const x = (Math.random() - 0.5) * (W + 2 * wing + 6), z = 4 + Math.random() * 28; return Math.abs(x) < 3.5 && z > 31 ? null : V(x, 0, z); });
+    const cw = o.crowdW || W + 2 * wing + 6, cd = o.crowdDepth || 28, fz = o.fohZ || 34;
+    box(6, 2.6, 4, 0, 1.3, fz, M.pa);
+    [-0.42, -0.15, 0.15, 0.42].forEach((u) => laser(u * W, H, -0.5, 0));
+    laser(-(W / 2 + wing / 2), H, -1, 0.3); laser(W / 2 + wing / 2, H, -1, -0.3);
+    crowd(o.crowdN || 1600, () => { const x = (Math.random() - 0.5) * cw, z = 4 + Math.random() * cd; return Math.abs(x) < 3.5 && Math.abs(z - fz) < 3 ? null : V(x, 0, z); });
     return { target: V(0, H + 4.5, -D / 2), front: 44, fohY: 9, crowdEye: V(2, 1.85, 12) };
+  },
+  stadium(s) {
+    const { W, D, H } = s, fieldW = Math.max(W + 30, 80), fieldEnd = 105, len = fieldEnd + D + 6, zc = (fieldEnd - D - 6) / 2;
+    const cam = BUILD.festival(s, { crowdN: 3000, crowdDepth: 60, crowdW: fieldW - 8, fohZ: 50 });
+    const turf = new THREE.Mesh(new THREE.PlaneGeometry(fieldW, len), M.turf);
+    turf.rotation.x = -Math.PI / 2; turf.position.set(0, 0.01, zc); venue.add(turf); receivers.push(turf);
+    const tier = (i) => ({ y: 1.2 + i * 0.62, o: 3 + i * 0.95 });
+    for (let i = 0; i < 24; i++) {
+      const { y, o } = tier(i);
+      [-1, 1].forEach((sx) => box(0.95, y, len + 2 * o, sx * (fieldW / 2 + o), y / 2, zc, M.stand));
+      box(fieldW + 2 * o, y, 0.95, 0, y / 2, fieldEnd + o, M.stand);
+    }
+    crowd(2400, () => {
+      const { y, o } = tier(Math.floor(Math.random() * 24)), r = Math.random();
+      if (r < 0.36) return V(-(fieldW / 2 + o), y, -D + Math.random() * (fieldEnd + D));
+      if (r < 0.72) return V(fieldW / 2 + o, y, -D + Math.random() * (fieldEnd + D));
+      return V((Math.random() - 0.5) * (fieldW + 2 * o), y, fieldEnd + o);
+    });
+    return { ...cam, target: V(0, H + 8, -D / 2), front: 78, fohY: 17, crowdEye: V(3, 1.85, 30) };
+  },
+  warehouse(s) {
+    const { W, D, H, trim } = s, roomW = Math.max(W + 18, 28), roomL = 56, top = H + trim, ceil = top + 2.5, zc = roomL / 2 - D - 1.2;
+    box(W, H, D, 0, H / 2, -D / 2, M.deck, true);
+    box(3, 1.05, 1, 0, H + 0.52, -D * 0.4, M.body);
+    box(0.6, ceil, roomL, -roomW / 2, ceil / 2, zc, M.concrete);
+    box(0.6, ceil, roomL, roomW / 2, ceil / 2, zc, M.concrete);
+    box(roomW, ceil, 0.6, 0, ceil / 2, -D - 1.2, M.concrete);
+    for (let z = 6; z < roomL - D - 4; z += 9) [-1, 1].forEach((sx) => box(0.8, ceil, 0.8, sx * roomW * 0.27, ceil / 2, z, M.concrete));
+    for (let z = 2; z < roomL - D - 2; z += 9) box(roomW, 0.7, 0.5, 0, ceil - 0.35, z, M.concrete);
+    const tx = roomW * 0.42;
+    [3, 11, 19, 27].forEach((z, i) => truss(`Grid ${i + 1}`, V(-tx, top, z), V(tx, top, z), 0.4, { hang: true }));
+    truss('Stage', V(-W * 0.45, top, -D * 0.5), V(W * 0.45, top, -D * 0.5), 0.4, { hang: true });
+    mainWall = screen('Stage LED', s.wallW, s.wallH, V(0, H + 0.4 + s.wallH / 2, -D + 0.5));
+    [-1, -0.33, 0.33, 1].forEach((u) => laser(u * W * 0.42, H, -0.4, 0));
+    laser(-roomW * 0.4, top + 0.6, 34, Math.PI); laser(roomW * 0.4, top + 0.6, 34, Math.PI);
+    crowd(1400, () => V((Math.random() - 0.5) * (roomW - 3), 0, 1.5 + Math.random() * 32));
+    return { target: V(0, H + 3, 4), front: 40, fohY: 7, crowdEye: V(2, 1.85, 10) };
+  },
+  booth(s) {
+    const { W, D, H, trim } = s, top = H + trim, room = 22, wallH = top + 2.5;
+    box(W, H, D, 0, H / 2, 0, M.deck, true);
+    box(W * 0.8, 1.0, D * 0.35, 0, H + 0.5, 0, M.body);
+    box(room, wallH, 0.4, 0, wallH / 2, -room / 2, M.wall);
+    box(0.4, wallH, room, -room / 2, wallH / 2, 0, M.wall);
+    box(0.4, wallH, room, room / 2, wallH / 2, 0, M.wall);
+    const h = Math.max(W, D) / 2 + 1.2;
+    truss('Booth N', V(-h, top, -h), V(h, top, -h), 0.3, { hang: true });
+    truss('Booth S', V(-h, top, h), V(h, top, h), 0.3, { hang: true });
+    truss('Booth W', V(-h, top, -h), V(-h, top, h), 0.3, { hang: true });
+    truss('Booth E', V(h, top, -h), V(h, top, h), 0.3, { hang: true });
+    const cy = top - 0.5 - s.wallH / 2, hw = s.wallW / 2;
+    for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2; screen(`LED cube ${'NESW'[i]}`, s.wallW, s.wallH, V(Math.sin(a) * hw, cy, Math.cos(a) * hw), a, false); }
+    mainWall = screens[0].mesh;
+    const lid = new THREE.Mesh(new THREE.BoxGeometry(s.wallW, 0.12, s.wallW), M.frame); lid.position.set(0, cy + s.wallH / 2 + 0.06, 0); venue.add(lid);
+    [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(([a, b]) => { const x = a * (W / 2 - 0.25), z = b * (D / 2 - 0.25); laser(x, H, z, Math.atan2(x, z)); });
+    crowd(380, () => { const x = (Math.random() - 0.5) * (room - 2), z = (Math.random() - 0.5) * (room - 2); return Math.abs(x) < W / 2 + 0.7 && Math.abs(z) < D / 2 + 0.7 ? null : V(x, 0, z); });
+    return { target: V(0, H + 1.4, 0), front: room / 2 + 5, fohY: 7.5, crowdEye: V(1.2, 1.85, D / 2 + 2.6) };
+  },
+  arch(s) {
+    const { W, D, H, trim } = s, R = W / 2 + 7, Hr = H + trim + 2, L = 42;
+    box(W, H, D, 0, H / 2, -D / 2, M.deck, true);
+    mainWall = screen('Stage LED', s.wallW, s.wallH, V(0, H + 0.5 + s.wallH / 2, -D + 0.5));
+    const P = (a, z, inset = 0) => V((R - inset) * Math.cos(a), (Hr - inset) * Math.sin(a), z);
+    const glow = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false });
+    glowMats.push(glow);
+    let i = 0;
+    for (let z = -D - 0.5; z <= L; z += 6, i++) {
+      const pts = [], inner = [];
+      for (let k = 0; k <= 32; k++) { const a = k / 32 * Math.PI; pts.push(P(a, z)); inner.push(P(a, z, 0.3)); }
+      venue.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 64, 0.18, 6), M.truss));
+      venue.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(inner), 64, 0.07, 5), glow));
+      trussList.push({ name: `Arch rib ${i + 1}`, from: [-R, 0, r2(z)], to: [R, 0, r2(z)], section: 0.36, shape: 'arch' });
+      if (i % 2 === 0) [[0.28, 0.42], [0.42, 0.58], [0.58, 0.72]].forEach(([a0, a1]) => hangLines.push({ name: `Arch ${i + 1}`, a: P(a0 * Math.PI, z, 0.6), b: P(a1 * Math.PI, z, 0.6), flip: true, yaw: 0 }));
+    }
+    const tent = new THREE.CylinderGeometry(R + 0.3, R + 0.3, L + D + 1, 48, 1, true, Math.PI / 2, Math.PI);
+    tent.rotateX(Math.PI / 2); tent.scale(1, (Hr + 0.3) / (R + 0.3), 1);
+    const fabric = new THREE.Mesh(tent, M.fabric); fabric.position.z = (L - D - 1) / 2; venue.add(fabric);
+    [-0.4, -0.13, 0.13, 0.4].forEach((u) => laser(u * W, H, -0.4, 0));
+    laser(-R * 0.6, 4, L - 4, Math.PI); laser(R * 0.6, 4, L - 4, Math.PI);
+    crowd(1500, () => V((Math.random() - 0.5) * (2 * R - 4), 0, 2 + Math.random() * (L - 6)));
+    return { target: V(0, H + 3.5, -D / 2 + 2), front: L - 2, fohY: 8, crowdEye: V(2, 1.85, 14) };
   },
   club(s) {
     const { W, D, H, trim } = s, ceil = H + trim + 0.9, roomW = Math.max(W + 8, 16), roomD = 22;
@@ -504,8 +647,9 @@ const BUILD = {
     truss('Box SR', V(x0, t, z0), V(x0, t, z1), 0.3, { hang: true });
     truss('Stage pipe', V(-W * 0.45, t, -D * 0.5), V(W * 0.45, t, -D * 0.5), 0.3);
     mainWall = screen('DJ wall', s.wallW, s.wallH, V(0, H + 0.2 + s.wallH / 2, -D + 0.35));
+    [-0.35, 0.35].forEach((u) => laser(u * W, H, -0.3, 0));
     crowd(260, () => V((Math.random() - 0.5) * (roomW - 2), 0, 1 + Math.random() * 12));
-    return { target: V(0, H + 1.6, -D / 2 + 1), front: 15, crowdEye: V(1, 1.85, 7.5) };
+    return { target: V(0, H + 1.6, -D / 2 + 1), front: 14, fohY: 3.2, crowdEye: V(1, 1.85, 7.5) };
   },
 };
 
@@ -554,17 +698,61 @@ function distribute(n) {
   return out;
 }
 
+/* ---------- Lasers ---------- */
+const LASER_LEN = 70, LASER_BEAMS = 9;
+const laserGeo = new THREE.CylinderGeometry(0.06, 0.008, 1, 6, 1, true); laserGeo.translate(0, 0.5, 0);
+function makeLaser(spot) {
+  const root = new THREE.Group(); root.position.copy(spot.pos); root.rotation.y = spot.yaw;
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.22, 0.35), M.body); body.position.y = 0.11; root.add(body);
+  const tilt = new THREE.Group(); tilt.position.set(0, 0.16, 0.18); root.add(tilt);
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uColor: { value: new THREE.Color() }, uIntensity: { value: 0 }, uLen: { value: LASER_LEN } },
+    vertexShader: beamVert, fragmentShader: beamFrag,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+  });
+  const holders = [];
+  for (let b = 0; b < LASER_BEAMS; b++) {
+    const h = new THREE.Group(), m = new THREE.Mesh(laserGeo, mat);
+    m.rotation.x = Math.PI / 2; m.scale.set(1, LASER_LEN, 1); m.frustumCulled = false;
+    h.add(m); tilt.add(h); holders.push(h);
+  }
+  venue.add(root);
+  return { root, tilt, holders, mat };
+}
+const laserCol = new THREE.Color();
+function animateLasers(beat, drop) {
+  const mode = drop === 'on' && state.lasers === 'off' ? 'fan' : state.lasers;
+  laserCol.set(state.laserCol);
+  lasers.forEach((L, li) => {
+    const on = mode !== 'off' && drop !== 'pre';
+    L.tilt.visible = on;
+    if (!on) return;
+    let spread, tilt, sweep = 0, flick = 1;
+    if (mode === 'fan') { spread = (14 + 22 * (0.5 + 0.5 * Math.sin(beat * Math.PI / 8))) * DEG; tilt = -(3 + 5 * Math.sin(beat * Math.PI / 4 + li)) * DEG; }
+    else if (mode === 'sweep') { spread = 3 * DEG; sweep = 45 * DEG * Math.sin(beat * Math.PI / 4 + li * 0.9); tilt = -4 * DEG; }
+    else { spread = 32 * DEG; tilt = (1.5 + 1.5 * Math.sin(beat * Math.PI / 2 + li)) * DEG; flick = ((beat * 2) % 1) < 0.5 ? 1 : 0.15; }
+    L.tilt.rotation.x = tilt;
+    const nb = L.holders.length;
+    L.holders.forEach((h, b) => { h.rotation.y = sweep + (b / (nb - 1) - 0.5) * 2 * spread; });
+    L.mat.uniforms.uColor.value.copy(laserCol);
+    L.mat.uniforms.uIntensity.value = 2.6 * (0.12 + state.haze) * flick * (drop === 'on' ? 1.3 : 1);
+  });
+}
+
 /* ---------- Build ---------- */
 function build() {
   scene.remove(venue);
-  venue.traverse((o) => { if (o.geometry && o.geometry !== beamGeo && o.geometry !== poolGeo && o.geometry !== lensGeo && o.geometry !== headGeo) o.geometry.dispose(); if (o.material && o.material.dispose && !Object.values(M).includes(o.material)) o.material.dispose(); });
+  venue.traverse((o) => { if (o.geometry && o.geometry !== beamGeo && o.geometry !== poolGeo && o.geometry !== lensGeo && o.geometry !== headGeo && o.geometry !== laserGeo) o.geometry.dispose(); if (o.material && o.material.dispose && !Object.values(M).includes(o.material)) o.material.dispose(); });
   venue = new THREE.Group(); scene.add(venue);
   receivers = []; fixtures = []; trussList = []; screens = []; hangLines = [];
+  crowds = []; laserSpots = []; lasers = []; glowMats = [];
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), M.floor);
   floor.rotation.x = -Math.PI / 2; venue.add(floor); receivers.push(floor);
   sizeWallCanvas(state.wallW / state.wallH);
   camSet = BUILD[state.tpl](state);
   distribute(state.count).forEach((s, i) => fixtures.push(makeFixture(s, i)));
+  if (!laserSpots.length) [-0.3, 0.3].forEach((u) => laser(u * state.W, state.H, -0.3, 0));
+  lasers = laserSpots.map(makeLaser);
   const mw = mainWall;
   const n = new THREE.Vector3(0, 0, 1).applyQuaternion(mw.quaternion);
   wallLight.position.copy(mw.position).addScaledVector(n, 3);
@@ -575,19 +763,22 @@ function build() {
 }
 
 /* ---------- Cameras ---------- */
-let tween = null, activeCam = 'foh';
+let tween = null, activeCam = 'foh', droneAng = 0;
+function droneOrbit() { const { W, D, H } = state; return { R: Math.max(W, D) * 1.1 + 14, h: H + Math.max(W, D) * 0.35 + 7 }; }
 function camPose(kind) {
   const t = camSet.target, { W, D, H, trim } = state, span = Math.max(W, D) + 10;
   switch (kind) {
     case 'crowd': { const wp = mainWall.getWorldPosition(new THREE.Vector3()); return { pos: camSet.crowdEye.clone(), target: wp }; }
     case 'wide': return { pos: V(span * 0.95, H + trim + 7, t.z + span * 1.05), target: t.clone() };
     case 'side': return { pos: V(W / 2 + 2.5, H + 2.2, t.z + D * 0.45 + 1), target: V(-W * 0.1, H + trim * 0.45, t.z) };
+    case 'drone': { const o = droneOrbit(); return { pos: V(t.x, o.h, t.z + o.R), target: t.clone() }; }
     case 'top': return { pos: V(0, Math.max(W, D) * 1.5 + trim + 18, t.z + 0.01), target: V(0, 0, t.z) };
     default: return { pos: V(0, camSet.fohY || H + 4.5, camSet.front), target: t.clone() };
   }
 }
 function goCam(kind, instant) {
   activeCam = kind;
+  droneAng = 0;
   document.querySelectorAll('[data-cam]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.cam === kind)));
   const p = camPose(kind);
   if (instant || matchMedia('(prefers-reduced-motion: reduce)').matches) { camera.position.copy(p.pos); controls.target.copy(p.target); controls.update(); tween = null; return; }
@@ -598,7 +789,7 @@ function goCam(kind, instant) {
 const colA = new THREE.Color(), colB = new THREE.Color(), tmpC = new THREE.Color();
 const ray = new THREE.Raycaster(); ray.far = 90;
 const qW = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), dir = new THREE.Vector3(), org = new THREE.Vector3(), nrm = new THREE.Vector3();
-let time = 0, last = performance.now(), paused = false, frame = 0;
+let time = 0, beatClock = 0, last = performance.now(), paused = false, frame = 0;
 
 function fixtureColor(i, n, beat, out) {
   if (state.colorMode === 'solid') return out.copy(colA);
@@ -622,7 +813,7 @@ function dimmer(i, n, beat) {
   return 1;
 }
 
-function drawWall(t, beat) {
+function drawWall(t, beat, drop) {
   const w = wc.width, h = wc.height, ctx = wctx, pulse = 0.55 + 0.45 * Math.exp(-((beat % 1)) * 5);
   const A = '#' + colA.getHexString(), B = '#' + colB.getHexString();
   ctx.globalAlpha = 1;
@@ -674,6 +865,8 @@ function drawWall(t, beat) {
       ctx.fillText('Choose an image or video in the LED wall panel', w / 2, h / 2, w * 0.9); ctx.textAlign = 'left';
     }
   }
+  if (drop === 'on') { ctx.globalAlpha = Math.exp(-(beat % 1) * 6) * 0.75; ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); ctx.globalAlpha = 1; }
+  else if (drop === 'pre') { ctx.globalAlpha = 0.85; ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h); ctx.globalAlpha = 1; }
   wallTex.value.needsUpdate = true;
   if (frame % 6 === 0) {
     sctx.drawImage(wc, 0, 0, 1, 1);
@@ -684,12 +877,14 @@ function drawWall(t, beat) {
 
 function tick(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
-  if (!paused) time += dt;
+  if (!paused) { time += dt; beatClock += dt * state.bpm / 60; }
   frame++;
-  const beat = time * state.bpm / 60;
+  if (audio.playing && audio.demo) beatClock = demoBeat();
+  else if (audio.playing && audio.el && audio.grid) { beatClock = trackBeat(); meter(); }
+  const beat = beatClock, drop = dropPhase(beat);
   colA.set(state.colA); colB.set(state.colB);
   const n = fixtures.length, half = state.zoom / 2 * DEG, k = Math.tan(half) / Math.tan(BASE_HALF);
-  const hz = 0.05 + state.haze * 0.55;
+  const hz = 0.05 + Math.min(1, state.haze + (drop === 'on' ? 0.2 : 0)) * 0.55;
   scene.fog.density = 0.004 + state.haze * 0.012;
   fixtures.forEach((f, i) => {
     let p, tl, dim, kf = k, hf = half;
@@ -700,7 +895,7 @@ function tick(now) {
     } else {
       [p, tl] = motion(i, n, beat);
       if (!f.flip) { p = Math.PI / 2; tl = (i % 2 ? 1 : -1) * (12 + 14 * Math.sin(beat * Math.PI / 4)) * DEG; if (state.program === 'pools') tl = 0; }
-      dim = dimmer(i, n, beat);
+      dim = drop === 'pre' ? 0 : drop === 'on' ? 0.5 + 0.5 * Math.exp(-(beat % 1) * 4) : dimmer(i, n, beat);
       fixtureColor(i, n, beat, tmpC);
     }
     f.pan.rotation.y = p; f.tilt.rotation.x = tl;
@@ -723,11 +918,23 @@ function tick(now) {
       f.pool.material.color.copy(tmpC).multiplyScalar(dim * (0.55 - state.haze * 0.2));
     } else f.pool.visible = false;
   });
-  drawWall(time, beat);
+  animateLasers(beat, drop);
+  const energy = drop === 'on' ? 1.6 : drop === 'pre' ? 0.15 : audio.playing ? audio.energy : 0.5;
+  crowds.forEach((c) => posePeople(c, beat, energy));
+  glowMats.forEach((m) => m.color.copy(wallLight.color).multiplyScalar(1.3));
+  drawWall(time, beat, drop);
+  if (frame % 10 === 0) $('#beatOut').textContent = `${Math.round(state.bpm)} BPM`;
+  $('#beatOut').dataset.on = (beat % 1) < 0.18 ? '1' : '0';
   if (tween) {
     const e = Math.min(1, (now - tween.t0) / 900), s = e < 0.5 ? 2 * e * e : 1 - Math.pow(-2 * e + 2, 2) / 2;
     camera.position.lerpVectors(tween.from, tween.to, s); controls.target.lerpVectors(tween.fromT, tween.toT, s);
     if (e >= 1) tween = null;
+  }
+  if (activeCam === 'drone' && !tween) {
+    droneAng += dt * 0.12;
+    const o = droneOrbit(), t = camSet.target;
+    camera.position.set(t.x + Math.sin(droneAng) * o.R, o.h, t.z + Math.cos(droneAng) * o.R);
+    controls.target.copy(t);
   }
   controls.update();
   renderer.render(scene, camera);
@@ -789,6 +996,184 @@ function renderLive() {
 }
 const esc = (t) => String(t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 
+/* ---------- Music: demo beat, your track, kick detection, drop ---------- */
+const audio = { ctx: null, input: null, an: null, bins: null, mode: 'none', playing: false, demo: null, el: null, trackUrl: null, trackName: '', grid: null, energy: 0.5, noise: null };
+const dropState = { start: 0, end: 0 };
+function ensureCtx() {
+  if (!audio.ctx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    audio.ctx = new AC();
+    audio.an = audio.ctx.createAnalyser(); audio.an.fftSize = 1024; audio.an.smoothingTimeConstant = 0.25;
+    audio.input = audio.ctx.createGain();
+    audio.input.connect(audio.an); audio.an.connect(audio.ctx.destination);
+    audio.bins = new Uint8Array(audio.an.frequencyBinCount);
+    const nb = audio.ctx.createBuffer(1, audio.ctx.sampleRate, audio.ctx.sampleRate), ch = nb.getChannelData(0);
+    for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
+    audio.noise = nb;
+  }
+  if (audio.ctx.state === 'suspended') audio.ctx.resume();
+  return audio.ctx;
+}
+function demoBeat() { const d = audio.demo; return d.beatBase + (audio.ctx.currentTime - d.tBase) * state.bpm / 60; }
+function reanchorDemo(prevBpm) {
+  const d = audio.demo; if (!d) return;
+  const t = audio.ctx.currentTime;
+  d.beatBase += (t - d.tBase) * prevBpm / 60; d.tBase = t;
+}
+// Synth voices for the demo loop.
+function kick(t, out, len = 0.4) {
+  const c = audio.ctx, o = c.createOscillator(), g = c.createGain();
+  o.frequency.setValueAtTime(160, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.12);
+  g.gain.setValueAtTime(1, t); g.gain.exponentialRampToValueAtTime(0.001, t + len);
+  o.connect(g).connect(out); o.start(t); o.stop(t + len + 0.02);
+}
+function noiseHit(t, out, type, freq, gain, decay) {
+  const c = audio.ctx, src = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+  src.buffer = audio.noise; f.type = type; f.frequency.value = freq;
+  g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.001, t + decay);
+  src.connect(f).connect(g).connect(out); src.start(t); src.stop(t + decay + 0.05);
+}
+function bass(t, out, freq) {
+  const c = audio.ctx, o = c.createOscillator(), f = c.createBiquadFilter(), g = c.createGain();
+  o.type = 'sawtooth'; o.frequency.value = freq;
+  f.type = 'lowpass'; f.Q.value = 8; f.frequency.setValueAtTime(900, t); f.frequency.exponentialRampToValueAtTime(140, t + 0.2);
+  g.gain.setValueAtTime(0.32, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.24);
+  o.connect(f).connect(g).connect(out); o.start(t); o.stop(t + 0.26);
+}
+const BASSLINE = [55, 55, 65.41, 49];
+function playStep(n, t) {
+  const out = audio.demo.out, s16 = n % 16;
+  if (n % 4 === 0) kick(t, out);
+  if (s16 === 4 || s16 === 12) noiseHit(t, out, 'bandpass', 1500, 0.55, 0.16);
+  if (n % 4 === 2) { noiseHit(t, out, 'highpass', 7000, 0.2, 0.1); bass(t, out, BASSLINE[Math.floor(n / 16) % 4]); }
+  else if (n % 2 === 1) noiseHit(t, out, 'highpass', 9000, 0.06, 0.03);
+}
+function scheduleDemo() {
+  const d = audio.demo, now = audio.ctx.currentTime;
+  for (;;) {
+    const t = d.tBase + (d.step / 4 - d.beatBase) * 60 / state.bpm;
+    if (t > now + 0.15) break;
+    if (t >= now - 0.02) playStep(d.step, t);
+    d.step++;
+  }
+}
+function startDemo() {
+  const c = ensureCtx(), out = c.createGain();
+  out.gain.value = 0.55; out.connect(audio.input);
+  const beatBase = Math.ceil(beatClock);
+  audio.demo = { out, beatBase, tBase: c.currentTime + 0.1, step: beatBase * 4, timer: 0 };
+  audio.demo.timer = setInterval(scheduleDemo, 25);
+  scheduleDemo();
+  audio.energy = 0.9;
+}
+function startTrack() {
+  const c = ensureCtx();
+  if (!audio.el) {
+    audio.el = new Audio(); audio.el.loop = true;
+    c.createMediaElementSource(audio.el).connect(audio.input);
+  }
+  if (audio.el.src !== audio.trackUrl) audio.el.src = audio.trackUrl;
+  return audio.el.play();
+}
+function startMusic() {
+  try {
+    if (audio.mode === 'demo') startDemo();
+    else if (audio.mode === 'track' && audio.trackUrl) startTrack().catch(() => { audio.playing = false; renderMusic('The browser blocked playback. Press Play music again.'); });
+    else return;
+    audio.playing = true;
+  } catch (_) { audio.playing = false; renderMusic('This browser cannot play audio here.'); }
+}
+function stopMusic() {
+  if (audio.demo) { clearInterval(audio.demo.timer); audio.demo.out.disconnect(); audio.demo = null; }
+  if (audio.el) audio.el.pause();
+  audio.playing = false; audio.energy = 0.5;
+}
+// Beat grid for your own track, worked out once when the file loads: a kick-band onset envelope,
+// autocorrelation for the tempo (85-175 BPM), then the phase whose beats land on the most onsets.
+function analyzeTrack(buf) {
+  const sr = buf.sampleRate, hop = 512, a = Math.exp(-2 * Math.PI * 150 / sr);
+  const chans = [];
+  for (let c = 0; c < buf.numberOfChannels; c++) chans.push(buf.getChannelData(c));
+  const frames = Math.floor(buf.length / hop), env = new Float32Array(frames);
+  let lp = 0;
+  for (let f = 0; f < frames; f++) {
+    let sum = 0;
+    for (let i = f * hop, e = i + hop; i < e; i++) {
+      let x = 0; for (const ch of chans) x += ch[i];
+      lp = a * lp + (1 - a) * x; sum += lp * lp;
+    }
+    env[f] = Math.sqrt(sum / hop);
+  }
+  const on = new Float32Array(frames);
+  for (let f = 1; f < frames; f++) on[f] = Math.max(0, env[f] - env[f - 1]);
+  const fps = sr / hop, minLag = Math.floor(fps * 60 / 175), maxLag = Math.ceil(fps * 60 / 85);
+  let best = 0, bestLag = 0;
+  for (let lag = minLag; lag <= maxLag; lag++) {
+    let r = 0; for (let f = lag; f < frames; f++) r += on[f] * on[f - lag];
+    if (r > best) { best = r; bestLag = lag; }
+  }
+  if (!bestLag) return null;
+  // The lag is whole frames (about 23 ms), so search fractional periods around it together with the phase.
+  const sm = new Float32Array(frames);
+  for (let f = 1; f < frames - 1; f++) sm[f] = on[f] + 0.5 * (on[f - 1] + on[f + 1]);
+  let period = bestLag, bestPh = 0, top = -1;
+  for (let p = bestLag - 1.5; p <= bestLag + 1.5; p += 0.01) {
+    for (let ph = 0; ph < p; ph++) {
+      let sc = 0; for (let f = ph; f < frames; f += p) sc += sm[Math.round(f)] || 0;
+      if (sc > top) { top = sc; period = p; bestPh = ph; }
+    }
+  }
+  const bpm = 60 * fps / period;
+  return { bpm: Math.round(bpm * 10) / 10, offset: bestPh / fps };
+}
+function trackBeat() { const g = audio.grid; return (audio.el.currentTime - g.offset) * g.bpm / 60; }
+function meter() {
+  const b = audio.bins; audio.an.getByteFrequencyData(b);
+  let all = 0; for (let i = 0; i < b.length; i++) all += b[i];
+  audio.energy += (Math.min(1.4, all / (b.length * 255) * 3) - audio.energy) * 0.08;
+}
+function dropPhase(beat) {
+  if (!dropState.end || beat >= dropState.end) return null;
+  return beat < dropState.start ? 'pre' : 'on';
+}
+function triggerDrop() {
+  dropState.start = Math.ceil(beatClock + 0.25); dropState.end = dropState.start + 16;
+  const d = audio.demo;
+  if (audio.playing && d) {
+    const t = d.tBase + (dropState.start - d.beatBase) * 60 / state.bpm;
+    noiseHit(t, d.out, 'highpass', 3000, 0.5, 1.8); kick(t, d.out, 1.2);
+  }
+  const btn = $('#drop'); btn.setAttribute('aria-pressed', 'true');
+  setTimeout(() => btn.setAttribute('aria-pressed', 'false'), (dropState.end - beatClock) * 60000 / state.bpm);
+}
+function renderMusic(msg) {
+  const play = $('#play');
+  play.textContent = audio.playing ? 'Stop music' : 'Play music';
+  play.disabled = audio.mode === 'none' || (audio.mode === 'track' && !audio.trackUrl);
+  $('#trackRow').hidden = audio.mode !== 'track';
+  let note = 'Lights, lasers and crowd follow the Tempo slider. Pick a demo beat or your own track to hear music.';
+  if (audio.mode === 'demo') note = 'A synth house loop at the Tempo slider. Press Drop for a one-beat blackout, then four bars at full energy.';
+  if (audio.mode === 'track') note = audio.trackUrl ? `${audio.trackName}: ${audio.grid.bpm} BPM, lights locked to its kick.` : 'Choose an MP3, WAV or M4A file.';
+  $('#musicNote').textContent = msg || note;
+}
+$('#music').addEventListener('change', (e) => { stopMusic(); audio.mode = e.target.value; renderMusic(); });
+$('#track').addEventListener('change', (e) => {
+  const f = e.target.files && e.target.files[0]; if (!f) return;
+  stopMusic();
+  if (audio.trackUrl) URL.revokeObjectURL(audio.trackUrl);
+  audio.trackUrl = null; audio.grid = null; audio.trackName = f.name;
+  renderMusic(`Finding the beat in ${f.name}…`);
+  f.arrayBuffer().then((ab) => ensureCtx().decodeAudioData(ab)).then((buf) => {
+    audio.grid = analyzeTrack(buf);
+    if (!audio.grid) throw new Error('no beat');
+    audio.trackUrl = URL.createObjectURL(f);
+    state.bpm = Math.round(audio.grid.bpm); $('#bpm').value = state.bpm; $('#bpm').nextElementSibling.textContent = String(state.bpm);
+    renderMusic();
+  }).catch(() => renderMusic(`Could not read a steady beat from ${f.name}. Try an MP3 or WAV with a clear kick.`));
+});
+$('#play').addEventListener('click', () => { if (audio.playing) stopMusic(); else startMusic(); renderMusic(); });
+$('#drop').addEventListener('click', triggerDrop);
+
 /* ---------- Readouts, patch, scene data ---------- */
 function updateReadouts() {
   const s = state;
@@ -814,6 +1199,7 @@ function sceneJSON() {
     layers: [
       { name: 'Truss', objects: trussList.map((t) => ({ type: 'Truss', name: t.name, from: t.from, to: t.to, section: t.section })) },
       { name: 'Fixtures', objects: fixtures.map((f, i) => { const { u, a } = addr(i); return { type: 'Fixture', fixtureId: f.id, gdtfSpec: 'Generic@Spot_16ch.gdtf', gdtfMode: 'Standard 16ch', address: { universe: u, channel: a }, position: f.pos.toArray().map(r2), hanging: f.flip, focus: f.truss }; }) },
+      { name: 'Lasers', objects: lasers.map((L, i) => ({ type: 'Laser', name: `Laser ${i + 1}`, position: L.root.position.toArray().map(r2), beams: LASER_BEAMS })) },
       { name: 'Video', objects: screens.map((sc) => ({ type: 'VideoScreen', name: sc.name, size: [sc.w, sc.h].map(r2), position: sc.mesh.position.toArray().map(r2), pixelPitchMm: s.pitch, source: s.visual })) },
     ],
   };
@@ -839,7 +1225,7 @@ const fmt = { W: (v) => v.toFixed(1), D: (v) => v.toFixed(1), H: (v) => v.toFixe
 const rebuildKeys = ['W', 'D', 'H', 'trim', 'count', 'wallW', 'wallH'];
 function syncInputs() {
   Object.keys(fmt).forEach((k) => { const el = $('#' + k); el.value = state[k]; el.nextElementSibling.textContent = fmt[k](state[k]); });
-  ['program', 'dimfx', 'colorMode', 'visual'].forEach((k) => { $('#' + k).value = state[k]; });
+  ['program', 'dimfx', 'colorMode', 'visual', 'lasers'].forEach((k) => { $('#' + k).value = state[k]; });
   $('#textRow').hidden = state.visual !== 'text';
   $('#mediaRow').hidden = state.visual !== 'media';
 }
@@ -847,24 +1233,28 @@ let pending = 0;
 function scheduleBuild(cam) { cancelAnimationFrame(pending); pending = requestAnimationFrame(() => { build(); if (cam) goCam(activeCam === 'crowd' ? 'foh' : activeCam, false); }); }
 Object.keys(fmt).forEach((k) => {
   $('#' + k).addEventListener('input', (e) => {
+    const prevBpm = state.bpm;
     state[k] = k === 'count' || k === 'bpm' || k === 'zoom' ? parseInt(e.target.value, 10) : parseFloat(e.target.value);
+    if (k === 'bpm') reanchorDemo(prevBpm);
     e.target.nextElementSibling.textContent = fmt[k](state[k]);
     if (rebuildKeys.includes(k)) scheduleBuild(false);
   });
 });
-['program', 'dimfx', 'colorMode'].forEach((k) => $('#' + k).addEventListener('change', (e) => { state[k] = e.target.value; }));
+['program', 'dimfx', 'colorMode', 'lasers'].forEach((k) => $('#' + k).addEventListener('change', (e) => { state[k] = e.target.value; }));
 $('#control').addEventListener('change', (e) => { state.control = e.target.value; live.touched = true; });
 $('#visual').addEventListener('change', (e) => { state.visual = e.target.value; syncInputs(); if ($('#sceneDetails').open) $('#sceneJson').textContent = sceneJSON(); });
 $('#colA').addEventListener('input', (e) => { state.colA = e.target.value; });
 $('#colB').addEventListener('input', (e) => { state.colB = e.target.value; });
+$('#laserCol').addEventListener('input', (e) => { state.laserCol = e.target.value; });
 $('#wallText').addEventListener('input', (e) => { state.text = e.target.value; });
 $('#pitch').addEventListener('change', (e) => { state.pitch = parseFloat(e.target.value); screens.forEach((sc) => sc.mesh.material.uniforms.uPixels.value.set(sc.w * 1000 / state.pitch, sc.h * 1000 / state.pitch)); updateReadouts(); });
 tplBox.addEventListener('change', (e) => {
   const k = e.target.value, t = TEMPLATES[k];
-  Object.assign(state, { tpl: k }, pick(t), { program: t.program, visual: t.visual });
+  Object.assign(state, { tpl: k }, pick(t), { program: t.program, visual: t.visual, lasers: t.lasers || 'off' });
   syncInputs(); build(); goCam('foh', false);
 });
 document.querySelectorAll('[data-cam]').forEach((b) => b.addEventListener('click', () => goCam(b.dataset.cam)));
+controls.addEventListener('start', () => { if (activeCam !== 'drone') return; activeCam = 'free'; tween = null; document.querySelectorAll('[data-cam]').forEach((b) => b.setAttribute('aria-pressed', 'false')); });
 $('#pause').addEventListener('click', (e) => { paused = !paused; e.target.textContent = paused ? 'Play' : 'Pause'; e.target.setAttribute('aria-pressed', String(paused)); });
 $('#sceneDetails').addEventListener('toggle', (e) => { if (e.target.open) $('#sceneJson').textContent = sceneJSON(); });
 $('#copyJson').addEventListener('click', (e) => {
@@ -882,6 +1272,7 @@ function resize() {
 new ResizeObserver(resize).observe($('#view'));
 
 syncInputs();
+renderMusic();
 renderLive();
 connectLive();
 build();

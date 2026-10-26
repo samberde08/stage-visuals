@@ -1,6 +1,10 @@
 # Stage Visuals
 
-A browser stage previsualizer. Pick a venue type, size it, and run moving lights and LED-wall content over it, either from built-in effects or live from a lighting console over sACN or Art-Net.
+A browser stage previsualizer for practising show design and showing clients how visuals will look in a real venue. Pick a venue type, size it, and run moving lights, lasers, a dancing crowd and LED-wall content over it, from built-in effects synced to music or live from a lighting console over sACN or Art-Net.
+
+**Venues:** club, DJ booth in the round with LED cube, warehouse, arch tent, festival main stage, stadium, arena, proscenium theatre, thrust. All are parametric: sizes are typical proportions for each format, not copies of specific venues.
+
+**Music:** play the built-in demo beat or load your own track. A track's tempo and beat phase are worked out from its kick drum when it loads, and lights, lasers, LED content and crowd lock to it. **Drop** gives a one-beat blackout, then four bars at full energy.
 
 Online preview (built-in effects only): https://claude.ai/artifact/DvhX2dgvYb9dXB9nP7aKWh
 
@@ -68,7 +72,7 @@ test/                node --test suite (npm test)
 
 ## Roadmap
 
-1. MVR import and export, so rigs from Capture, Vectorworks or grandMA3 load directly.
-2. GDTF fixture types in place of the generic spot, including real beam angles and DMX modes.
-3. Real venue library built from published tech specs.
-4. Video input for the LED wall from TouchDesigner (NDI or Spout/Syphon via the bridge).
+1. Live TouchDesigner video on the LED walls (NDI or Spout/Syphon through the bridge).
+2. MVR import and export, so rigs from Capture, Vectorworks or grandMA3 load directly.
+3. GDTF fixture types in place of the generic spot, including real beam angles and DMX modes.
+4. Real venue library built from published tech specs.
