@@ -41,9 +41,25 @@ test('realism fields are present and in range', () => {
     assert.ok(v.room.crowdN > 0 && v.room.crowdN <= 5000, `${v.id} crowd stays drawable`);
     assert.ok(/^\w+\/\w+$/.test(v.tz), v.id);
     assert.ok(Array.isArray(v.showHours) && v.showHours.every((h) => /^\d\d:\d\d$/.test(h)), v.id);
-    assert.ok(['published', 'estimated'].includes(v.confidence), v.id);
-    if (v.confidence === 'published') assert.ok(v.sources.length, `${v.id} cites a source`);
   }
+});
+
+test('confidence levels are backed by cited facts', () => {
+  for (const v of VENUES) {
+    assert.ok(['sourced', 'partial', 'estimated'].includes(v.confidence), v.id);
+    assert.ok(Array.isArray(v.facts), `${v.id} has a facts list`);
+    for (const f of v.facts) assert.ok(f.k && f.v && /^https?:\/\//.test(f.src), `${v.id}: ${f.k} cites a web source`);
+    if (v.confidence !== 'estimated') {
+      assert.ok(v.facts.length >= (v.confidence === 'sourced' ? 3 : 1), `${v.id} cites enough facts for ${v.confidence}`);
+      assert.ok(typeof v.estimated === 'string' && v.estimated.length, `${v.id} says what is still estimated`);
+    }
+  }
+  assert.ok(VENUES.filter((v) => v.confidence === 'sourced').length >= 3, 'at least three demo stages with real data');
+});
+
+test('LED pixel pitch is one the app offers', () => {
+  const pitches = new Set([...html.matchAll(/<option value="([\d.]+)"[^>]*>[\d.]+ mm/g)].map((m) => +m[1]));
+  for (const v of VENUES) if (v.led.pitch) assert.ok(pitches.has(v.led.pitch), `${v.id}: ${v.led.pitch} mm`);
 });
 
 test('mix of clubs and festival stages', () => {
