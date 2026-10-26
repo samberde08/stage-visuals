@@ -106,12 +106,13 @@ details .btn { margin: 0 10px 10px; }
     <div class="cams" id="cams">
       <button type="button" data-cam="foh" aria-pressed="true">FOH</button>
       <button type="button" data-cam="crowd" aria-pressed="false">Crowd</button>
+      <button type="button" data-cam="walk" aria-pressed="false">Walk</button>
       <button type="button" data-cam="wide" aria-pressed="false">Wide</button>
       <button type="button" data-cam="drone" aria-pressed="false">Drone</button>
       <button type="button" data-cam="side" aria-pressed="false">Stage left</button>
       <button type="button" data-cam="top" aria-pressed="false">Plan</button>
       <button type="button" id="pause" aria-pressed="false">Pause</button>
-      <span class="hint">Drag to orbit · scroll to zoom · right-drag to pan</span>
+      <span class="hint" id="camHint">Drag to orbit · scroll to zoom · right-drag to pan</span>
     </div>
   </div>
 
@@ -183,6 +184,11 @@ details .btn { margin: 0 10px 10px; }
           <option value="demo">Demo beat</option>
           <option value="track">Your track</option>
         </select></div>
+      <div class="row two"><label for="sound">Sound</label>
+        <select id="sound">
+          <option value="room">In the venue: room, distance, crowd</option>
+          <option value="direct">Direct: the track as mixed</option>
+        </select></div>
       <div class="row two" id="trackRow" hidden><label for="track">File</label><input id="track" type="file" accept="audio/*"></div>
       <div class="btns"><button type="button" class="btn" id="play">Play music</button><button type="button" class="btn drop" id="drop">Drop</button></div>
       <p class="note" id="musicNote"></p>
@@ -200,6 +206,12 @@ details .btn { margin: 0 10px 10px; }
         <select id="surround">
           <option value="on">Real location: HDRI sky and scenery</option>
           <option value="off">Off: plain sky</option>
+        </select></div>
+      <div class="row two"><label for="lens">Lens</label>
+        <select id="lens">
+          <option value="eye">Your eyes: adapt to the light</option>
+          <option value="phone">Phone video: grain and fringing</option>
+          <option value="clean">Clean render</option>
         </select></div>
       <div class="row"><label for="density">Crowd</label><input id="density" type="range" min="0" max="1" step="0.05" value="1"><output for="density"></output></div>
       <p class="note" id="lookNote"></p>
@@ -289,7 +301,7 @@ function venueMeta(tpl, v) {
   if (!v) return { id: null, name: NAMES[tpl], setting: INDOOR_TPL[tpl] ? 'indoor' : tpl === 'arch' ? 'tent' : 'outdoor', indoor: !!INDOOR_TPL[tpl], lat: null, lon: null, elevationM: null, bearing: null, capacity: null, tz: null, season: null, showHours: null };
   return { id: v.id, name: v.name, city: v.city, region: v.region, setting: v.setting, indoor: v.setting === 'indoor', lat: v.lat, lon: v.lon, elevationM: v.elevationM, bearing: v.audienceFacing, capacity: v.capacity, tz: v.tz, season: v.season, showHours: v.showHours };
 }
-const state = { tpl: 'festival', venue: null, room: {}, venueMeta: null, ...pick(TEMPLATES.festival), program: 'fan', dimfx: 'steady', colorMode: 'alt', colA: '#ff7a1a', colB: '#2f6bff', bpm: 124, zoom: 9, haze: 0.55, visual: 'plasma', text: 'STAGE VISUALS', pitch: 3.9, control: 'effects', lasers: 'fan', laserCol: '#22ff66', quality: 'high', tod: 21.5, density: 1, surround: 'on' };
+const state = { tpl: 'festival', venue: null, room: {}, venueMeta: null, ...pick(TEMPLATES.festival), program: 'fan', dimfx: 'steady', colorMode: 'alt', colA: '#ff7a1a', colB: '#2f6bff', bpm: 124, zoom: 9, haze: 0.55, visual: 'plasma', text: 'STAGE VISUALS', pitch: 3.9, control: 'effects', lasers: 'fan', laserCol: '#22ff66', quality: 'high', tod: 21.5, density: 1, surround: 'on', lens: 'eye', sound: 'room' };
 if (matchMedia('(max-width: 760px)').matches || (navigator.hardwareConcurrency || 8) < 4) state.quality = 'fast';
 state.venueMeta = venueMeta(state.tpl, null);
 function pick(t) { return { W: t.W, D: t.D, H: t.H, trim: t.trim, wallW: t.wallW, wallH: t.wallH, count: t.count }; }
@@ -346,17 +358,44 @@ const stars = (() => {
 // Fast renders straight to the canvas with the renderer's own ACES and no bloom.
 const shared = { uTime: { value: 0 }, uHaze: { value: 0.5 }, uLinear: { value: 0 } };
 const FinalShader = {
-  uniforms: { tDiffuse: { value: null }, uExposure: { value: 1.1 } },
+  uniforms: { tDiffuse: { value: null }, uExposure: { value: 1.1 }, uTime: { value: 0 }, uGrain: { value: 0 }, uVig: { value: 0 }, uCA: { value: 0 }, uAspect: { value: 1 } },
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
   fragmentShader: `
-uniform sampler2D tDiffuse; uniform float uExposure; varying vec2 vUv;
+uniform sampler2D tDiffuse; uniform float uExposure, uTime, uGrain, uVig, uCA, uAspect; varying vec2 vUv;
 vec3 fit(vec3 v){ vec3 a = v * (v + 0.0245786) - 0.000090537; vec3 b = v * (0.983729 * v + 0.4329510) + 0.238081; return a / b; }
+float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
 void main(){
   const mat3 I = mat3(vec3(0.59719, 0.07600, 0.02840), vec3(0.35458, 0.90834, 0.13383), vec3(0.04823, 0.01566, 0.83777));
   const mat3 O = mat3(vec3(1.60475, -0.10208, -0.00327), vec3(-0.53108, 1.10813, -0.07276), vec3(-0.07367, -0.00605, 1.07602));
-  vec3 c = clamp(O * fit(I * (texture2D(tDiffuse, vUv).rgb * uExposure / 0.6)), 0.0, 1.0);
+  // Lens: red and blue focus at slightly different sizes towards the edges, and the corners fall off.
+  vec2 d = vUv - 0.5;
+  vec3 src = uCA > 0.0 ? vec3(texture2D(tDiffuse, 0.5 + d * (1.0 + uCA)).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, 0.5 + d * (1.0 - uCA)).b) : texture2D(tDiffuse, vUv).rgb;
+  float r = length(d * vec2(uAspect, 1.0));
+  src *= 1.0 - uVig * smoothstep(0.25, 0.95, r);
+  vec3 c = clamp(O * fit(I * (src * uExposure / 0.6)), 0.0, 1.0);
   c = mix(pow(c, vec3(0.41666)) * 1.055 - 0.055, c * 12.92, vec3(lessThanEqual(c, vec3(0.0031308))));
+  // Sensor grain, strongest in the shadows like a phone at a gig.
+  float g = hash(gl_FragCoord.xy + fract(uTime * 7.13) * vec2(131.0, 71.0)) + hash(gl_FragCoord.xy * 1.37 + fract(uTime * 3.7) * 97.0) - 1.0;
+  c += g * uGrain * (1.0 - 0.7 * dot(c, vec3(0.333)));
   gl_FragColor = vec4(c, 1.0);
+}`,
+};
+// Measures the scene's average brightness (log-average luminance, centre weighted) into one pixel,
+// which drives the eye or camera adapting to the light.
+const MeterShader = {
+  uniforms: { tDiffuse: { value: null } },
+  vertexShader: FinalShader.vertexShader,
+  fragmentShader: `
+uniform sampler2D tDiffuse; varying vec2 vUv;
+void main(){
+  float s = 0.0, wsum = 0.0;
+  for (int i = 0; i < 12; i++) for (int j = 0; j < 12; j++) {
+    vec2 uv = (vec2(float(i), float(j)) + 0.5) / 12.0;
+    float w = 1.0 - 0.75 * smoothstep(0.1, 0.7, length(uv - 0.5));
+    float l = dot(texture2D(tDiffuse, uv).rgb, vec3(0.2126, 0.7152, 0.0722));
+    s += log2(l + 0.0005) * w; wsum += w;
+  }
+  gl_FragColor = vec4(clamp((s / wsum + 12.0) / 16.0, 0.0, 1.0), 0.0, 0.0, 1.0);
 }`,
 };
 let post = null;
@@ -368,11 +407,21 @@ function makePost() {
   const rt = gl2 ? new THREE.WebGLMultisampleRenderTarget(size.x, size.y, opts) : new THREE.WebGLRenderTarget(size.x, size.y, opts);
   const composer = new THREE.EffectComposer(renderer, rt);
   composer.addPass(new THREE.RenderPass(scene, camera));
+  const Quad = THREE.FullScreenQuad || (THREE.Pass && THREE.Pass.FullScreenQuad);
+  let meter = null;
+  if (Quad && THREE.Pass) {
+    const mat = new THREE.ShaderMaterial(MeterShader), quad = new Quad(mat);
+    const target = new THREE.WebGLRenderTarget(1, 1, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
+    meter = new THREE.Pass(); meter.needsSwap = false; meter.want = false; meter.target = target;
+    meter.render = (r, write, read) => { if (!meter.want) return; mat.uniforms.tDiffuse.value = read.texture; r.setRenderTarget(target); quad.render(r); };
+    meter.setSize = () => {};
+    composer.addPass(meter);
+  }
   const bloom = new THREE.UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.75, 0.5, 0.9);
   composer.addPass(bloom);
   const fin = new THREE.ShaderPass(FinalShader);
   composer.addPass(fin);
-  return { composer, bloom, fin };
+  return { composer, bloom, fin, meter };
 }
 function highOn() { return state.quality === 'high' && !!post; }
 function setQuality(q) {
@@ -411,9 +460,18 @@ const hdriCache = {};
 function loadHdri(name) {
   if (!hdriCache[name]) hdriCache[name] = new Promise((res) => {
     if (!THREE.RGBELoader || !HDRI[name]) { res(null); return; }
-    new THREE.RGBELoader().setDataType(THREE.HalfFloatType).load(`${HDRI_BASE}${name}_1k.hdr`, (t) => {
-      t.minFilter = t.magFilter = THREE.LinearFilter; t.generateMipmaps = false; t.needsUpdate = true; res(t);
-    }, undefined, () => res(null));
+    const loader = new THREE.RGBELoader().setDataType(THREE.HalfFloatType);
+    const done = (t) => { t.minFilter = t.magFilter = THREE.LinearFilter; t.generateMipmaps = false; t.needsUpdate = true; res(t); };
+    // Hosts that won't serve .hdr (the online preview) get a base64 .txt copy instead.
+    const fromB64 = () => fetch(`${HDRI_BASE}${name}_1k.hdr.txt`).then((r) => r.ok ? r.text() : Promise.reject())
+      .then((b64) => {
+        const bin = atob(b64.trim()), buf = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+        const d = loader.parse(buf.buffer);
+        const t = new THREE.DataTexture(d.data, d.width, d.height, d.format, d.type);
+        t.encoding = THREE.LinearEncoding; t.flipY = true; done(t);
+      }).catch(() => res(null));
+    loader.load(`${HDRI_BASE}${name}_1k.hdr`, done, undefined, fromB64);
   });
   return hdriCache[name];
 }
@@ -790,13 +848,17 @@ float noise(vec3 x){
              mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x), mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y), f.z);
 }
 void main(){
-  float att = exp(-vDist * 0.04);
+  // Light scattered towards the eye falls off about as 1/distance along a widening beam (the same light spread over
+  // a wider slice of haze), plus a hot spot at the lens where the beam is still narrow and dense.
+  float att = 1.0 / (1.0 + vDist * 0.11) + 1.6 * exp(-vDist * 1.4);
   float endFade = 1.0 - smoothstep(uLen - 1.2, uLen, vDist);
   // Haze drifts through the beam, so light catches in slow-moving clumps rather than a flat cone.
   vec3 drift = vec3(uTime * 0.21, uTime * 0.04, uTime * 0.13);
   float n = noise(vWorld * 0.42 + drift) * 0.65 + noise(vWorld * 1.35 - drift * 1.8) * 0.35;
   float clump = mix(1.0, 0.25 + 1.5 * n, 0.3 + 0.45 * uHaze);
-  float a = uIntensity * att * endFade * pow(vEdge, 1.6) * clump;
+  // Seen side-on the cone is thickest through its middle; a soft core and feathered edge rather than a hard tube.
+  float core = pow(vEdge, 2.4) + 0.35 * pow(vEdge, 8.0);
+  float a = uIntensity * att * endFade * core * clump;
   vec3 col = mix(uColor, pow(uColor, vec3(2.2)) * 1.3, uLinear);
   gl_FragColor = vec4(col * a, 1.0);
 }`;
@@ -809,6 +871,21 @@ function poolTexture() {
   return new THREE.CanvasTexture(c);
 }
 const poolTex = poolTexture();
+// Glare from a fixture pointed at the viewer: a hot core, a soft veil and six thin streaks, as a lens or an eye sees it.
+const glareTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const x = c.getContext('2d'), g = x.createRadialGradient(128, 128, 0, 128, 128, 128);
+  g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.06, 'rgba(255,255,255,.85)'); g.addColorStop(0.2, 'rgba(255,255,255,.22)'); g.addColorStop(0.5, 'rgba(255,255,255,.05)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 256, 256);
+  x.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 6; i++) {
+    x.save(); x.translate(128, 128); x.rotate(i * Math.PI / 3 + 0.26);
+    const s = x.createLinearGradient(-128, 0, 128, 0);
+    s.addColorStop(0, 'rgba(255,255,255,0)'); s.addColorStop(0.5, 'rgba(255,255,255,.55)'); s.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = s; x.fillRect(-128, -1.2, 256, 2.4); x.restore();
+  }
+  return new THREE.CanvasTexture(c);
+})();
 const poolGeo = new THREE.PlaneGeometry(1, 1);
 
 /* ---------- Scene state ---------- */
@@ -866,115 +943,165 @@ function screen(name, w, h, pos, rotY = 0, frame = true) {
 }
 
 /* ---------- Crowd ---------- */
-// Each person is x, y, z, height scale, a dance phase and the direction they face; poses are rewritten every frame.
-// A person is four instanced parts: body (legs and torso, shirt colour), head, two arms that pivot at the shoulder,
-// and for about one in ten a phone held up to film the stage.
-function mergeGeos(parts) {
-  const pos = [], nor = [], col = [];
-  parts.forEach(([g, shade]) => {
-    const n = g.toNonIndexed(), P = n.attributes.position.array, N = n.attributes.normal.array;
-    for (let i = 0; i < P.length; i++) { pos.push(P[i]); nor.push(N[i]); col.push(shade); }
+// Everyone in a crowd is one instanced mesh, posed on the GPU, so a festival field can hold tens of thousands of people.
+// A person is one merged mesh whose vertices are tagged by part (body, head, left arm, right arm, phone) and by what
+// colours them (shirt, skin, hair, trousers). Per person: position, facing and height in the instance matrix, shirt in
+// the instance colour, skin tone, and a dance phase, style, phone flag and trouser shade. The vertex shader swings
+// arms, nods heads, hops on the beat, and steps people aside when the camera stands among them.
+const PART = { body: 0, head: 1, armL: 2, armR: 3, phone: 4 }, PAINT = { shirt: 0, skin: 1, hair: 2, legs: 3 };
+function mergeParts(parts) {
+  const pos = [], nor = [], part = [], paint = [], shade = [], idx = [];
+  parts.forEach(([g, p, k, s]) => {
+    const P = g.attributes.position.array, N = g.attributes.normal.array, base = pos.length / 3;
+    for (let i = 0; i < P.length; i++) { pos.push(P[i]); nor.push(N[i]); }
+    for (let i = 0; i < P.length / 3; i++) { part.push(p); paint.push(k); shade.push(s); }
+    if (g.index) g.index.array.forEach((i) => idx.push(base + i)); else for (let i = 0; i < P.length / 3; i++) idx.push(base + i);
   });
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
-  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setAttribute('aPart', new THREE.Float32BufferAttribute(part, 1));
+  g.setAttribute('aPaint', new THREE.Float32BufferAttribute(paint, 1));
+  g.setAttribute('aShade', new THREE.Float32BufferAttribute(shade, 1));
+  g.setIndex(idx);
   return g;
 }
+// Proportions for a 1.75 m adult at scale 1: eyes at about 1.63 m, shoulders 0.44 m wide.
 const PERSON = (() => {
   const at = (g, x, y, z) => { g.translate(x, y, z); return g; };
-  const torso = at(new THREE.CylinderGeometry(0.19, 0.15, 0.62, 8), 0, 1.13, 0); torso.scale(1, 1, 0.62);
-  const legL = at(new THREE.BoxGeometry(0.13, 0.84, 0.15), -0.09, 0.42, 0);
-  const legR = at(new THREE.BoxGeometry(0.13, 0.84, 0.15), 0.09, 0.42, 0);
-  const body = mergeGeos([[torso, 1], [legL, 0.32], [legR, 0.32]]);
-  const head = at(new THREE.SphereGeometry(0.105, 10, 8), 0, 0, 0); head.scale(0.92, 1.08, 1);
-  const arm = at(new THREE.BoxGeometry(0.065, 0.64, 0.075), 0, -0.32, 0);
-  const phone = new THREE.BoxGeometry(0.075, 0.15, 0.012);
-  return { body, head, arm, phone };
+  const torso = at(new THREE.CylinderGeometry(0.2, 0.15, 0.6, 9), 0, 1.15, 0); torso.scale(1, 1, 0.58);
+  const chest = at(new THREE.SphereGeometry(0.2, 9, 5, 0, Math.PI * 2, 0, Math.PI / 2), 0, 1.44, 0); chest.scale(1, 0.35, 0.58);
+  const hips = at(new THREE.CylinderGeometry(0.15, 0.16, 0.14, 9), 0, 0.84, 0); hips.scale(1, 1, 0.66);
+  const leg = (x) => at(new THREE.CylinderGeometry(0.075, 0.05, 0.82, 7), x, 0.41, 0);
+  const shoe = (x) => at(new THREE.BoxGeometry(0.1, 0.07, 0.24), x, 0.035, 0.04);
+  const neck = at(new THREE.CylinderGeometry(0.045, 0.055, 0.1, 7), 0, 1.49, -0.01);
+  const head = at(new THREE.SphereGeometry(0.098, 12, 9), 0, 1.6, 0.005); head.scale(0.88, 1.1, 1);
+  const hair = at(new THREE.SphereGeometry(0.103, 12, 7, 0, Math.PI * 2, 0, Math.PI * 0.72), 0, 1.615, -0.018); hair.scale(0.9, 1.1, 1.02);
+  // Arms hang from the shoulder pivot at (±0.22, 1.4); the short sleeve takes the shirt colour.
+  const arm = (x) => [
+    [at(new THREE.CylinderGeometry(0.052, 0.046, 0.16, 7), x, 1.32, 0), PAINT.shirt, 1],
+    [at(new THREE.CylinderGeometry(0.042, 0.032, 0.5, 7), x, 1.07, 0), PAINT.skin, 1],
+    [at(new THREE.SphereGeometry(0.042, 7, 5), x, 0.8, 0.01), PAINT.skin, 0.95],
+  ];
+  const phone = at(new THREE.BoxGeometry(0.075, 0.15, 0.012), 0.22, 0.74, 0.03);
+  const parts = [
+    [torso, PART.body, PAINT.shirt, 1], [chest, PART.body, PAINT.shirt, 1], [hips, PART.body, PAINT.legs, 1],
+    [leg(-0.085), PART.body, PAINT.legs, 1], [leg(0.085), PART.body, PAINT.legs, 1],
+    [shoe(-0.085), PART.body, PAINT.legs, 0.5], [shoe(0.085), PART.body, PAINT.legs, 0.5],
+    [neck, PART.head, PAINT.skin, 0.45], [head, PART.head, PAINT.skin, 1], [hair, PART.head, PAINT.hair, 1],
+    ...arm(-0.22).map(([g, k, s]) => [g, PART.armL, k, s]), ...arm(0.22).map(([g, k, s]) => [g, PART.armR, k, s]),
+    [phone, PART.phone, PAINT.shirt, 0],
+  ];
+  return mergeParts(parts);
 })();
-const crowdMat = {
-  body: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.92, vertexColors: true }),
-  skin: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7 }),
-  phone: new THREE.MeshBasicMaterial({ color: 0xcfe0ff }),
-};
+const crowdU = { uBeat: { value: 0 }, uEnergy: { value: 0.5 }, uLift: { value: 0 }, uCam: { value: new THREE.Vector4() }, uRim: { value: new THREE.Color() }, uStageDir: { value: new THREE.Vector3() } };
+const CROWD_VERT = `
+attribute float aPart; attribute float aPaint; attribute float aShade; attribute vec3 aSkin; attribute vec4 aData;
+uniform float uBeat; uniform float uEnergy; uniform float uLift; uniform vec4 uCam;
+varying float vPhone;
+mat3 rotX(float a){ float c = cos(a), s = sin(a); return mat3(1.0, 0.0, 0.0, 0.0, c, s, 0.0, -s, c); }
+mat3 rotY(float a){ float c = cos(a), s = sin(a); return mat3(c, 0.0, -s, 0.0, 1.0, 0.0, s, 0.0, c); }
+mat3 rotZ(float a){ float c = cos(a), s = sin(a); return mat3(c, s, 0.0, -s, c, 0.0, 0.0, 0.0, 1.0); }
+void crowdPose(inout vec3 p, inout vec3 n){
+  const float CPI = 3.14159265;
+  float ph = aData.x, style = aData.y, phone = aData.z, e = uEnergy, b = uBeat + ph * 0.2;
+  float hop = pow(abs(sin(CPI * b)), 3.0) * 0.2 * e, pump = pow(abs(cos(CPI * b)), 2.0);
+  vPhone = 0.0;
+  if (aPart > 1.5) {
+    // Arm angle about the shoulder: 0 hangs down, -PI points straight up. Hands go up as the energy builds.
+    float side = aPart < 2.5 ? -1.0 : 1.0, ax, az;
+    bool holding = phone > 0.5 && aPart > 2.5;
+    if (holding) { ax = -2.2; az = 0.05; }
+    else if (phone > 0.5 || style < 0.15 + uLift * 0.55) { ax = -2.35 - 0.5 * pump * min(1.0, e); az = side * (0.25 + 0.2 * style); }
+    else { ax = -0.15 - 0.45 * pump * e * (0.5 + style); az = side * 0.12; }
+    vec3 piv = vec3(side * 0.22, 1.4, 0.0);
+    if (aPart > 3.5) { vPhone = phone; if (phone < 0.5) p = piv; }
+    mat3 R = rotX(ax) * rotZ(az);
+    p = piv + R * (p - piv); n = R * n;
+  } else if (aPart > 0.5) {
+    mat3 R = rotX(sin(CPI * b * 2.0) * 0.12 * e);
+    vec3 piv = vec3(0.0, 1.5, 0.0);
+    p = piv + R * (p - piv); n = R * n;
+  }
+  mat3 S = rotY(sin(uBeat * CPI * 0.5 + ph * 6.3) * 0.25 * min(1.0, e));
+  p = S * p; n = S * n;
+  p.y += hop;
+  // Make room for the camera: anyone within 1.1 m of it, at about head height, steps back.
+  vec3 ip = instanceMatrix[3].xyz; vec2 d = ip.xz - uCam.xz; float L = length(d);
+  if (uCam.w > 0.5 && L < 1.1 && abs(uCam.y - ip.y - 1.6) < 1.6) {
+    vec2 push = (L > 0.001 ? d / L : vec2(1.0, 0.0)) * (1.1 - L);
+    mat3 m = mat3(instanceMatrix); float s2 = dot(m[0], m[0]);
+    vec3 w = vec3(push.x, 0.0, push.y);
+    p += vec3(dot(m[0], w), dot(m[1], w), dot(m[2], w)) / s2;
+  }
+}`;
+function patchCrowd(shader, depth) {
+  Object.assign(shader.uniforms, crowdU);
+  shader.vertexShader = CROWD_VERT + '\n' + shader.vertexShader;
+  if (depth) shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', 'vec3 transformed = vec3(position); vec3 cpN = vec3(0.0, 1.0, 0.0); crowdPose(transformed, cpN);');
+  else {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <beginnormal_vertex>', 'vec3 objectNormal = vec3(normal); vec3 cpPos = vec3(position); crowdPose(cpPos, objectNormal);')
+      .replace('#include <begin_vertex>', 'vec3 transformed = cpPos;')
+      .replace('#include <color_vertex>', `#include <color_vertex>
+  vColor = (aPaint < 0.5 ? vColor : aPaint < 1.5 ? aSkin : aPaint < 2.5 ? vec3(0.02, 0.014, 0.01) + aSkin * 0.06 : mix(vec3(0.012), vec3(0.025, 0.035, 0.07), aData.w)) * aShade;`);
+    // Rim light: at night the audience is a silhouette whose edges catch the stage behind it. Phone screens glow.
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform vec3 uRim; uniform vec3 uStageDir; varying float vPhone;')
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+  float rimE = pow(1.0 - abs(dot(normal, normalize(vViewPosition))), 3.0) * smoothstep(-0.35, 0.6, dot(normal, uStageDir));
+  totalEmissiveRadiance += uRim * rimE + vec3(0.7, 0.82, 1.0) * vPhone * 0.45;`);
+  }
+}
+const crowdMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.88 });
+crowdMat.onBeforeCompile = (s) => patchCrowd(s, false);
+const crowdDepth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+crowdDepth.onBeforeCompile = (s) => patchCrowd(s, true);
 const SHIRTS = ['#111114', '#18181c', '#232328', '#3a3b40', '#55575d', '#1d2a4a', '#2f4a72', '#d6d6d2', '#7a1d22', '#3d4a2a', '#8c7a5e', '#0e3a3a', '#5b2a6e', '#c8b400'].map((h) => new THREE.Color(h).convertSRGBToLinear());
 const SKIN = ['#5a3825', '#8d5524', '#a8693f', '#c68642', '#e0ac69', '#f1c27d', '#ffdbac'].map((h) => new THREE.Color(h).convertSRGBToLinear());
 const SHIRT_W = SHIRTS.map((_, i) => (i < 5 ? 3 : i === 7 ? 1.6 : 1));
 function pickWeighted(list, w) { let r = Math.random() * w.reduce((a, b) => a + b, 0); for (let i = 0; i < list.length; i++) { r -= w[i]; if (r <= 0) return list[i]; } return list[0]; }
 
-function crowd(n, fn, focus) {
-  const data = new Float32Array(n * 6);
-  let k = 0;
-  for (let i = 0; i < n * 3 && k < n; i++) {
-    const p = fn(); if (!p) continue;
-    data.set([p.x, p.y, p.z, 0.9 + Math.random() * 0.2, Math.random(), 0], k * 6);
-    k++;
-  }
-  const inst = (geo, mat, count) => { const m = new THREE.InstancedMesh(geo, mat, Math.max(1, count)); m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.frustumCulled = false; venue.add(m); return m; };
-  const phones = [];
-  for (let i = 0; i < k; i++) if (data[i * 6 + 4] < 0.1) phones.push(i);
-  const body = inst(PERSON.body, crowdMat.body, k), head = inst(PERSON.head, crowdMat.skin, k), arms = inst(PERSON.arm, crowdMat.skin, k * 2);
-  const ph = inst(PERSON.phone, crowdMat.phone, phones.length);
-  for (let i = 0; i < k; i++) {
-    const skin = SKIN[Math.floor(Math.random() * SKIN.length)];
-    body.setColorAt(i, pickWeighted(SHIRTS, SHIRT_W)); head.setColorAt(i, skin);
-    arms.setColorAt(i * 2, skin); arms.setColorAt(i * 2 + 1, skin);
-  }
-  const c = { body, head, arms, ph, phones, data, k, focus: focus || null, shown: k };
-  crowds.push(c);
-  return c;
-}
-// Called once the venue knows where the stage is: everyone turns to face the focus point.
-function faceCrowds(target) {
+// Builders call crowd() with a base head count and a function that returns a random spot (or null).
+// finishCrowds() then tops each area up towards the venue's capacity and builds the meshes.
+function crowd(n, fn, focus) { const c = { n, fn, focus: focus || null, k: 0, mesh: null }; crowds.push(c); return c; }
+const CROWD_CAP = { high: 24000, fast: 6000 };
+function finishCrowds(target) {
+  const base = crowds.reduce((a, c) => a + c.n, 0) || 1, cap = CROWD_CAP[state.quality] || CROWD_CAP.fast;
+  const want = Math.min(cap, Math.max(base, (state.venueMeta && state.venueMeta.capacity) || base * 2.5));
+  // People keep at least 0.55 m apart, about 3.3 per square metre at the barrier, so a small area fills up and stops.
+  const taken = new Set(), cell = 0.55;
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
   crowds.forEach((c) => {
-    const f = c.focus || target, d = c.data;
-    for (let i = 0; i < c.k; i++) { const o = i * 6; d[o + 5] = Math.atan2(f.x - d[o], f.z - d[o + 2]) + (Math.random() - 0.5) * 0.5; }
+    const goal = Math.round(Math.max(c.n, want * c.n / base)), pts = [];
+    for (let i = 0; i < goal * 4 && pts.length < goal; i++) {
+      const p = c.fn(); if (!p) continue;
+      const key = `${Math.floor(p.x / cell)},${Math.floor(p.z / cell)},${Math.round(p.y / 2)}`;
+      if (taken.has(key)) continue;
+      taken.add(key); pts.push(p);
+    }
+    const k = c.k = pts.length, f = c.focus || target;
+    const mesh = new THREE.InstancedMesh(PERSON, crowdMat, Math.max(1, k));
+    mesh.customDepthMaterial = crowdDepth; mesh.frustumCulled = false; mesh.userData.crowd = true;
+    const skin = new Float32Array(k * 3), data = new Float32Array(k * 4);
+    pts.forEach((p, i) => {
+      const yaw = Math.atan2(f.x - p.x, f.z - p.z) + (Math.random() - 0.5) * 0.5, s = 0.9 + Math.random() * 0.2;
+      q.setFromAxisAngle(up, yaw); sc.set(s, s, s);
+      mesh.setMatrixAt(i, m4.compose(p, q, sc));
+      mesh.setColorAt(i, pickWeighted(SHIRTS, SHIRT_W));
+      SKIN[Math.floor(Math.random() * SKIN.length)].toArray(skin, i * 3);
+      const ph = Math.random();
+      data.set([ph, (ph * 7.31) % 1, ph < 0.1 ? 1 : 0, Math.random()], i * 4);
+    });
+    mesh.geometry = PERSON.clone();
+    mesh.geometry.setAttribute('aSkin', new THREE.InstancedBufferAttribute(skin, 3));
+    mesh.geometry.setAttribute('aData', new THREE.InstancedBufferAttribute(data, 4));
+    venue.add(mesh); c.mesh = mesh;
   });
   setDensity(state.density);
 }
-function setDensity(v) {
-  crowds.forEach((c) => {
-    const m = Math.round(c.k * v);
-    c.shown = m; c.body.count = m; c.head.count = m; c.arms.count = m * 2;
-    let np = 0; while (np < c.phones.length && c.phones[np] < m) np++;
-    c.ph.count = np;
-  });
-}
-const cm4 = new THREE.Matrix4(), lm4 = new THREE.Matrix4(), om4 = new THREE.Matrix4(), cq = new THREE.Quaternion(), cs = new THREE.Vector3(), cp = new THREE.Vector3(), ce = new THREE.Euler();
-const PHONE_AT = new THREE.Matrix4().makeTranslation(0, -0.66, 0.03);
-function posePeople(c, beat, energy) {
-  const d = c.data, lift = Math.min(1, Math.max(0, energy - 0.35));
-  let pi = 0;
-  for (let i = 0; i < c.shown; i++) {
-    const o = i * 6, ph = d[o + 4], style = (ph * 7.31) % 1;
-    const b = beat + ph * 0.2;
-    const hop = Math.pow(Math.abs(Math.sin(Math.PI * b)), 3) * 0.2 * energy;
-    cq.setFromAxisAngle(up, d[o + 5] + Math.sin(beat * Math.PI * 0.5 + ph * 6.3) * 0.25 * Math.min(1, energy));
-    cp.set(d[o], d[o + 1] + hop, d[o + 2]);
-    const sc = d[o + 3];
-    cs.set(sc, sc * (1 + hop * 0.12), sc);
-    cm4.compose(cp, cq, cs);
-    c.body.setMatrixAt(i, cm4);
-    lm4.makeRotationX(Math.sin(Math.PI * b * 2) * 0.12 * energy).setPosition(0, 1.6, 0);
-    c.head.setMatrixAt(i, om4.multiplyMatrices(cm4, lm4));
-    // Arm angle about the shoulder: 0 hangs down, -PI points straight up. Some people throw their hands up as energy builds.
-    const phone = ph < 0.1, raised = phone || style < 0.15 + lift * 0.55;
-    const pump = Math.pow(Math.abs(Math.cos(Math.PI * b)), 2);
-    for (let s = 0; s < 2; s++) {
-      const side = s ? 1 : -1;
-      let ax, az;
-      if (phone && s === 1) { ax = -2.2; az = 0.05; }
-      else if (raised) { ax = -2.35 - 0.5 * pump * Math.min(1, energy); az = side * (0.25 + 0.2 * style); }
-      else { ax = -0.15 - 0.45 * pump * energy * (0.5 + style); az = side * 0.12; }
-      ce.set(ax, 0, az);
-      lm4.makeRotationFromEuler(ce).setPosition(side * 0.22, 1.4, 0);
-      om4.multiplyMatrices(cm4, lm4);
-      c.arms.setMatrixAt(i * 2 + s, om4);
-      if (phone && s === 1) c.ph.setMatrixAt(pi++, lm4.multiplyMatrices(om4, PHONE_AT));
-    }
-  }
-  [c.body, c.head, c.arms, c.ph].forEach((m) => { m.instanceMatrix.needsUpdate = true; });
-}
+function setDensity(v) { crowds.forEach((c) => { if (c.mesh) c.mesh.count = Math.round(c.k * v); }); }
+const peopleCount = () => crowds.reduce((a, c) => a + (c.mesh ? c.mesh.count : 0), 0);
 function laser(x, y, z, yaw = 0) { laserSpots.push({ pos: V(x, y, z), yaw }); }
 function seatRow(w, x, y, z, rotY = 0) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.45, 0.5), M.seat);
@@ -1302,9 +1429,11 @@ function makeFixture(spec, idx) {
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
   });
   const beam = new THREE.Mesh(beamGeo, beamMat); beam.position.y = 0.21; beam.frustumCulled = false; tilt.add(beam);
+  const glare = new THREE.Sprite(new THREE.SpriteMaterial({ map: glareTex, color: 0x000000, blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: false, fog: false, transparent: true }));
+  glare.position.y = 0.26; glare.visible = false; tilt.add(glare);
   const pool = new THREE.Mesh(poolGeo, new THREE.MeshBasicMaterial({ map: poolTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, color: 0x000000, polygonOffset: true, polygonOffsetFactor: -2, fog: false }));
   venue.add(root); venue.add(pool);
-  return { ...spec, id: 101 + idx, root, pan, tilt, lens, beam, pool };
+  return { ...spec, id: 101 + idx, root, pan, tilt, lens, beam, pool, glare };
 }
 
 function distribute(n) {
@@ -1369,7 +1498,7 @@ function animateLasers(beat, drop) {
 /* ---------- Build ---------- */
 function build() {
   scene.remove(venue);
-  const keepGeo = new Set([beamGeo, poolGeo, lensGeo, headGeo, laserGeo, ...Object.values(PERSON)]), keepMat = new Set([...Object.values(M), ...Object.values(crowdMat)]);
+  const keepGeo = new Set([beamGeo, poolGeo, lensGeo, headGeo, laserGeo, PERSON]), keepMat = new Set([...Object.values(M), crowdMat, crowdDepth]);
   venue.traverse((o) => { if (o.geometry && !keepGeo.has(o.geometry)) o.geometry.dispose(); if (o.material && o.material.dispose && !keepMat.has(o.material)) o.material.dispose(); });
   venue = new THREE.Group(); scene.add(venue);
   receivers = []; fixtures = []; trussList = []; screens = []; hangLines = [];
@@ -1379,7 +1508,7 @@ function build() {
   floor.rotation.x = -Math.PI / 2; venue.add(floor); receivers.push(floor);
   sizeWallCanvas(state.wallW / state.wallH);
   camSet = BUILD[state.tpl](state);
-  faceCrowds(camSet.target);
+  finishCrowds(camSet.target);
   distribute(state.count).forEach((s, i) => fixtures.push(makeFixture(s, i)));
   if (!laserSpots.length) [-0.3, 0.3].forEach((u) => laser(u * state.W, state.H, -0.3, 0));
   lasers = laserSpots.map(makeLaser);
@@ -1391,6 +1520,7 @@ function build() {
   venue.traverse((o) => { if (o.isMesh && !o.material.isShaderMaterial && !o.material.isMeshBasicMaterial && !o.material.transparent) { o.castShadow = o !== floor; o.receiveShadow = true; } });
   buildScenery();
   setSurroundings();
+  setRoom();
   updateLook();
   updateReadouts();
   renderPatch();
@@ -1415,10 +1545,70 @@ function goCam(kind, instant) {
   activeCam = kind;
   droneAng = 0;
   document.querySelectorAll('[data-cam]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.cam === kind)));
+  $('#camHint').textContent = kind === 'walk' ? 'WASD or arrow keys to walk · Shift to run · drag to look around' : 'Drag to orbit · scroll to zoom · right-drag to pan';
+  if (kind === 'walk') { enterWalk(); return; }
+  if (walk.on) exitWalk();
   const p = camPose(kind);
   if (instant || matchMedia('(prefers-reduced-motion: reduce)').matches) { camera.position.copy(p.pos); controls.target.copy(p.target); controls.update(); tween = null; return; }
   tween = { t0: performance.now(), from: camera.position.clone(), fromT: controls.target.clone(), to: p.pos, toT: p.target };
 }
+
+/* ---------- Walk: first person at eye height ---------- */
+// You stand in the crowd at 1.7 m eye height and walk the floor, rows or field. The ground is found by casting down
+// onto decks, floors and seating, so you climb Red Rocks' rows but not walls. Steps bob the head; standing still you
+// move with the beat.
+const walk = { on: false, pos: new THREE.Vector3(), yaw: 0, pitch: 0, keys: new Set(), phase: 0, speed: 0, ground: 0, drag: null };
+const downRay = new THREE.Raycaster(), DOWN = new THREE.Vector3(0, -1, 0), EYE = 1.7;
+function groundAt(x, z, from) {
+  downRay.set(org.set(x, from + 1.0, z), DOWN); downRay.far = 40;
+  const hit = downRay.intersectObjects(receivers, false).find((h) => h.face && Math.abs(nrm.copy(h.face.normal).transformDirection(h.object.matrixWorld).y) > 0.5);
+  return hit ? hit.point.y : null;
+}
+function enterWalk() {
+  const e = camSet.crowdEye, t = camSet.target;
+  walk.on = true; walk.speed = 0; tween = null; controls.enabled = false;
+  const g = groundAt(e.x, e.z, e.y);
+  walk.ground = g === null ? Math.max(0, e.y - 1.85) : g;
+  walk.pos.set(e.x, walk.ground, e.z);
+  walk.yaw = Math.atan2(-(t.x - e.x), -(t.z - e.z));
+  walk.pitch = Math.atan2(t.y - walk.ground - EYE, Math.hypot(t.x - e.x, t.z - e.z)) * 0.6;
+  camera.rotation.order = 'YXZ';
+}
+function exitWalk() {
+  walk.on = false; controls.enabled = true;
+  camera.rotation.order = 'XYZ';
+  controls.target.copy(camera.position).add(new THREE.Vector3(-Math.sin(walk.yaw), Math.sin(walk.pitch), -Math.cos(walk.yaw)).multiplyScalar(6));
+}
+function updateWalk(dt, beat, energy) {
+  const k = walk.keys, f = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0);
+  const sd = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0);
+  const want = (f || sd) ? (k.has('ShiftLeft') || k.has('ShiftRight') ? 3.4 : 1.4) : 0;
+  walk.speed += (want - walk.speed) * (1 - Math.exp(-dt * 6));
+  if (walk.speed > 0.01 && (f || sd)) {
+    const len = Math.hypot(f, sd), cy = Math.cos(walk.yaw), sy = Math.sin(walk.yaw), step = walk.speed * dt / len;
+    const nx = walk.pos.x + (-sy * f + cy * sd) * step, nz = walk.pos.z + (-cy * f - sy * sd) * step;
+    const g = groundAt(nx, nz, walk.ground);
+    // Step up at most 0.6 m (a row or a stair); anything higher is a wall or a stage edge.
+    if (g !== null && g - walk.ground < 0.6) { walk.pos.set(nx, g, nz); walk.ground += (g - walk.ground) * Math.min(1, dt * 12); }
+    walk.phase += walk.speed * dt * Math.PI / 0.7;
+  }
+  const moving = Math.min(1, walk.speed / 1.4), still = 1 - moving;
+  const bob = Math.abs(Math.sin(walk.phase)) * 0.04 * moving + Math.pow(Math.abs(Math.sin(Math.PI * beat)), 3) * 0.035 * energy * still;
+  const sway = Math.sin(walk.phase) * 0.025 * moving;
+  camera.position.set(walk.pos.x + Math.cos(walk.yaw) * sway, walk.ground + EYE - 0.02 + bob, walk.pos.z - Math.sin(walk.yaw) * sway);
+  camera.rotation.set(walk.pitch - bob * 0.25, walk.yaw, Math.sin(walk.phase) * 0.006 * moving + Math.sin(beat * Math.PI * 0.5) * 0.01 * energy * still, 'YXZ');
+}
+canvas.addEventListener('pointerdown', (e) => { if (walk.on) { walk.drag = { x: e.clientX, y: e.clientY }; canvas.setPointerCapture(e.pointerId); } });
+canvas.addEventListener('pointermove', (e) => {
+  if (!walk.on || !walk.drag) return;
+  walk.yaw += (e.clientX - walk.drag.x) * 0.0035; walk.pitch = Math.max(-1.2, Math.min(1.2, walk.pitch + (e.clientY - walk.drag.y) * 0.0035));
+  walk.drag = { x: e.clientX, y: e.clientY };
+});
+canvas.addEventListener('pointerup', () => { walk.drag = null; });
+const typing = (el) => el && /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName);
+addEventListener('keydown', (e) => { if (!walk.on || typing(document.activeElement)) return; walk.keys.add(e.code); if (e.code.startsWith('Arrow')) e.preventDefault(); });
+addEventListener('keyup', (e) => walk.keys.delete(e.code));
+addEventListener('blur', () => walk.keys.clear());
 
 /* ---------- Look: time of day ---------- */
 // Outdoor venues get a sky, a sun placed from the clock and the site's latitude, and stars after dark.
@@ -1481,8 +1671,8 @@ function updateLook() {
   if (highOn()) scene.fog.color.convertSRGBToLinear();
   scene.background.copy(scene.fog.color);
   // Without daylight the audience is mostly silhouette, lit only by spill from the stage.
-  const skinLevel = 0.3 + 0.7 * day;
-  crowdMat.body.color.setScalar(skinLevel); crowdMat.skin.color.setScalar(skinLevel);
+  const skinLevel = 0.14 + 0.86 * day;
+  crowdMat.color.setScalar(skinLevel);
   look.exposure = 1.1 - 0.55 * day;
   renderer.toneMappingExposure = look.exposure;
   outU.uExp.value = look.exposure;
@@ -1506,6 +1696,7 @@ function updateLook() {
 const colA = new THREE.Color(), colB = new THREE.Color(), tmpC = new THREE.Color();
 const ray = new THREE.Raycaster(); ray.far = 90;
 const qW = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), dir = new THREE.Vector3(), org = new THREE.Vector3(), nrm = new THREE.Vector3();
+const rimSum = new THREE.Color(), toCam = new THREE.Vector3();
 let time = 0, beatClock = 0, last = performance.now(), paused = false, frame = 0;
 
 function fixtureColor(i, n, beat, out) {
@@ -1614,6 +1805,8 @@ function tick(now) {
   const hz = (0.05 + Math.min(1, state.haze + (drop === 'on' ? 0.2 : 0)) * 0.55) * (1 - 0.8 * look.day);
   scene.fog.density = (0.004 + state.haze * 0.012) * (1 - 0.65 * look.day);
   shared.uTime.value = time; shared.uHaze.value = state.haze;
+  rimSum.setRGB(0, 0, 0);
+  const glareK = (1 - 0.75 * look.day) * (highOn() ? 1 : 0.6);
   fixtures.forEach((f, i) => {
     let p, tl, dim, kf = k, hf = half;
     if (state.control === 'live') {
@@ -1636,6 +1829,12 @@ function tick(now) {
     const L = hit ? Math.max(0.5, hit.distance) : 45;
     f.beam.scale.set(L * kf, L, L * kf);
     const u = f.beam.material.uniforms; u.uLen.value = L; u.uColor.value.copy(tmpC); u.uIntensity.value = dim * hz;
+    rimSum.r += tmpC.r * dim; rimSum.g += tmpC.g * dim; rimSum.b += tmpC.b * dim;
+    // Glare when the viewer is inside or near the beam, plus a faint lens glow whenever the fixture faces them.
+    const facing = dir.dot(toCam.copy(camera.position).sub(org).normalize());
+    const inBeam = smooth(Math.cos(hf * 2.2), Math.cos(hf * 0.6), facing), g = dim * (inBeam + 0.1 * Math.pow(Math.max(0, facing), 6)) * glareK;
+    f.glare.visible = g > 0.01;
+    if (f.glare.visible) { f.glare.material.color.copy(tmpC).multiplyScalar(0.5 + 3 * g); f.glare.scale.setScalar(0.03 + 0.42 * g); }
     if (hit && dim > 0.02) {
       nrm.copy(hit.face.normal).transformDirection(hit.object.matrixWorld);
       f.pool.visible = true;
@@ -1648,9 +1847,15 @@ function tick(now) {
   });
   animateLasers(beat, drop);
   const energy = drop === 'on' ? 1.6 : drop === 'pre' ? 0.15 : audio.playing ? audio.energy : 0.5;
-  crowds.forEach((c) => posePeople(c, beat, energy));
+  crowdU.uBeat.value = beat; crowdU.uEnergy.value = energy; crowdU.uLift.value = Math.min(1, Math.max(0, energy - 0.35));
   glowMats.forEach((m) => m.color.copy(wallLight.color).multiplyScalar(1.3));
   drawWall(time, beat, drop);
+  // Rim light on the crowd from what the stage is doing: the LED wall plus the rig's average colour and level.
+  const nf = Math.max(1, n), night = 1 - look.day;
+  crowdU.uRim.value.copy(wallLight.color).multiplyScalar(0.3).add(rimSum.multiplyScalar(1.2 / nf)).multiplyScalar(night * (highOn() ? 1 : 0.7));
+  toCam.copy(camSet.target).sub(camera.position).setY(0).normalize().setY(0.1).normalize();
+  crowdU.uStageDir.value.copy(toCam).transformDirection(camera.matrixWorldInverse);
+  crowdU.uCam.value.set(camera.position.x, camera.position.y, camera.position.z, 1);
   if (frame % 10 === 0) $('#beatOut').textContent = `${Math.round(state.bpm)} BPM`;
   $('#beatOut').dataset.on = (beat % 1) < 0.18 ? '1' : '0';
   if (tween) {
@@ -1664,12 +1869,33 @@ function tick(now) {
     camera.position.set(t.x + Math.sin(droneAng) * o.R, o.h, t.z + Math.cos(droneAng) * o.R);
     controls.target.copy(t);
   }
-  controls.update();
+  if (walk.on) updateWalk(dt, beat, energy); else controls.update();
+  if (audio.room && frame % 3 === 0) updateSound(drop);
   if (sky) sky.position.copy(camera.position);
   dome.position.copy(camera.position);
   stars.position.copy(camera.position);
-  if (highOn()) post.composer.render(); else renderer.render(scene, camera);
+  if (highOn()) renderHigh(dt); else renderer.render(scene, camera);
   requestAnimationFrame(tick);
+}
+
+// Eyes and cameras adapt: look into a bright LED wall and everything else darkens, turn to the dark crowd and it opens up.
+// Adaptation is partial (under half a stop per stop, within about a stop either way) and darkens faster than it brightens, as eyes do.
+// grain, vignette and fringing come from the Lens setting.
+const LENS = { eye: { adapt: 0.4, rate: [2.5, 0.7], grain: 0, vig: 0.22, ca: 0 }, phone: { adapt: 0.75, rate: [5, 2.5], grain: 0.045, vig: 0.38, ca: 0.0035 }, clean: { adapt: 0, rate: [1, 1], grain: 0, vig: 0, ca: 0 } };
+const adapt = { mul: 1, lum: 0.03, buf: new Uint8Array(4) };
+function renderHigh(dt) {
+  const L = LENS[state.lens] || LENS.eye, m = post.meter, fu = post.fin.uniforms;
+  if (m) m.want = L.adapt > 0 && frame % 10 === 0;
+  fu.uTime.value = time; fu.uGrain.value = L.grain; fu.uVig.value = L.vig; fu.uCA.value = L.ca; fu.uAspect.value = camera.aspect;
+  post.composer.render();
+  if (m && m.want) {
+    renderer.readRenderTargetPixels(m.target, 0, 0, 1, 1, adapt.buf);
+    adapt.lum = Math.pow(2, adapt.buf[0] / 255 * 16 - 12);
+  }
+  const target = L.adapt ? Math.min(1.7, Math.max(0.45, Math.pow((0.04 + 0.4 * look.day) / Math.max(1e-4, adapt.lum), L.adapt))) : 1;
+  adapt.mul += (target - adapt.mul) * (1 - Math.exp(-dt * L.rate[target < adapt.mul ? 0 : 1]));
+  fu.uExposure.value = look.exposure * adapt.mul;
+  canvas.dataset.lum = adapt.lum.toFixed(4);
 }
 
 /* ---------- Live DMX (sACN / Art-Net via the local bridge) ---------- */
@@ -1762,14 +1988,92 @@ function ensureCtx() {
     audio.ctx = new AC();
     audio.an = audio.ctx.createAnalyser(); audio.an.fftSize = 1024; audio.an.smoothingTimeConstant = 0.25;
     audio.input = audio.ctx.createGain();
-    audio.input.connect(audio.an); audio.an.connect(audio.ctx.destination);
+    // The analyser hears the music as mixed, before the room, so beat tracking is the same in every venue.
+    const sink = audio.ctx.createGain(); sink.gain.value = 0;
+    audio.input.connect(audio.an); audio.an.connect(sink).connect(audio.ctx.destination);
     audio.bins = new Uint8Array(audio.an.frequencyBinCount);
     const nb = audio.ctx.createBuffer(1, audio.ctx.sampleRate, audio.ctx.sampleRate), ch = nb.getChannelData(0);
     for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
     audio.noise = nb;
+    makeRoom(audio.ctx);
   }
   if (audio.ctx.state === 'suspended') audio.ctx.resume();
   return audio.ctx;
+}
+/* ---------- Venue sound ---------- */
+// "In the venue" plays the music through the room you are standing in: a reverb tail sized to the space, a slap back
+// off Red Rocks' monoliths or a stadium's stands, high end lost to distance from the PA, the PA placed in 3D around
+// your head (HRTF), and a crowd that cheers on the drop. "Direct" plays the track as mixed.
+// Reverb times are typical for each kind of space, not measurements of these venues.
+const ROOMS = {
+  club: { rt: 1.0, wet: 0.2 }, booth: { rt: 1.0, wet: 0.2 }, warehouse: { rt: 2.3, wet: 0.36 }, arena: { rt: 2.4, wet: 0.34 },
+  proscenium: { rt: 1.5, wet: 0.24 }, thrust: { rt: 1.4, wet: 0.24 }, arch: { rt: 0.9, wet: 0.16 },
+  festival: { rt: 0.6, wet: 0.06 }, stadium: { rt: 1.8, wet: 0.16, echo: 0.42, echoG: 0.14 }, amphi: { rt: 1.2, wet: 0.13, echo: 0.19, echoG: 0.16 },
+};
+function makeRoom(c) {
+  const r = audio.room = { direct: c.createGain(), dry: c.createGain(), conv: c.createConvolver(), wet: c.createGain(), echo: c.createDelay(1), echoG: c.createGain(), air: c.createBiquadFilter(), pan: c.createPanner(), level: c.createGain(), crowd: c.createGain(), key: '', cheer: 0 };
+  audio.input.connect(r.direct).connect(c.destination);
+  audio.input.connect(r.dry).connect(r.air);
+  audio.input.connect(r.conv).connect(r.wet).connect(r.air);
+  audio.input.connect(r.echo).connect(r.echoG).connect(r.air);
+  r.air.type = 'lowpass'; r.air.Q.value = 0.5;
+  r.pan.panningModel = 'HRTF'; r.pan.rolloffFactor = 0;
+  r.air.connect(r.pan).connect(r.level).connect(c.destination);
+  // Crowd: band-limited noise for the roar of voices, swelling when the drop lands.
+  const src = c.createBufferSource(), bp = c.createBiquadFilter(), lp = c.createBiquadFilter();
+  src.buffer = audio.noise; src.loop = true;
+  bp.type = 'bandpass'; bp.frequency.value = 650; bp.Q.value = 0.45; lp.type = 'lowpass'; lp.frequency.value = 2600;
+  src.connect(bp).connect(lp).connect(r.crowd).connect(c.destination);
+  r.crowd.gain.value = 0; src.start();
+  setRoom();
+}
+// Impulse response: decaying stereo noise whose high end dies away faster than its low end, as air and surfaces absorb it.
+function roomIR(c, rt) {
+  const len = Math.ceil(c.sampleRate * Math.min(3.5, rt * 1.3)), buf = c.createBuffer(2, len, c.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch); let lp = 0;
+    for (let i = 0; i < len; i++) {
+      const t = i / c.sampleRate, k = Math.min(0.97, 0.15 + t / rt * 0.8);
+      lp = lp * k + (Math.random() * 2 - 1) * (1 - k);
+      d[i] = lp * Math.exp(-6.9 * t / rt) * (t < 0.012 ? t / 0.012 : 1);
+    }
+  }
+  return buf;
+}
+function setRoom() {
+  const r = audio.room; if (!r) return;
+  const room = { ...(ROOMS[state.tpl] || ROOMS.festival) };
+  if (state.room && state.room.ceil === 0) { room.rt = Math.min(room.rt, 0.8); room.wet *= 0.5; }
+  const key = `${room.rt}|${room.wet}|${room.echo || 0}`;
+  if (key === r.key) return;
+  r.key = key; r.cfg = room;
+  r.conv.buffer = roomIR(audio.ctx, room.rt);
+  r.echo.delayTime.value = room.echo || 0.01;
+}
+const lisFwd = new THREE.Vector3(), lisUp = new THREE.Vector3();
+function setParam(p, v, t) { if (p) p.setTargetAtTime(v, t, 0.08); }
+function updateSound(drop) {
+  const r = audio.room; if (!r) return;
+  const c = audio.ctx, t = c.currentTime, venueOn = state.sound === 'room', cfg = r.cfg || ROOMS.festival;
+  // The PA sits at the front of the stage, roughly where the target is, at deck height.
+  const pa = camSet.target, d = Math.max(3, Math.hypot(camera.position.x - pa.x, camera.position.z - Math.min(pa.z + state.D / 2, 1)));
+  setParam(r.direct.gain, venueOn ? 0 : 1, t);
+  setParam(r.dry.gain, venueOn ? Math.min(1, 14 / d) * 0.5 + 0.5 : 0, t);
+  setParam(r.wet.gain, venueOn ? cfg.wet * (0.6 + Math.min(1.2, d / 30)) : 0, t);
+  setParam(r.echoG.gain, venueOn ? (cfg.echoG || 0) : 0, t);
+  setParam(r.air.frequency, 19000 / (1 + d / 45), t);
+  setParam(r.level.gain, venueOn ? 0.75 + 0.25 * Math.min(1, 20 / d) : 0, t);
+  r.cheer = drop === 'on' ? Math.max(r.cheer, 1) : r.cheer * 0.985;
+  const crowdSize = Math.min(1, peopleCount() / 6000);
+  setParam(r.crowd.gain, venueOn && audio.playing ? (0.012 + 0.03 * crowdSize) * (1 + 3 * r.cheer) * (0.85 + 0.3 * Math.sin(time * 0.7) * Math.sin(time * 0.31)) : 0, t);
+  const P = r.pan, L = c.listener;
+  if (P.positionX) { P.positionX.value = pa.x; P.positionY.value = state.H + 4; P.positionZ.value = Math.min(pa.z + state.D / 2, 1); } else P.setPosition(pa.x, state.H + 4, pa.z);
+  camera.getWorldDirection(lisFwd); lisUp.set(0, 1, 0).applyQuaternion(camera.quaternion);
+  const cp = camera.position;
+  if (L.positionX) {
+    L.positionX.value = cp.x; L.positionY.value = cp.y; L.positionZ.value = cp.z;
+    L.forwardX.value = lisFwd.x; L.forwardY.value = lisFwd.y; L.forwardZ.value = lisFwd.z; L.upX.value = lisUp.x; L.upY.value = lisUp.y; L.upZ.value = lisUp.z;
+  } else { L.setPosition(cp.x, cp.y, cp.z); L.setOrientation(lisFwd.x, lisFwd.y, lisFwd.z, lisUp.x, lisUp.y, lisUp.z); }
 }
 function demoBeat() { const d = audio.demo; return d.beatBase + (audio.ctx.currentTime - d.tBase) * state.bpm / 60; }
 function reanchorDemo(prevBpm) {
@@ -1928,6 +2232,7 @@ $('#track').addEventListener('change', (e) => {
     renderMusic();
   }).catch(() => renderMusic(`Could not read a steady beat from ${f.name}. Try an MP3 or WAV with a clear kick.`));
 });
+$('#sound').addEventListener('change', (e) => { state.sound = e.target.value; });
 $('#play').addEventListener('click', () => { if (audio.playing) stopMusic(); else startMusic(); renderMusic(); });
 $('#drop').addEventListener('click', triggerDrop);
 
@@ -1937,7 +2242,7 @@ function updateReadouts() {
   $('#hudTitle').textContent = s.venueMeta && s.venueMeta.id ? s.venueMeta.name : NAMES[s.tpl];
   const px = (m) => Math.round(m * 1000 / s.pitch);
   const nScreens = screens.length;
-  $('#hudSpec').textContent = `${s.W.toFixed(1)} × ${s.D.toFixed(1)} m deck · ${s.H.toFixed(1)} m high · trim ${(s.H + s.trim).toFixed(1)} m AFF · ${fixtures.length} fixtures · ${nScreens} LED surface${nScreens === 1 ? '' : 's'}`;
+  $('#hudSpec').textContent = `${s.W.toFixed(1)} × ${s.D.toFixed(1)} m deck · ${s.H.toFixed(1)} m high · trim ${(s.H + s.trim).toFixed(1)} m AFF · ${fixtures.length} fixtures · ${nScreens} LED surface${nScreens === 1 ? '' : 's'} · ${peopleCount().toLocaleString()} people`;
   $('#wallOut').textContent = `${s.wallW.toFixed(1)} × ${s.wallH.toFixed(1)} m · ${px(s.wallW)} × ${px(s.wallH)} px · ${Math.round(s.wallW / 0.5) * Math.round(s.wallH / 0.5)} cabinets (500 mm)`;
   $('#pitchOut').textContent = `${s.pitch} mm pitch`;
 }
@@ -1997,12 +2302,13 @@ Object.keys(fmt).forEach((k) => {
     e.target.nextElementSibling.textContent = fmt[k](state[k]);
     if (rebuildKeys.includes(k)) scheduleBuild(false);
     if (k === 'tod') updateLook();
-    if (k === 'density') setDensity(state.density);
+    if (k === 'density') { setDensity(state.density); updateReadouts(); }
   });
 });
 ['program', 'dimfx', 'colorMode', 'lasers'].forEach((k) => $('#' + k).addEventListener('change', (e) => { state[k] = e.target.value; }));
-$('#quality').addEventListener('change', (e) => setQuality(e.target.value));
+$('#quality').addEventListener('change', (e) => { setQuality(e.target.value); build(); });
 $('#surround').addEventListener('change', (e) => { state.surround = e.target.value; build(); });
+$('#lens').addEventListener('change', (e) => { state.lens = e.target.value; });
 $('#control').addEventListener('change', (e) => { state.control = e.target.value; live.touched = true; });
 $('#visual').addEventListener('change', (e) => { state.visual = e.target.value; tdFeed.touched = true; syncInputs(); sizeWallCanvas(state.wallW / state.wallH); if ($('#sceneDetails').open) $('#sceneJson').textContent = sceneJSON(); });
 $('#colA').addEventListener('input', (e) => { state.colA = e.target.value; });
