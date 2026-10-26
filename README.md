@@ -2,7 +2,9 @@
 
 A browser stage previsualizer for practising show design and showing clients how visuals will look in a real venue. Pick a venue type, size it, and run moving lights, lasers, a dancing crowd and LED-wall content over it, from built-in effects synced to music or live from a lighting console over sACN or Art-Net.
 
-**Venues:** club, DJ booth in the round with LED cube, warehouse, arch tent, festival main stage, stadium, arena, proscenium theatre, thrust. All are parametric: sizes are typical proportions for each format, not copies of specific venues.
+**Venues:** club, DJ booth in the round with LED cube, warehouse, arch tent, festival main stage, stadium, arena, proscenium theatre, thrust and amphitheatre templates, all parametric.
+
+**Real venue library:** 30 top US club and festival venues in `app/venues.js`, picked from the **Real venue** menu: 15 clubs (Brooklyn Mirage, Knockdown Center, Echostage, Club Space, Exchange LA, Radius and more), Red Rocks and The Gorge, and 13 festival stages (EDC kineticFIELD and circuitGROUNDS, Coachella Sahara, Ultra, Electric Forest, Lollapalooza Perry's, Movement, Lost Lands, Portola, CRSSD, HARD Summer). Sizes are estimates from public information (capacity, published stage widths, photos), not venue drawings, and festival stages are generic proportions for that stage's scale because the designs change every year. Each venue also carries realism data for sky and crowd simulation: indoor or outdoor, latitude and longitude, the direction the audience faces, capacity, time zone, season and typical show hours. The page exposes it as `state.venueMeta` and fires a `stagevenue` event on `window` when it changes.
 
 **Music:** play the built-in demo beat or load your own track. A track's tempo and beat phase are worked out from its kick drum when it loads, and lights, lasers, LED content and crowd lock to it. **Drop** gives a one-beat blackout, then four bars at full energy.
 
