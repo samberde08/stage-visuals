@@ -183,6 +183,18 @@ details .btn { margin: 0 10px 10px; }
     </section>
 
     <section class="group">
+      <div class="eyebrow"><span>Look</span><span id="lookOut"></span></div>
+      <div class="row two"><label for="quality">Quality</label>
+        <select id="quality">
+          <option value="high">High: bloom and sun shadows</option>
+          <option value="fast">Fast: for laptops and phones</option>
+        </select></div>
+      <div class="row"><label for="tod">Time of day</label><input id="tod" type="range" min="0" max="24" step="0.25" value="21.5"><output for="tod"></output></div>
+      <div class="row"><label for="density">Crowd</label><input id="density" type="range" min="0" max="1" step="0.05" value="1"><output for="density"></output></div>
+      <p class="note" id="lookNote"></p>
+    </section>
+
+    <section class="group">
       <div class="eyebrow"><span>LED wall</span><span id="pitchOut"></span></div>
       <div class="row two"><label for="visual">Content</label>
         <select id="visual">
@@ -220,6 +232,13 @@ details .btn { margin: 0 10px 10px; }
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/objects/Sky.js"></script>
 <script src="venues.js"></script>
 <script>
 (() => {
@@ -254,31 +273,104 @@ function venueMeta(tpl, v) {
   if (!v) return { id: null, name: NAMES[tpl], setting: INDOOR_TPL[tpl] ? 'indoor' : tpl === 'arch' ? 'tent' : 'outdoor', indoor: !!INDOOR_TPL[tpl], lat: null, lon: null, elevationM: null, bearing: null, capacity: null, tz: null, season: null, showHours: null };
   return { id: v.id, name: v.name, city: v.city, region: v.region, setting: v.setting, indoor: v.setting === 'indoor', lat: v.lat, lon: v.lon, elevationM: v.elevationM, bearing: v.audienceFacing, capacity: v.capacity, tz: v.tz, season: v.season, showHours: v.showHours };
 }
-const state = { tpl: 'festival', venue: null, room: {}, venueMeta: null, ...pick(TEMPLATES.festival), program: 'fan', dimfx: 'steady', colorMode: 'alt', colA: '#ff7a1a', colB: '#2f6bff', bpm: 124, zoom: 9, haze: 0.55, visual: 'plasma', text: 'STAGE VISUALS', pitch: 3.9, control: 'effects', lasers: 'fan', laserCol: '#22ff66' };
+const state = { tpl: 'festival', venue: null, room: {}, venueMeta: null, ...pick(TEMPLATES.festival), program: 'fan', dimfx: 'steady', colorMode: 'alt', colA: '#ff7a1a', colB: '#2f6bff', bpm: 124, zoom: 9, haze: 0.55, visual: 'plasma', text: 'STAGE VISUALS', pitch: 3.9, control: 'effects', lasers: 'fan', laserCol: '#22ff66', quality: 'high', tod: 21.5, density: 1 };
+if (matchMedia('(max-width: 760px)').matches || (navigator.hardwareConcurrency || 8) < 4) state.quality = 'fast';
 state.venueMeta = venueMeta(state.tpl, null);
 function pick(t) { return { W: t.W, D: t.D, H: t.H, trim: t.trim, wallW: t.wallW, wallH: t.wallH, count: t.count }; }
 
 /* ---------- Renderer ---------- */
 const canvas = $('#c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
 renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.1;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const NIGHT = new THREE.Color(0x07080b);
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x07080b);
+scene.background = NIGHT.clone();
 scene.fog = new THREE.FogExp2(0x07080b, 0.012);
 const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 600);
 const controls = new THREE.OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.maxPolarAngle = Math.PI * 0.495;
 
-scene.add(new THREE.HemisphereLight(0x8090b0, 0x0a0a0a, 0.35));
+const hemi = new THREE.HemisphereLight(0x8090b0, 0x0a0a0a, 0.35);
+scene.add(hemi);
 const key = new THREE.DirectionalLight(0xffe2c0, 0.35);
 key.position.set(4, 18, 30);
 scene.add(key);
 const wallLight = new THREE.PointLight(0xffffff, 1.4, 40, 1.5);
 scene.add(wallLight);
+// Daylight for outdoor venues. The sun only casts shadows at High quality.
+const sun = new THREE.DirectionalLight(0xffffff, 0);
+sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.05;
+sun.shadow.camera.near = 1; sun.shadow.camera.far = 420;
+scene.add(sun, sun.target);
+const sky = THREE.Sky ? new THREE.Sky() : null;
+if (sky) {
+  sky.scale.setScalar(520); sky.visible = false; sky.frustumCulled = false;
+  Object.assign(sky.material.uniforms, { turbidity: { value: 5 }, rayleigh: { value: 1.4 }, mieCoefficient: { value: 0.005 }, mieDirectionalG: { value: 0.82 } });
+  scene.add(sky);
+}
+const stars = (() => {
+  const n = 1600, p = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, y = 0.06 + Math.random() * 0.94, r = Math.sqrt(1 - y * y);
+    p.set([Math.cos(a) * r * 430, y * 430, Math.sin(a) * r * 430], i * 3);
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(p, 3));
+  const pts = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xdfe6ff, size: 1.6, sizeAttenuation: false, transparent: true, depthWrite: false, fog: false }));
+  pts.visible = false; pts.frustumCulled = false;
+  scene.add(pts);
+  return pts;
+})();
+
+/* ---------- Post-processing (High quality) ---------- */
+// High renders linear light into a half-float target, adds bloom, then applies ACES and sRGB in one last pass.
+// Fast renders straight to the canvas with the renderer's own ACES and no bloom.
+const shared = { uTime: { value: 0 }, uHaze: { value: 0.5 }, uLinear: { value: 0 } };
+const FinalShader = {
+  uniforms: { tDiffuse: { value: null }, uExposure: { value: 1.1 } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+  fragmentShader: `
+uniform sampler2D tDiffuse; uniform float uExposure; varying vec2 vUv;
+vec3 fit(vec3 v){ vec3 a = v * (v + 0.0245786) - 0.000090537; vec3 b = v * (0.983729 * v + 0.4329510) + 0.238081; return a / b; }
+void main(){
+  const mat3 I = mat3(vec3(0.59719, 0.07600, 0.02840), vec3(0.35458, 0.90834, 0.13383), vec3(0.04823, 0.01566, 0.83777));
+  const mat3 O = mat3(vec3(1.60475, -0.10208, -0.00327), vec3(-0.53108, 1.10813, -0.07276), vec3(-0.07367, -0.00605, 1.07602));
+  vec3 c = clamp(O * fit(I * (texture2D(tDiffuse, vUv).rgb * uExposure / 0.6)), 0.0, 1.0);
+  c = mix(pow(c, vec3(0.41666)) * 1.055 - 0.055, c * 12.92, vec3(lessThanEqual(c, vec3(0.0031308))));
+  gl_FragColor = vec4(c, 1.0);
+}`,
+};
+let post = null;
+function makePost() {
+  if (!THREE.EffectComposer || !THREE.RenderPass || !THREE.ShaderPass || !THREE.UnrealBloomPass) return null;
+  const size = renderer.getDrawingBufferSize(new THREE.Vector2());
+  const gl2 = renderer.capabilities.isWebGL2, hdr = gl2 && renderer.extensions.has('EXT_color_buffer_float');
+  const opts = { type: hdr ? THREE.HalfFloatType : THREE.UnsignedByteType, format: THREE.RGBAFormat, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter };
+  const rt = gl2 ? new THREE.WebGLMultisampleRenderTarget(size.x, size.y, opts) : new THREE.WebGLRenderTarget(size.x, size.y, opts);
+  const composer = new THREE.EffectComposer(renderer, rt);
+  composer.addPass(new THREE.RenderPass(scene, camera));
+  const bloom = new THREE.UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.75, 0.5, 0.9);
+  composer.addPass(bloom);
+  const fin = new THREE.ShaderPass(FinalShader);
+  composer.addPass(fin);
+  return { composer, bloom, fin };
+}
+function highOn() { return state.quality === 'high' && !!post; }
+function setQuality(q) {
+  state.quality = q;
+  if (q === 'high' && !post) { try { post = makePost(); } catch (e) { post = null; } }
+  const high = highOn();
+  renderer.toneMapping = high ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
+  renderer.shadowMap.enabled = high;
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, high ? 2 : 1.25));
+  shared.uLinear.value = high ? 1 : 0;
+  scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; });
+  resize();
+  updateLook();
+}
 
 const M = {
   floor: new THREE.MeshStandardMaterial({ color: 0x101116, roughness: 0.42, metalness: 0.25 }),
@@ -290,7 +382,6 @@ const M = {
   truss: new THREE.MeshStandardMaterial({ color: 0xb4b7bf, roughness: 0.35, metalness: 0.85 }),
   lacing: new THREE.LineBasicMaterial({ color: 0x80838c }),
   body: new THREE.MeshStandardMaterial({ color: 0x1c1d22, roughness: 0.45, metalness: 0.5 }),
-  crowd: new THREE.MeshStandardMaterial({ color: 0x0f1014, roughness: 1 }),
   pa: new THREE.MeshStandardMaterial({ color: 0x0d0d10, roughness: 0.7 }),
   frame: new THREE.MeshStandardMaterial({ color: 0x0a0a0c, roughness: 0.6 }),
   concrete: new THREE.MeshStandardMaterial({ color: 0x2c2d31, roughness: 0.95 }),
@@ -320,7 +411,7 @@ function sizeWallCanvas(aspect) {
 
 const wallVert = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`;
 const wallFrag = `
-uniform sampler2D map; uniform vec2 uPixels; uniform vec2 uPanels; uniform float uBright;
+uniform sampler2D map; uniform vec2 uPixels; uniform vec2 uPanels; uniform float uBright; uniform float uLinear;
 varying vec2 vUv;
 void main(){
   vec3 c = texture2D(map, vUv).rgb;
@@ -335,11 +426,13 @@ void main(){
   float fq = max(fwidth(q.x), fwidth(q.y));
   float seam = smoothstep(0.5 - fq, 0.5, max(g.x, g.y));
   c *= 1.0 - seam * 0.55;
+  // At High quality the frame is linear light, so decode the sRGB content and drive it hot enough to bloom.
+  c = mix(c, pow(c, vec3(2.2)) * 1.8, uLinear);
   gl_FragColor = vec4(c * uBright, 1.0);
 }`;
 function wallMaterial(w, h) {
   const m = new THREE.ShaderMaterial({
-    uniforms: { map: wallTex, uPixels: { value: new THREE.Vector2(w * 1000 / state.pitch, h * 1000 / state.pitch) }, uPanels: { value: new THREE.Vector2(w / 0.5, h / 0.5) }, uBright: { value: 1.0 } },
+    uniforms: { map: wallTex, uPixels: { value: new THREE.Vector2(w * 1000 / state.pitch, h * 1000 / state.pitch) }, uPanels: { value: new THREE.Vector2(w / 0.5, h / 0.5) }, uBright: { value: 1.0 }, uLinear: shared.uLinear },
     vertexShader: wallVert, fragmentShader: wallFrag, fog: false,
   });
   m.extensions.derivatives = true;
@@ -352,22 +445,34 @@ const BASE_HALF = 10 * DEG;
 const beamGeo = new THREE.CylinderGeometry(Math.tan(BASE_HALF), 0.035, 1, 32, 1, true);
 beamGeo.translate(0, 0.5, 0);
 const beamVert = `
-uniform float uLen; varying float vDist; varying float vEdge;
+uniform float uLen; varying float vDist; varying float vEdge; varying vec3 vWorld;
 void main(){
   vDist = position.y * uLen;
+  vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   vec3 n = normalize(normalMatrix * normal);
   vEdge = abs(dot(n, normalize(-mv.xyz)));
   gl_Position = projectionMatrix * mv;
 }`;
 const beamFrag = `
-uniform vec3 uColor; uniform float uIntensity; uniform float uLen;
-varying float vDist; varying float vEdge;
+uniform vec3 uColor; uniform float uIntensity; uniform float uLen; uniform float uTime; uniform float uHaze; uniform float uLinear;
+varying float vDist; varying float vEdge; varying vec3 vWorld;
+float hash(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+float noise(vec3 x){
+  vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(hash(i), hash(i + vec3(1,0,0)), f.x), mix(hash(i + vec3(0,1,0)), hash(i + vec3(1,1,0)), f.x), f.y),
+             mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x), mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y), f.z);
+}
 void main(){
   float att = exp(-vDist * 0.04);
   float endFade = 1.0 - smoothstep(uLen - 1.2, uLen, vDist);
-  float a = uIntensity * att * endFade * pow(vEdge, 1.6);
-  gl_FragColor = vec4(uColor * a, 1.0);
+  // Haze drifts through the beam, so light catches in slow-moving clumps rather than a flat cone.
+  vec3 drift = vec3(uTime * 0.21, uTime * 0.04, uTime * 0.13);
+  float n = noise(vWorld * 0.42 + drift) * 0.65 + noise(vWorld * 1.35 - drift * 1.8) * 0.35;
+  float clump = mix(1.0, 0.25 + 1.5 * n, 0.3 + 0.45 * uHaze);
+  float a = uIntensity * att * endFade * pow(vEdge, 1.6) * clump;
+  vec3 col = mix(uColor, pow(uColor, vec3(2.2)) * 1.3, uLinear);
+  gl_FragColor = vec4(col * a, 1.0);
 }`;
 function poolTexture() {
   const c = document.createElement('canvas'); c.width = c.height = 128;
@@ -434,38 +539,115 @@ function screen(name, w, h, pos, rotY = 0, frame = true) {
   return mesh;
 }
 
-// Each person is x, y, z, height scale and a dance phase; poses are rewritten every frame.
-function crowd(n, fn) {
-  const geo = new THREE.CylinderGeometry(0.15, 0.19, 1.65, 6); geo.translate(0, 0.83, 0);
-  const im = new THREE.InstancedMesh(geo, M.crowd, n);
-  im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-  im.frustumCulled = false;
-  const data = new Float32Array(n * 5);
+/* ---------- Crowd ---------- */
+// Each person is x, y, z, height scale, a dance phase and the direction they face; poses are rewritten every frame.
+// A person is four instanced parts: body (legs and torso, shirt colour), head, two arms that pivot at the shoulder,
+// and for about one in ten a phone held up to film the stage.
+function mergeGeos(parts) {
+  const pos = [], nor = [], col = [];
+  parts.forEach(([g, shade]) => {
+    const n = g.toNonIndexed(), P = n.attributes.position.array, N = n.attributes.normal.array;
+    for (let i = 0; i < P.length; i++) { pos.push(P[i]); nor.push(N[i]); col.push(shade); }
+  });
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  return g;
+}
+const PERSON = (() => {
+  const at = (g, x, y, z) => { g.translate(x, y, z); return g; };
+  const torso = at(new THREE.CylinderGeometry(0.19, 0.15, 0.62, 8), 0, 1.13, 0); torso.scale(1, 1, 0.62);
+  const legL = at(new THREE.BoxGeometry(0.13, 0.84, 0.15), -0.09, 0.42, 0);
+  const legR = at(new THREE.BoxGeometry(0.13, 0.84, 0.15), 0.09, 0.42, 0);
+  const body = mergeGeos([[torso, 1], [legL, 0.32], [legR, 0.32]]);
+  const head = at(new THREE.SphereGeometry(0.105, 10, 8), 0, 0, 0); head.scale(0.92, 1.08, 1);
+  const arm = at(new THREE.BoxGeometry(0.065, 0.64, 0.075), 0, -0.32, 0);
+  const phone = new THREE.BoxGeometry(0.075, 0.15, 0.012);
+  return { body, head, arm, phone };
+})();
+const crowdMat = {
+  body: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.92, vertexColors: true }),
+  skin: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7 }),
+  phone: new THREE.MeshBasicMaterial({ color: 0xcfe0ff }),
+};
+const SHIRTS = ['#111114', '#18181c', '#232328', '#3a3b40', '#55575d', '#1d2a4a', '#2f4a72', '#d6d6d2', '#7a1d22', '#3d4a2a', '#8c7a5e', '#0e3a3a', '#5b2a6e', '#c8b400'].map((h) => new THREE.Color(h).convertSRGBToLinear());
+const SKIN = ['#5a3825', '#8d5524', '#a8693f', '#c68642', '#e0ac69', '#f1c27d', '#ffdbac'].map((h) => new THREE.Color(h).convertSRGBToLinear());
+const SHIRT_W = SHIRTS.map((_, i) => (i < 5 ? 3 : i === 7 ? 1.6 : 1));
+function pickWeighted(list, w) { let r = Math.random() * w.reduce((a, b) => a + b, 0); for (let i = 0; i < list.length; i++) { r -= w[i]; if (r <= 0) return list[i]; } return list[0]; }
+
+function crowd(n, fn, focus) {
+  const data = new Float32Array(n * 6);
   let k = 0;
   for (let i = 0; i < n * 3 && k < n; i++) {
     const p = fn(); if (!p) continue;
-    data.set([p.x, p.y, p.z, 0.88 + Math.random() * 0.22, Math.random()], k * 5);
+    data.set([p.x, p.y, p.z, 0.9 + Math.random() * 0.2, Math.random(), 0], k * 6);
     k++;
   }
-  im.count = k;
-  venue.add(im);
-  const c = { im, data, k };
-  crowds.push(c);
-  posePeople(c, 0, 0.5);
-}
-const cm4 = new THREE.Matrix4(), cq = new THREE.Quaternion(), cs = new THREE.Vector3(), cp = new THREE.Vector3();
-function posePeople(c, beat, energy) {
-  const d = c.data;
-  for (let i = 0; i < c.k; i++) {
-    const o = i * 5, ph = d[o + 4];
-    const hop = Math.pow(Math.abs(Math.sin(Math.PI * (beat + ph * 0.2))), 3) * 0.22 * energy;
-    cq.setFromAxisAngle(up, Math.sin(beat * Math.PI * 0.5 + ph * 6.3) * 0.3 * Math.min(1, energy));
-    cp.set(d[o], d[o + 1] + hop, d[o + 2]);
-    cs.set(1, d[o + 3] * (1 + hop * 0.15), 1);
-    cm4.compose(cp, cq, cs);
-    c.im.setMatrixAt(i, cm4);
+  const inst = (geo, mat, count) => { const m = new THREE.InstancedMesh(geo, mat, Math.max(1, count)); m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.frustumCulled = false; venue.add(m); return m; };
+  const phones = [];
+  for (let i = 0; i < k; i++) if (data[i * 6 + 4] < 0.1) phones.push(i);
+  const body = inst(PERSON.body, crowdMat.body, k), head = inst(PERSON.head, crowdMat.skin, k), arms = inst(PERSON.arm, crowdMat.skin, k * 2);
+  const ph = inst(PERSON.phone, crowdMat.phone, phones.length);
+  for (let i = 0; i < k; i++) {
+    const skin = SKIN[Math.floor(Math.random() * SKIN.length)];
+    body.setColorAt(i, pickWeighted(SHIRTS, SHIRT_W)); head.setColorAt(i, skin);
+    arms.setColorAt(i * 2, skin); arms.setColorAt(i * 2 + 1, skin);
   }
-  c.im.instanceMatrix.needsUpdate = true;
+  const c = { body, head, arms, ph, phones, data, k, focus: focus || null, shown: k };
+  crowds.push(c);
+  return c;
+}
+// Called once the venue knows where the stage is: everyone turns to face the focus point.
+function faceCrowds(target) {
+  crowds.forEach((c) => {
+    const f = c.focus || target, d = c.data;
+    for (let i = 0; i < c.k; i++) { const o = i * 6; d[o + 5] = Math.atan2(f.x - d[o], f.z - d[o + 2]) + (Math.random() - 0.5) * 0.5; }
+  });
+  setDensity(state.density);
+}
+function setDensity(v) {
+  crowds.forEach((c) => {
+    const m = Math.round(c.k * v);
+    c.shown = m; c.body.count = m; c.head.count = m; c.arms.count = m * 2;
+    let np = 0; while (np < c.phones.length && c.phones[np] < m) np++;
+    c.ph.count = np;
+  });
+}
+const cm4 = new THREE.Matrix4(), lm4 = new THREE.Matrix4(), om4 = new THREE.Matrix4(), cq = new THREE.Quaternion(), cs = new THREE.Vector3(), cp = new THREE.Vector3(), ce = new THREE.Euler();
+const PHONE_AT = new THREE.Matrix4().makeTranslation(0, -0.66, 0.03);
+function posePeople(c, beat, energy) {
+  const d = c.data, lift = Math.min(1, Math.max(0, energy - 0.35));
+  let pi = 0;
+  for (let i = 0; i < c.shown; i++) {
+    const o = i * 6, ph = d[o + 4], style = (ph * 7.31) % 1;
+    const b = beat + ph * 0.2;
+    const hop = Math.pow(Math.abs(Math.sin(Math.PI * b)), 3) * 0.2 * energy;
+    cq.setFromAxisAngle(up, d[o + 5] + Math.sin(beat * Math.PI * 0.5 + ph * 6.3) * 0.25 * Math.min(1, energy));
+    cp.set(d[o], d[o + 1] + hop, d[o + 2]);
+    const sc = d[o + 3];
+    cs.set(sc, sc * (1 + hop * 0.12), sc);
+    cm4.compose(cp, cq, cs);
+    c.body.setMatrixAt(i, cm4);
+    lm4.makeRotationX(Math.sin(Math.PI * b * 2) * 0.12 * energy).setPosition(0, 1.6, 0);
+    c.head.setMatrixAt(i, om4.multiplyMatrices(cm4, lm4));
+    // Arm angle about the shoulder: 0 hangs down, -PI points straight up. Some people throw their hands up as energy builds.
+    const phone = ph < 0.1, raised = phone || style < 0.15 + lift * 0.55;
+    const pump = Math.pow(Math.abs(Math.cos(Math.PI * b)), 2);
+    for (let s = 0; s < 2; s++) {
+      const side = s ? 1 : -1;
+      let ax, az;
+      if (phone && s === 1) { ax = -2.2; az = 0.05; }
+      else if (raised) { ax = -2.35 - 0.5 * pump * Math.min(1, energy); az = side * (0.25 + 0.2 * style); }
+      else { ax = -0.15 - 0.45 * pump * energy * (0.5 + style); az = side * 0.12; }
+      ce.set(ax, 0, az);
+      lm4.makeRotationFromEuler(ce).setPosition(side * 0.22, 1.4, 0);
+      om4.multiplyMatrices(cm4, lm4);
+      c.arms.setMatrixAt(i * 2 + s, om4);
+      if (phone && s === 1) c.ph.setMatrixAt(pi++, lm4.multiplyMatrices(om4, PHONE_AT));
+    }
+  }
+  [c.body, c.head, c.arms, c.ph].forEach((m) => { m.instanceMatrix.needsUpdate = true; });
 }
 function laser(x, y, z, yaw = 0) { laserSpots.push({ pos: V(x, y, z), yaw }); }
 function seatRow(w, x, y, z, rotY = 0) {
@@ -756,7 +938,7 @@ function makeFixture(spec, idx) {
   const lensMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
   const lens = new THREE.Mesh(lensGeo, lensMat); lens.position.y = 0.212; tilt.add(lens);
   const beamMat = new THREE.ShaderMaterial({
-    uniforms: { uColor: { value: new THREE.Color() }, uIntensity: { value: 0 }, uLen: { value: 30 } },
+    uniforms: { uColor: { value: new THREE.Color() }, uIntensity: { value: 0 }, uLen: { value: 30 }, ...shared },
     vertexShader: beamVert, fragmentShader: beamFrag,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
   });
@@ -792,7 +974,7 @@ function makeLaser(spot) {
   const body = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.22, 0.35), M.body); body.position.y = 0.11; root.add(body);
   const tilt = new THREE.Group(); tilt.position.set(0, 0.16, 0.18); root.add(tilt);
   const mat = new THREE.ShaderMaterial({
-    uniforms: { uColor: { value: new THREE.Color() }, uIntensity: { value: 0 }, uLen: { value: LASER_LEN } },
+    uniforms: { uColor: { value: new THREE.Color() }, uIntensity: { value: 0 }, uLen: { value: LASER_LEN }, ...shared },
     vertexShader: beamVert, fragmentShader: beamFrag,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
   });
@@ -821,14 +1003,15 @@ function animateLasers(beat, drop) {
     const nb = L.holders.length;
     L.holders.forEach((h, b) => { h.rotation.y = sweep + (b / (nb - 1) - 0.5) * 2 * spread; });
     L.mat.uniforms.uColor.value.copy(laserCol);
-    L.mat.uniforms.uIntensity.value = 2.6 * (0.12 + state.haze) * flick * (drop === 'on' ? 1.3 : 1);
+    L.mat.uniforms.uIntensity.value = 2.6 * (0.12 + state.haze) * flick * (drop === 'on' ? 1.3 : 1) * (1 - 0.75 * look.day);
   });
 }
 
 /* ---------- Build ---------- */
 function build() {
   scene.remove(venue);
-  venue.traverse((o) => { if (o.geometry && o.geometry !== beamGeo && o.geometry !== poolGeo && o.geometry !== lensGeo && o.geometry !== headGeo && o.geometry !== laserGeo) o.geometry.dispose(); if (o.material && o.material.dispose && !Object.values(M).includes(o.material)) o.material.dispose(); });
+  const keepGeo = new Set([beamGeo, poolGeo, lensGeo, headGeo, laserGeo, ...Object.values(PERSON)]), keepMat = new Set([...Object.values(M), ...Object.values(crowdMat)]);
+  venue.traverse((o) => { if (o.geometry && !keepGeo.has(o.geometry)) o.geometry.dispose(); if (o.material && o.material.dispose && !keepMat.has(o.material)) o.material.dispose(); });
   venue = new THREE.Group(); scene.add(venue);
   receivers = []; fixtures = []; trussList = []; screens = []; hangLines = [];
   crowds = []; laserSpots = []; lasers = []; glowMats = [];
@@ -836,6 +1019,7 @@ function build() {
   floor.rotation.x = -Math.PI / 2; venue.add(floor); receivers.push(floor);
   sizeWallCanvas(state.wallW / state.wallH);
   camSet = BUILD[state.tpl](state);
+  faceCrowds(camSet.target);
   distribute(state.count).forEach((s, i) => fixtures.push(makeFixture(s, i)));
   if (!laserSpots.length) [-0.3, 0.3].forEach((u) => laser(u * state.W, state.H, -0.3, 0));
   lasers = laserSpots.map(makeLaser);
@@ -843,6 +1027,9 @@ function build() {
   const n = new THREE.Vector3(0, 0, 1).applyQuaternion(mw.quaternion);
   wallLight.position.copy(mw.position).addScaledVector(n, 3);
   wallLight.distance = Math.max(18, state.wallW * 2.4);
+  // Solid, lit surfaces take part in sun shadows; beams, glows and LED faces do not.
+  venue.traverse((o) => { if (o.isMesh && !o.material.isShaderMaterial && !o.material.isMeshBasicMaterial && !o.material.transparent) { o.castShadow = o !== floor; o.receiveShadow = true; } });
+  updateLook();
   updateReadouts();
   renderPatch();
   if ($('#sceneDetails').open) $('#sceneJson').textContent = sceneJSON();
@@ -869,6 +1056,64 @@ function goCam(kind, instant) {
   const p = camPose(kind);
   if (instant || matchMedia('(prefers-reduced-motion: reduce)').matches) { camera.position.copy(p.pos); controls.target.copy(p.target); controls.update(); tween = null; return; }
   tween = { t0: performance.now(), from: camera.position.clone(), fromT: controls.target.clone(), to: p.pos, toT: p.target };
+}
+
+/* ---------- Look: time of day ---------- */
+// Outdoor venues get a sky, a sun placed from the clock and the site's latitude, and stars after dark.
+// state.venueMeta, when a real venue is loaded: indoor, lat and bearing (compass degrees the audience faces) are used here; nulls fall back to defaults.
+const OUTDOOR = { arch: true, festival: true, stadium: true };
+const look = { outdoor: false, day: 0, elev: -30, exposure: 1.1 };
+const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+const sunDir = new THREE.Vector3(), lc = new THREE.Color();
+const C = (h) => new THREE.Color(h);
+const SKY = { night: C(0x8090b0), day: C(0xbcd2f5), gNight: C(0x0a0a0a), gDay: C(0x4a4236), low: C(0xff8a45), high: C(0xfff4e6), dusk: C(0xd98a5f), haze: C(0x9fb4cc) };
+function isOutdoor() { const m = state.venueMeta; return m && typeof m.indoor === 'boolean' ? !m.indoor : !!OUTDOOR[state.tpl]; }
+// Solar position for 21 June, the season most outdoor shows are planned for. Hour is local solar time.
+function sunAt(hour, latDeg, bearingDeg) {
+  const decl = 23.44 * DEG, H = (hour - 12) * 15 * DEG, phi = latDeg * DEG;
+  const el = Math.asin(Math.sin(phi) * Math.sin(decl) + Math.cos(phi) * Math.cos(decl) * Math.cos(H));
+  const az = Math.atan2(Math.sin(H), Math.cos(H) * Math.sin(phi) - Math.tan(decl) * Math.cos(phi)) + Math.PI;
+  // +z points from the stage to the audience, which is the bearing turned round.
+  const a = az - (bearingDeg + 180) * DEG;
+  sunDir.set(-Math.sin(a) * Math.cos(el), Math.sin(el), Math.cos(a) * Math.cos(el));
+  return el / DEG;
+}
+function clock(h) { const m = Math.round(h * 60) % 1440; return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; }
+function updateLook() {
+  const out = look.outdoor = isOutdoor(), m = state.venueMeta || {};
+  const el = look.elev = sunAt(state.tod, m.lat ?? 34, m.bearing ?? 270);
+  const day = look.day = out ? smooth(-4, 14, el) : 0;
+  const glow = out ? smooth(-12, -1, el) * (1 - smooth(4, 20, el)) : 0;
+  if (sky) { sky.visible = out && el > -8; sky.material.uniforms.sunPosition.value.copy(sunDir); }
+  const starA = out ? 1 - smooth(-10, 1, el) : 0;
+  stars.visible = starA > 0.01; stars.material.opacity = starA * 0.9;
+  sun.intensity = out ? 2.6 * smooth(-1, 10, el) : 0;
+  sun.color.copy(SKY.low).lerp(SKY.high, smooth(2, 35, el));
+  hemi.color.copy(SKY.night).lerp(SKY.day, day); hemi.groundColor.copy(SKY.gNight).lerp(SKY.gDay, day);
+  hemi.intensity = 0.35 + 0.65 * day;
+  key.intensity = 0.35 * (1 - day);
+  lc.copy(SKY.dusk).lerp(SKY.haze, smooth(2, 25, el));
+  scene.fog.color.copy(NIGHT).lerp(lc, Math.max(day, glow * 0.35));
+  // High quality writes linear light and encodes at the end, so the fog and clear colours are decoded to match.
+  if (highOn()) scene.fog.color.convertSRGBToLinear();
+  scene.background.copy(scene.fog.color);
+  // Without daylight the audience is mostly silhouette, lit only by spill from the stage.
+  const skinLevel = 0.3 + 0.7 * day;
+  crowdMat.body.color.setScalar(skinLevel); crowdMat.skin.color.setScalar(skinLevel);
+  look.exposure = 1.1 - 0.55 * day;
+  renderer.toneMappingExposure = look.exposure;
+  if (post) { post.fin.uniforms.uExposure.value = look.exposure; post.bloom.threshold = 0.9 + 2.5 * day; post.bloom.strength = 0.75 - 0.35 * day; }
+  const shadows = highOn() && sun.intensity > 0.05;
+  sun.castShadow = shadows;
+  if (camSet.target) {
+    const t = camSet.target, ext = Math.min(150, Math.max(30, Math.max(state.W, state.D) * 1.6 + 26)), cam = sun.shadow.camera;
+    sun.target.position.copy(t); sun.position.copy(t).addScaledVector(sunDir, 200);
+    cam.left = cam.bottom = -ext; cam.right = cam.top = ext; cam.updateProjectionMatrix();
+  }
+  const tod = $('#tod');
+  tod.disabled = !out;
+  $('#lookOut').textContent = out ? `${clock(state.tod)} · ${el > 8 ? 'daylight' : el > -6 ? (state.tod < 12 ? 'sunrise' : 'sunset') : 'night'}` : 'indoor';
+  $('#lookNote').textContent = out ? 'Sun position for midsummer. Beams and lasers wash out in full sun, as they do on site.' : 'This venue is indoors, so time of day has no effect.';
 }
 
 /* ---------- Animation ---------- */
@@ -970,8 +1215,9 @@ function tick(now) {
   const beat = beatClock, drop = dropPhase(beat);
   colA.set(state.colA); colB.set(state.colB);
   const n = fixtures.length, half = state.zoom / 2 * DEG, k = Math.tan(half) / Math.tan(BASE_HALF);
-  const hz = 0.05 + Math.min(1, state.haze + (drop === 'on' ? 0.2 : 0)) * 0.55;
-  scene.fog.density = 0.004 + state.haze * 0.012;
+  const hz = (0.05 + Math.min(1, state.haze + (drop === 'on' ? 0.2 : 0)) * 0.55) * (1 - 0.8 * look.day);
+  scene.fog.density = (0.004 + state.haze * 0.012) * (1 - 0.65 * look.day);
+  shared.uTime.value = time; shared.uHaze.value = state.haze;
   fixtures.forEach((f, i) => {
     let p, tl, dim, kf = k, hf = half;
     if (state.control === 'live') {
@@ -1023,7 +1269,9 @@ function tick(now) {
     controls.target.copy(t);
   }
   controls.update();
-  renderer.render(scene, camera);
+  if (sky) sky.position.copy(camera.position);
+  stars.position.copy(camera.position);
+  if (highOn()) post.composer.render(); else renderer.render(scene, camera);
   requestAnimationFrame(tick);
 }
 
@@ -1307,7 +1555,7 @@ $('#media').addEventListener('change', (e) => {
 /* ---------- UI wiring ---------- */
 const tplBox = $('#templates');
 tplBox.innerHTML = Object.entries(TEMPLATES).map(([k, t]) => `<label><input type="radio" name="tpl" id="tpl-${k}" value="${k}"${k === state.tpl ? ' checked' : ''}><b>${t.label}</b><small>${t.blurb}</small></label>`).join('');
-const fmt = { W: (v) => v.toFixed(1), D: (v) => v.toFixed(1), H: (v) => v.toFixed(1), trim: (v) => v.toFixed(1), count: (v) => String(v), bpm: (v) => v + '', zoom: (v) => v + '°', haze: (v) => Math.round(v * 100) + '%', wallW: (v) => v.toFixed(1), wallH: (v) => v.toFixed(1) };
+const fmt = { W: (v) => v.toFixed(1), D: (v) => v.toFixed(1), H: (v) => v.toFixed(1), trim: (v) => v.toFixed(1), count: (v) => String(v), bpm: (v) => v + '', zoom: (v) => v + '°', haze: (v) => Math.round(v * 100) + '%', wallW: (v) => v.toFixed(1), wallH: (v) => v.toFixed(1), tod: clock, density: (v) => Math.round(v * 100) + '%' };
 const rebuildKeys = ['W', 'D', 'H', 'trim', 'count', 'wallW', 'wallH'];
 function syncInputs() {
   Object.keys(fmt).forEach((k) => { const el = $('#' + k); el.value = state[k]; el.nextElementSibling.textContent = fmt[k](state[k]); });
@@ -1324,9 +1572,12 @@ Object.keys(fmt).forEach((k) => {
     if (k === 'bpm') reanchorDemo(prevBpm);
     e.target.nextElementSibling.textContent = fmt[k](state[k]);
     if (rebuildKeys.includes(k)) scheduleBuild(false);
+    if (k === 'tod') updateLook();
+    if (k === 'density') setDensity(state.density);
   });
 });
 ['program', 'dimfx', 'colorMode', 'lasers'].forEach((k) => $('#' + k).addEventListener('change', (e) => { state[k] = e.target.value; }));
+$('#quality').addEventListener('change', (e) => setQuality(e.target.value));
 $('#control').addEventListener('change', (e) => { state.control = e.target.value; live.touched = true; });
 $('#visual').addEventListener('change', (e) => { state.visual = e.target.value; syncInputs(); if ($('#sceneDetails').open) $('#sceneJson').textContent = sceneJSON(); });
 $('#colA').addEventListener('input', (e) => { state.colA = e.target.value; });
@@ -1375,15 +1626,17 @@ function resize() {
   const v = $('#view'), w = v.clientWidth, h = v.clientHeight;
   if (!w || !h) return;
   renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+  if (post) { const d = renderer.getDrawingBufferSize(new THREE.Vector2()); post.composer.setSize(d.x, d.y); }
 }
 new ResizeObserver(resize).observe($('#view'));
 
 syncInputs();
+$('#quality').value = state.quality;
 renderMusic();
 renderLive();
 connectLive();
 build();
-resize();
+setQuality(state.quality);
 goCam('foh', true);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => {});
 requestAnimationFrame(tick);

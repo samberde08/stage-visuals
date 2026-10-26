@@ -8,6 +8,8 @@ A browser stage previsualizer for practising show design and showing clients how
 
 **Music:** play the built-in demo beat or load your own track. A track's tempo and beat phase are worked out from its kick drum when it loads, and lights, lasers, LED content and crowd lock to it. **Drop** gives a one-beat blackout, then four bars at full energy.
 
+**Look:** High quality adds bloom, filmic colour and sun shadows; Fast drops them for laptops and phones. Outdoor venues (arch tent, festival, stadium) get a sky, a sun placed from the time of day for midsummer, and stars after dark, and beams wash out in full sun as they do on site. The crowd is made of people with arms, phones held up to film and mixed clothing, facing the stage, and the Crowd slider thins it out.
+
 Online preview (built-in effects only): https://claude.ai/artifact/DvhX2dgvYb9dXB9nP7aKWh
 
 ## Run it with a console
