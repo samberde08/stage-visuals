@@ -126,3 +126,43 @@ test('bridge forwards unicast sACN to a websocket client', async () => {
   assert.strictEqual(st[0].name, 'Test desk');
   await bridge.close();
 });
+
+function clientFrame(payload, opcode, fin = true) {
+  const key = crypto.randomBytes(4), len = payload.length;
+  const head = len < 126 ? Buffer.from([0, 0x80 | len]) : Buffer.from([0, 0x80 | 126, len >> 8, len & 255]);
+  head[0] = (fin ? 0x80 : 0) | opcode;
+  const body = Buffer.from(payload); for (let i = 0; i < body.length; i++) body[i] ^= key[i & 3];
+  return Buffer.concat([head, key, body]);
+}
+function wsConnect(port, path) {
+  const sock = net.connect(port, '127.0.0.1');
+  sock.write(`GET ${path} HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: ${crypto.randomBytes(16).toString('base64')}\r\nSec-WebSocket-Version: 13\r\n\r\n`);
+  return new Promise((resolve) => { let b = Buffer.alloc(0); const on = (d) => { b = Buffer.concat([b, d]); const at = b.indexOf('\r\n\r\n'); if (at >= 0) { sock.off('data', on); resolve({ sock, rest: b.subarray(at + 4) }); } }; sock.on('data', on); });
+}
+
+test('bridge relays a fragmented TouchDesigner JPEG frame to /video viewers', async () => {
+  const bridge = start({ port: 0, host: '127.0.0.1', universes: [1], artnet: false, artnetOffset: 1, quiet: true });
+  await new Promise((r) => bridge.server.once('listening', r));
+  const port = bridge.server.address().port;
+  const viewer = await wsConnect(port, '/video');
+  const td = await wsConnect(port, '/');
+  const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), crypto.randomBytes(300)]);
+  const got = new Promise((resolve, reject) => {
+    let buf = viewer.rest; const to = setTimeout(() => reject(new Error('no video frame')), 3000);
+    const check = () => {
+      if (buf.length < 4) return;
+      let len = buf[1] & 0x7f, h = 2; if (len === 126) { len = buf.readUInt16BE(2); h = 4; }
+      if (buf.length >= h + len) { clearTimeout(to); resolve({ op: buf[0] & 0x0f, data: buf.subarray(h, h + len) }); }
+    };
+    viewer.sock.on('data', (d) => { buf = Buffer.concat([buf, d]); check(); });
+  });
+  // Two fragments, split across TCP writes, plus a text message that must be ignored.
+  td.sock.write(clientFrame(Buffer.from('hello'), 0x1));
+  const a = clientFrame(jpeg.subarray(0, 100), 0x2, false), b = clientFrame(jpeg.subarray(100), 0x0, true);
+  td.sock.write(a.subarray(0, 50)); setTimeout(() => td.sock.write(Buffer.concat([a.subarray(50), b])), 30);
+  const f = await got;
+  assert.strictEqual(f.op, 0x2);
+  assert.deepStrictEqual(f.data, jpeg);
+  viewer.sock.destroy(); td.sock.destroy();
+  await bridge.close();
+});

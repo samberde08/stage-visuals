@@ -1,6 +1,6 @@
 'use strict';
-// A minimal server-side WebSocket (RFC 6455): handshake, outgoing frames, close handling.
-// The bridge only pushes data to the browser, so incoming messages are ignored apart from close and ping.
+// A minimal server-side WebSocket (RFC 6455): handshake, outgoing frames, and incoming (masked, possibly
+// fragmented) messages. Browsers only receive; TouchDesigner sends video frames in.
 
 const crypto = require('crypto');
 const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
@@ -19,19 +19,50 @@ function encodeFrame(payload, opcode) {
   return Buffer.concat([head, payload]);
 }
 
+const MAX_MESSAGE = 16 << 20;
+
 class Client {
   constructor(socket) {
     this.socket = socket;
     this.open = true;
+    this.onmessage = null; // (Buffer, isBinary) => void
+    this._buf = Buffer.alloc(0);
+    this._parts = [];
+    this._partOp = 0;
     socket.on('data', (d) => this._onData(d));
     socket.on('close', () => { this.open = false; });
     socket.on('error', () => { this.open = false; });
   }
 
   _onData(d) {
-    const opcode = d[0] & 0x0f;
-    if (opcode === 0x8) { this.close(); return; }
-    if (opcode === 0x9) this._write(encodeFrame(Buffer.alloc(0), 0xa)); // pong
+    this._buf = this._buf.length ? Buffer.concat([this._buf, d]) : d;
+    for (;;) {
+      const b = this._buf;
+      if (b.length < 2) return;
+      const fin = (b[0] & 0x80) !== 0, opcode = b[0] & 0x0f, masked = (b[1] & 0x80) !== 0;
+      let len = b[1] & 0x7f, at = 2;
+      if (len === 126) { if (b.length < 4) return; len = b.readUInt16BE(2); at = 4; }
+      else if (len === 127) { if (b.length < 10) return; len = Number(b.readBigUInt64BE(2)); at = 10; }
+      if (len > MAX_MESSAGE) { this.close(); return; }
+      const need = at + (masked ? 4 : 0) + len;
+      if (b.length < need) return;
+      let payload = b.subarray(need - len, need);
+      if (masked) {
+        const key = b.subarray(at, at + 4);
+        payload = Buffer.from(payload);
+        for (let i = 0; i < payload.length; i++) payload[i] ^= key[i & 3];
+      }
+      this._buf = b.subarray(need);
+      if (opcode === 0x8) { this.close(); return; }
+      if (opcode === 0x9) { this._write(encodeFrame(payload, 0xa)); continue; }
+      if (opcode === 0xa) continue;
+      if (opcode !== 0) { this._partOp = opcode; this._parts = []; }
+      this._parts.push(payload);
+      if (!fin) continue;
+      const msg = this._parts.length === 1 ? this._parts[0] : Buffer.concat(this._parts);
+      this._parts = [];
+      if (this.onmessage) this.onmessage(msg, this._partOp === 0x2);
+    }
   }
 
   _write(buf) {
