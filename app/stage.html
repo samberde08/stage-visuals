@@ -411,9 +411,18 @@ const hdriCache = {};
 function loadHdri(name) {
   if (!hdriCache[name]) hdriCache[name] = new Promise((res) => {
     if (!THREE.RGBELoader || !HDRI[name]) { res(null); return; }
-    new THREE.RGBELoader().setDataType(THREE.HalfFloatType).load(`${HDRI_BASE}${name}_1k.hdr`, (t) => {
-      t.minFilter = t.magFilter = THREE.LinearFilter; t.generateMipmaps = false; t.needsUpdate = true; res(t);
-    }, undefined, () => res(null));
+    const loader = new THREE.RGBELoader().setDataType(THREE.HalfFloatType);
+    const done = (t) => { t.minFilter = t.magFilter = THREE.LinearFilter; t.generateMipmaps = false; t.needsUpdate = true; res(t); };
+    // Hosts that won't serve .hdr (the online preview) get a base64 .txt copy instead.
+    const fromB64 = () => fetch(`${HDRI_BASE}${name}_1k.hdr.txt`).then((r) => r.ok ? r.text() : Promise.reject())
+      .then((b64) => {
+        const bin = atob(b64.trim()), buf = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+        const d = loader.parse(buf.buffer);
+        const t = new THREE.DataTexture(d.data, d.width, d.height, d.format, d.type);
+        t.encoding = THREE.LinearEncoding; t.flipY = true; done(t);
+      }).catch(() => res(null));
+    loader.load(`${HDRI_BASE}${name}_1k.hdr`, done, undefined, fromB64);
   });
   return hdriCache[name];
 }
