@@ -59,6 +59,12 @@ input[type="color"] { width: 100%; height: 30px; padding: 0 2px; background: var
 input[type="file"] { font: 12px var(--body); color: var(--muted); width: 100%; }
 .readout { font-family: var(--mono); font-size: 11.5px; color: var(--steel); font-variant-numeric: tabular-nums; }
 .note { font-size: 12px; color: var(--muted); margin: 0; }
+.venue-note p { margin: 0 0 6px; }
+.venue-note ul { margin: 0 0 6px; padding-left: 16px; }
+.venue-note li { margin-bottom: 3px; }
+.venue-note a { color: inherit; }
+.badge { display: inline-block; font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; padding: 1px 6px; border-radius: 8px; border: 1px solid currentColor; margin-right: 6px; }
+.badge.sourced { color: #4fd18b; } .badge.partial { color: #e8b84a; } .badge.estimated { color: var(--muted); }
 .btns { display: flex; gap: 8px; }
 .btns .btn { flex: 1; padding: 9px 10px; }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
@@ -113,13 +119,13 @@ details .btn { margin: 0 10px 10px; }
     <section class="group">
       <div class="eyebrow"><span>Venue</span><span>real venue or template</span></div>
       <div class="row two"><label for="venuePick">Real venue</label><select id="venuePick"></select></div>
-      <p class="note" id="venueNote" hidden></p>
+      <div class="note venue-note" id="venueNote" hidden></div>
       <div class="chips" id="templates"></div>
     </section>
 
     <section class="group">
       <div class="eyebrow"><span>Stage</span><span>metres</span></div>
-      <div class="row"><label for="W">Width</label><input id="W" type="range" min="2" max="70" step="0.5"><output for="W"></output></div>
+      <div class="row"><label for="W">Width</label><input id="W" type="range" min="2" max="150" step="0.5"><output for="W"></output></div>
       <div class="row"><label for="D">Depth</label><input id="D" type="range" min="2" max="30" step="0.5"><output for="D"></output></div>
       <div class="row"><label for="H">Deck height</label><input id="H" type="range" min="0.2" max="3" step="0.1"><output for="H"></output></div>
       <div class="row"><label for="trim">Truss trim</label><input id="trim" type="range" min="2.5" max="30" step="0.5"><output for="trim"></output></div>
@@ -208,13 +214,15 @@ details .btn { margin: 0 10px 10px; }
       <p class="note" id="tdNote" hidden></p>
       <div class="row two" id="textRow" hidden><label for="wallText">Text</label><input id="wallText" type="text" value="STAGE VISUALS" maxlength="60"></div>
       <div class="row two" id="mediaRow" hidden><label for="media">File</label><input id="media" type="file" accept="image/*,video/*"></div>
-      <div class="row"><label for="wallW">Wall width</label><input id="wallW" type="range" min="2" max="50" step="0.5"><output for="wallW"></output></div>
+      <div class="row"><label for="wallW">Wall width</label><input id="wallW" type="range" min="2" max="70" step="0.5"><output for="wallW"></output></div>
       <div class="row"><label for="wallH">Wall height</label><input id="wallH" type="range" min="1" max="18" step="0.5"><output for="wallH"></output></div>
       <div class="row two"><label for="pitch">Pixel pitch</label>
         <select id="pitch">
+          <option value="1.8">1.8 mm (club fine pitch)</option>
           <option value="2.6">2.6 mm (broadcast)</option>
           <option value="3.9" selected>3.9 mm (touring)</option>
           <option value="5.9">5.9 mm (outdoor)</option>
+          <option value="8">8 mm (large outdoor)</option>
         </select></div>
       <div class="readout" id="wallOut"></div>
     </section>
@@ -802,6 +810,17 @@ const BUILD = {
     if (!open) {
       for (let z = 6; z < floorL; z += 9) [-1, 1].forEach((sx) => box(0.8, ceil, 0.8, sx * roomW * 0.27, ceil / 2, z, M.concrete));
       for (let z = 2; z < roomL - D - 2; z += 9) box(roomW, 0.7, 0.5, 0, ceil - 0.35, z, M.concrete);
+    } else if (o.roof) {
+      // Open-air with a space-frame roof over the stage on four corner towers, with a grid of trusses inside it.
+      const rw = o.roof.w / 2, rd = o.roof.d, ry = top + 0.6, z0 = 0.5, z1 = z0 - rd;
+      [[-rw, z0], [rw, z0], [-rw, z1], [rw, z1]].forEach(([x, z], i) => truss(`Roof tower ${i + 1}`, V(x, 0, z), V(x, ry, z), 0.6));
+      truss('Roof DS', V(-rw, ry, z0), V(rw, ry, z0), 0.6);
+      truss('Roof US', V(-rw, ry, z1), V(rw, ry, z1), 0.6);
+      truss('Roof SL', V(-rw, ry, z0), V(-rw, ry, z1), 0.6);
+      truss('Roof SR', V(rw, ry, z0), V(rw, ry, z1), 0.6);
+      const nx = Math.max(2, Math.round(o.roof.w / 6)), nz = Math.max(2, Math.round(rd / 5));
+      for (let i = 1; i < nx; i++) { const x = -rw + i * o.roof.w / nx; truss(`Roof rib ${i}`, V(x, ry, z0), V(x, ry, z1), 0.4); }
+      for (let i = 1; i < nz; i++) { const z = z0 - i * rd / nz; truss(`Roof grid ${i}`, V(-rw, ry - 0.5, z), V(rw, ry - 0.5, z), 0.4, { hang: true }); }
     } else {
       // Open-air: a goalpost frame over the stage carries the rig, plus towers for a front truss.
       [-1, 1].forEach((sx) => truss(`Leg ${sx < 0 ? 'SL' : 'SR'}`, V(sx * (W / 2 + 1), 0, -D * 0.5), V(sx * (W / 2 + 1), top + 0.6, -D * 0.5), 0.52));
@@ -838,14 +857,15 @@ const BUILD = {
     return { target: V(0, H + 1.4, 0), front: room / 2 + 5, fohY: 7.5, crowdEye: V(1.2, 1.85, D / 2 + 2.6) };
   },
   arch(s) {
-    const { W, D, H, trim } = s, o = s.room, R = W / 2 + 7, Hr = H + trim + 2, L = o.l || 42;
+    const { W, D, H, trim } = s, o = s.room, R = o.w ? o.w / 2 : W / 2 + 7, Hr = Math.max(o.h || 0, H + trim + 2), L = o.l || 42;
+    const step = o.ribs ? (L + D + 0.5) / (o.ribs - 1) : 6;
     box(W, H, D, 0, H / 2, -D / 2, M.deck, true);
     mainWall = screen('Stage LED', s.wallW, s.wallH, V(0, H + 0.5 + s.wallH / 2, -D + 0.5));
     const P = (a, z, inset = 0) => V((R - inset) * Math.cos(a), (Hr - inset) * Math.sin(a), z);
     const glow = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false });
     glowMats.push(glow);
     let i = 0;
-    for (let z = -D - 0.5; z <= L; z += 6, i++) {
+    for (let z = -D - 0.5; z <= L + 0.01; z += step, i++) {
       const pts = [], inner = [];
       for (let k = 0; k <= 32; k++) { const a = k / 32 * Math.PI; pts.push(P(a, z)); inner.push(P(a, z, 0.3)); }
       venue.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 64, 0.18, 6), M.truss));
@@ -876,6 +896,8 @@ const BUILD = {
     const lx = W * 0.44;
     [-1.2, -D * 0.36, -D * 0.66].forEach((z, i) => truss(`Pod ${'ABC'[i]}`, V(-lx, top, z), V(lx, top, z), 0.4, { hang: true }));
     [-1, 1].forEach((sx) => { for (let i = 0; i < 10; i++) { const m = box(1.3, 0.38, 0.9, sx * (W / 2 + 2), top + 1 - i * 0.4, 0.2, M.pa); m.rotation.x = i * 0.8 * DEG; } });
+    // Centre array for a left-centre-right system, flown from the front of the roof above the LED wall.
+    if (o.pa === 'lcr') for (let i = 0; i < 6; i++) { const m = box(1.3, 0.38, 0.9, 0, top + 1.6 - i * 0.4, 0.4, M.pa); m.rotation.x = i * 1.2 * DEG; }
     mainWall = screen('Upstage LED', s.wallW, s.wallH, V(0, H + 0.5 + s.wallH / 2, -D + 0.5));
     const prof = [];
     for (let i = 0; i < rows; i++) { const r = r0 + i * rd, y = i * rise; prof.push(new THREE.Vector2(r, y), new THREE.Vector2(r + rd, y), new THREE.Vector2(r + rd, y + rise)); }
@@ -889,11 +911,13 @@ const BUILD = {
       [-1, 1].forEach((sx) => {
         // Slab whose inner face runs from beside the stage to the outer corner of the bowl.
         const p0 = V(sx * (W / 2 + 6), 0, -D), p1 = V(sx * (Math.sin(fan / 2) * rEnd + 4), 0, Math.cos(fan / 2) * rEnd);
-        const along = p1.clone().sub(p0), len = along.length() + 20, yaw = Math.atan2(along.x, along.z), h = yEnd + 30;
+        // Heights are as the audience sees them: the audience's left is -x.
+        const h = typeof o.rocks === 'object' ? (sx < 0 ? o.rocks.left : o.rocks.right) : yEnd + 30;
+        const along = p1.clone().sub(p0), len = along.length() + 20, yaw = Math.atan2(along.x, along.z);
         const out = V(along.z, 0, -along.x).normalize().multiplyScalar(sx * Math.sign(along.z) * 15);
         const m = new THREE.Mesh(new THREE.DodecahedronGeometry(1, 1), rock);
         m.scale.set(16, h / 2, len / 2);
-        m.position.copy(p0).add(p1).multiplyScalar(0.5).add(out).setY(h * 0.3);
+        m.position.copy(p0).add(p1).multiplyScalar(0.5).add(out).setY(h * 0.42);
         m.rotation.set(0, yaw, sx * 0.06);
         venue.add(m); receivers.push(m);
       });
@@ -911,17 +935,34 @@ const BUILD = {
     box(0.3, ceil, roomD, -roomW / 2, ceil / 2, roomD / 2 - D - 0.5, M.wall);
     box(0.3, ceil, roomD, roomW / 2, ceil / 2, roomD / 2 - D - 0.5, M.wall);
     box(roomW, Math.max(ceil, H + trim + 0.9), 0.3, 0, Math.max(ceil, H + trim + 0.9) / 2, -D - 0.6, M.wall);
-    const floorD = Math.max(4, roomD - D - 2.5);
+    const floorD = Math.max(4, roomD - D - 2.5), back = roomD - D - 0.5, balY = 4.2, balD = 6;
+    if (o.floorW) {
+      // Marked dancefloor in front of the stage, with banquettes along the side walls.
+      const fd = Math.min(o.floorD || floorD, floorD), f = new THREE.Mesh(new THREE.PlaneGeometry(o.floorW, fd), new THREE.MeshStandardMaterial({ color: 0x15151b, roughness: 0.35, metalness: 0.3 }));
+      f.rotation.x = -Math.PI / 2; f.position.set(0, 0.012, 0.6 + fd / 2); venue.add(f); receivers.push(f);
+      if (roomW - o.floorW > 3) [-1, 1].forEach((sx) => box(1, 0.45, fd * 0.7, sx * (roomW / 2 - 0.8), 0.22, 0.6 + fd * 0.5, M.seat));
+    }
+    if (o.balcony) {
+      // Mezzanine across the back of the room, on columns, with a rail.
+      box(roomW, 0.4, balD, 0, balY, back - balD / 2, M.wall);
+      box(roomW, 1.05, 0.08, 0, balY + 0.72, back - balD, M.frame);
+      [-0.35, 0, 0.35].forEach((u) => box(0.4, balY, 0.4, u * roomW, balY / 2, back - balD + 0.4, M.wall));
+    }
     const t = H + trim, x0 = Math.min(roomW / 2 - 1.5, Math.max(W * 0.55, 3)), z0 = 1.2, z1 = Math.min(9, floorD - 2);
     truss('Box DS', V(-x0, t, z1), V(x0, t, z1), 0.3, { hang: true });
     truss('Box US', V(-x0, t, z0), V(x0, t, z0), 0.3, { hang: true });
     truss('Box SL', V(-x0, t, z0), V(-x0, t, z1), 0.3, { hang: true });
     truss('Box SR', V(x0, t, z0), V(x0, t, z1), 0.3, { hang: true });
     truss('Stage pipe', V(-W * 0.45, t, -D * 0.5), V(W * 0.45, t, -D * 0.5), 0.3);
+    if (o.pa === 'lr') [-1, 1].forEach((sx) => { for (let i = 0; i < 8; i++) { const m = box(1.0, 0.3, 0.7, sx * (W / 2 + 0.9), t - 0.2 - i * 0.32, 0.4, M.pa); m.rotation.x = i * 1.0 * DEG; } });
     mainWall = screen('DJ wall', s.wallW, s.wallH, V(0, H + 0.2 + s.wallH / 2, -D + 0.35));
     [-0.35, 0.35].forEach((u) => laser(u * W, H, -0.3, 0));
-    crowd(o.crowdN || 260, () => V((Math.random() - 0.5) * (roomW - 2), 0, 1 + Math.random() * floorD));
-    return { target: V(0, H + 1.6, -D / 2 + 1), front: Math.min(Math.max(14, floorD * 0.8), floorD + 1), fohY: open ? 4.5 : Math.min(t - 0.6, 3.2 + floorD * 0.05), crowdEye: V(1, 1.85, Math.min(7.5, floorD * 0.6)) };
+    const floorEnd = o.balcony ? back - balD - 0.5 : floorD;
+    crowd(o.crowdN || 260, () => o.balcony && Math.random() < 0.15
+      ? V((Math.random() - 0.5) * (roomW - 2), balY + 0.2, back - 1 - Math.random() * (balD - 2))
+      : V((Math.random() - 0.5) * (roomW - 2), 0, 1 + Math.random() * (floorEnd - 1)));
+    const cam = o.balcony ? { front: back - balD + 1, fohY: balY + 1.9 } : { front: Math.min(Math.max(14, floorD * 0.8), floorD + 1), fohY: open ? 4.5 : Math.min(t - 0.6, 3.2 + floorD * 0.05) };
+    return { target: V(0, H + 1.6, -D / 2 + 1), ...cam, crowdEye: V(1, 1.85, Math.min(7.5, floorD * 0.6)) };
   },
 };
 
@@ -1628,10 +1669,16 @@ $('#wallText').addEventListener('input', (e) => { state.text = e.target.value; }
 $('#pitch').addEventListener('change', (e) => { state.pitch = parseFloat(e.target.value); screens.forEach((sc) => sc.mesh.material.uniforms.uPixels.value.set(sc.w * 1000 / state.pitch, sc.h * 1000 / state.pitch)); updateReadouts(); });
 const venuePick = $('#venuePick');
 const KIND_LABEL = { club: 'Clubs', amphitheatre: 'Amphitheatres', festival: 'Festival stages' };
-venuePick.innerHTML = '<option value="">Generic template</option>' + Object.entries(KIND_LABEL).map(([kind, label]) => {
-  const vs = VENUES.filter((v) => v.kind === kind).sort((a, b) => a.name.localeCompare(b.name));
-  return vs.length ? `<optgroup label="${label}">${vs.map((v) => `<option value="${v.id}">${v.name} · ${v.city}</option>`).join('')}</optgroup>` : '';
-}).join('');
+const CONF_LABEL = { sourced: 'Real data', partial: 'Partly sourced', estimated: 'Estimated' };
+const vOpt = (v, tag) => `<option value="${esc(v.id)}">${esc(v.name)} · ${esc(v.city)}${tag && v.confidence === 'partial' ? ' (partly sourced)' : ''}</option>`;
+const demos = VENUES.filter((v) => v.confidence === 'sourced');
+venuePick.innerHTML = '<option value="">Generic template</option>'
+  + (demos.length ? `<optgroup label="Demo stages · real data">${demos.map((v) => vOpt(v)).join('')}</optgroup>` : '')
+  + Object.entries(KIND_LABEL).map(([kind, label]) => {
+    const vs = VENUES.filter((v) => v.kind === kind && v.confidence !== 'sourced').sort((a, b) => a.name.localeCompare(b.name));
+    return vs.length ? `<optgroup label="${label}">${vs.map((v) => vOpt(v, true)).join('')}</optgroup>` : '';
+  }).join('');
+const safeUrl = (u) => /^https?:\/\//.test(u) ? u : '#';
 venuePick.closest('.row').hidden = !VENUES.length;
 function setVenue(v, tpl) {
   state.venue = v ? v.id : null;
@@ -1640,12 +1687,18 @@ function setVenue(v, tpl) {
   venuePick.value = state.venue || '';
   const note = $('#venueNote');
   note.hidden = !v;
-  if (v) note.textContent = `${v.city}, ${v.region} · ${v.capacity.toLocaleString()} capacity · ${v.setting}. ${v.notes} ${v.confidence === 'published' ? 'Key figures are from the cited sources; other sizes are estimates.' : 'Sizes are estimates from public information.'}`;
+  if (v) {
+    const conf = v.confidence || 'estimated', facts = v.facts || [];
+    note.innerHTML = `<p><span class="badge ${conf}">${CONF_LABEL[conf]}</span>${esc(v.city)}, ${esc(v.region)} · ${v.capacity.toLocaleString()} capacity · ${esc(v.setting)}. ${esc(v.notes)}</p>`
+      + (facts.length ? `<ul>${facts.map((f) => `<li><b>${esc(f.k)}:</b> ${esc(f.v)} <a href="${esc(safeUrl(f.src))}" target="_blank" rel="noopener">source</a></li>`).join('')}</ul>` : '')
+      + `<p>${conf === 'estimated' ? 'All sizes are estimates from public information.' : `Estimated: ${esc(v.estimated || 'other sizes.')}`}</p>`;
+  }
   window.dispatchEvent(new CustomEvent('stagevenue', { detail: state.venueMeta }));
 }
 function applyTemplate(k, v) {
   const t = TEMPLATES[k], src = v ? { ...v.stage, ...v.led, ...v.rig } : t;
-  Object.assign(state, { tpl: k }, pick(src), { program: src.program, visual: src.visual, lasers: src.lasers || 'off' });
+  Object.assign(state, { tpl: k }, pick(src), { program: src.program, visual: src.visual, lasers: src.lasers || 'off', pitch: v ? v.led.pitch || 3.9 : state.pitch });
+  $('#pitch').value = String(state.pitch);
   const chip = $('#tpl-' + k); if (chip) chip.checked = true;
   setVenue(v, k);
   syncInputs(); build(); goCam('foh', false);
