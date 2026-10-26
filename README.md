@@ -18,6 +18,22 @@ Nothing is copied from venue drawings, and festival stages are proportions for t
 
 **Surroundings:** outdoor venues sit inside a real sky and their real surroundings. The sky is a Poly Haven HDRI (CC0, in `app/hdri/`, credits in its README): a midday image, a golden-hour image and, for wooded sites, a night image, crossfaded by sun height and turned so the image's sun lines up with the computed sun. The scenery is built from each venue's `scenery` list in `app/venues.js`, placed by compass bearing from the stage: city skylines with the real heights of their tallest towers (Manhattan from Brooklyn Mirage, the Loop from Grant Park, downtown Miami from Bayfront Park, the Renaissance Center from Hart Plaza, Denver from Red Rocks, the Strip from the speedway), mountain ranges at their real relief and distance, bays, rivers and lakes, pine, hardwood and palm trees, Sherwood Forest's lit trees, grandstands, and the orange glow of city light at night. Distant features are drawn at a fixed radius and scaled to keep their real angular size. Lit windows and aircraft warning lights come on after dark. The HDRIs are generic skies matched to each site's landscape, not photos of the venues, and stage orientation is estimated for most festival sites. **Surroundings** in the Look panel turns it off.
 
+**Being there:** the view is meant to feel like standing in the venue rather than looking at a model.
+
+- **Crowd at real size.** Each area fills towards the venue's capacity (up to 24,000 people at High quality, 6,000 at Fast), packed no tighter than about 3.3 people per square metre. People are posed on the graphics card: they hop and nod on the beat, throw their hands up as the energy builds, and about one in ten films on a glowing phone. At night they are silhouettes, with their edges lit by the colour of the stage and the rig. Anyone standing where the camera is steps aside.
+- **Walk.** The Walk camera puts you in the crowd at 1.7 m eye height. Use WASD or the arrow keys to walk (Shift to run) and drag to look around. You follow the ground, so you can climb Red Rocks' rows, and your head bobs as you walk and moves with the beat when you stand still.
+- **Beam optics.** Beams are hot at the lens and fade with distance, with a soft core and feathered edges. A fixture pointed at you flares, with a starburst that grows as you move into the beam.
+- **Lens.** In the Look panel, *Your eyes* adapts exposure to what you look at (the LED wall darkens the room around it, the dark crowd opens up), darkening faster than it brightens. *Phone video* adds faster auto-exposure, sensor grain, colour fringing and vignetting. *Clean render* turns it all off. The lens effects need High quality.
+- **Venue sound.** With *Sound: In the venue*, music plays through the room you're standing in: a reverb tail for the kind of space (short outdoors, long in a warehouse or arena), a slap back off the rocks at Red Rocks and off the stands in a stadium, high end lost to distance from the PA, the PA placed around your head in 3D, and a crowd that roars on the drop. Reverb times are typical for each kind of space, not measurements of these venues. Headphones help.
+
+### Further realism, using your Mac
+
+These need assets or hardware the cloud build can't fetch:
+
+1. **Scanned venues.** A phone scan (Polycam, RealityScan or Scaniverse on iPhone) of a room you're in, exported as glTF, would replace the modelled room with the real one. Only scan where you have permission, and keep scans private unless the venue agrees.
+2. **Sharper skies.** 4K versions of the Poly Haven HDRIs in `app/hdri/` (CC0, free) from polyhaven.com, saved with the same names.
+3. **Path-traced stills.** A path tracer (such as three-gpu-pathtracer, MIT) can render a single frame with real bounce light and haze for client pitches. It needs a recent GPU, so it runs on the Mac rather than in the online preview.
+
 Online preview (built-in effects only): https://claude.ai/artifact/DvhX2dgvYb9dXB9nP7aKWh
 
 ## Run it with a console
