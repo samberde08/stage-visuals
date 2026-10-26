@@ -41,6 +41,7 @@ function parseRange(s) {
 
 const PAGE = path.join(__dirname, '..', 'app', 'stage.html');
 const VENUES = path.join(__dirname, '..', 'app', 'venues.js');
+const HDRI_DIR = path.join(__dirname, '..', 'app', 'hdri');
 // The visualizer source is a body fragment (the same file is published as a claude.ai artifact),
 // so the bridge wraps it in a document and flags that live DMX is available.
 function renderPage() {
@@ -101,6 +102,9 @@ function start(opts) {
     } else if (url === '/venues.js') {
       res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' });
       res.end(fs.readFileSync(VENUES, 'utf8'));
+    } else if (/^\/hdri\/[\w-]+\.hdr$/.test(url) && fs.existsSync(path.join(HDRI_DIR, path.basename(url)))) {
+      res.writeHead(200, { 'content-type': 'image/vnd.radiance', 'cache-control': 'max-age=86400' });
+      fs.createReadStream(path.join(HDRI_DIR, path.basename(url))).pipe(res);
     } else if (url === '/status.json') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ sources: merger.status(), clients: clients.size, video: videoStatus() }));

@@ -196,6 +196,11 @@ details .btn { margin: 0 10px 10px; }
           <option value="fast">Fast: for laptops and phones</option>
         </select></div>
       <div class="row"><label for="tod">Time of day</label><input id="tod" type="range" min="0" max="24" step="0.25" value="21.5"><output for="tod"></output></div>
+      <div class="row two"><label for="surround">Surroundings</label>
+        <select id="surround">
+          <option value="on">Real location: HDRI sky and scenery</option>
+          <option value="off">Off: plain sky</option>
+        </select></div>
       <div class="row"><label for="density">Crowd</label><input id="density" type="range" min="0" max="1" step="0.05" value="1"><output for="density"></output></div>
       <p class="note" id="lookNote"></p>
     </section>
@@ -249,6 +254,7 @@ details .btn { margin: 0 10px 10px; }
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/objects/Sky.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/RGBELoader.js"></script>
 <script src="venues.js"></script>
 <script>
 (() => {
@@ -283,7 +289,7 @@ function venueMeta(tpl, v) {
   if (!v) return { id: null, name: NAMES[tpl], setting: INDOOR_TPL[tpl] ? 'indoor' : tpl === 'arch' ? 'tent' : 'outdoor', indoor: !!INDOOR_TPL[tpl], lat: null, lon: null, elevationM: null, bearing: null, capacity: null, tz: null, season: null, showHours: null };
   return { id: v.id, name: v.name, city: v.city, region: v.region, setting: v.setting, indoor: v.setting === 'indoor', lat: v.lat, lon: v.lon, elevationM: v.elevationM, bearing: v.audienceFacing, capacity: v.capacity, tz: v.tz, season: v.season, showHours: v.showHours };
 }
-const state = { tpl: 'festival', venue: null, room: {}, venueMeta: null, ...pick(TEMPLATES.festival), program: 'fan', dimfx: 'steady', colorMode: 'alt', colA: '#ff7a1a', colB: '#2f6bff', bpm: 124, zoom: 9, haze: 0.55, visual: 'plasma', text: 'STAGE VISUALS', pitch: 3.9, control: 'effects', lasers: 'fan', laserCol: '#22ff66', quality: 'high', tod: 21.5, density: 1 };
+const state = { tpl: 'festival', venue: null, room: {}, venueMeta: null, ...pick(TEMPLATES.festival), program: 'fan', dimfx: 'steady', colorMode: 'alt', colA: '#ff7a1a', colB: '#2f6bff', bpm: 124, zoom: 9, haze: 0.55, visual: 'plasma', text: 'STAGE VISUALS', pitch: 3.9, control: 'effects', lasers: 'fan', laserCol: '#22ff66', quality: 'high', tod: 21.5, density: 1, surround: 'on' };
 if (matchMedia('(max-width: 760px)').matches || (navigator.hardwareConcurrency || 8) < 4) state.quality = 'fast';
 state.venueMeta = venueMeta(state.tpl, null);
 function pick(t) { return { W: t.W, D: t.D, H: t.H, trim: t.trim, wallW: t.wallW, wallH: t.wallH, count: t.count }; }
@@ -380,6 +386,314 @@ function setQuality(q) {
   scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; });
   resize();
   updateLook();
+}
+
+/* ---------- Surroundings: HDRI sky and location scenery ---------- */
+// Outdoor venues sit inside a Poly Haven HDRI (CC0, see app/hdri/README.md): a daytime one picked to match the
+// site (forest, desert flats, red rock, city, waterfront) and a night one, crossfaded by the sun. The day image is
+// turned so its sun lines up with the computed sun. Location scenery (skylines, mountains, water, trees) is built
+// from the venue's `scenery` list, placed by compass bearing from the stage.
+// sky: median sky radiance, used to normalise brightness. haze: daytime horizon colour. sunU: the sun's u in the image.
+const HDRI = {
+  forest_slope: { sky: 0.156, haze: 0xa7b6c4, sunU: 0.615 },
+  quarry_01: { sky: 0.311, haze: 0xc4d2de, sunU: 0.600 },
+  kiara_1_dawn: { sky: 0.838, haze: 0xcfb0b8, sunU: 0.631 },
+  venice_sunset: { sky: 0.737, haze: 0xd9c4b2, sunU: 0.600 },
+  blouberg_sunrise_2: { sky: 0.737, haze: 0xd4cdbf, sunU: 0.056 },
+  spruit_sunrise: { sky: 0.301, haze: 0xc6d5e4, sunU: 0.599 },
+  dikhololo_night: { sky: 0.109, night: true },
+  moonless_golf: { sky: 0.162, night: true },
+};
+const GENERIC_SCENERY = { hdri: 'quarry_01', dusk: 'spruit_sunrise', night: 'dikhololo_night', ground: 'grass', features: [] };
+const GROUND = { grass: 0x1c2618, dirt: 0x4a3a2a, sand: 0x6e6049, rock: 0x553425, asphalt: 0x222327, concrete: 0x37373a };
+const HDRI_BASE = window.STAGE_HDRI_BASE || 'hdri/';
+const hdriCache = {};
+function loadHdri(name) {
+  if (!hdriCache[name]) hdriCache[name] = new Promise((res) => {
+    if (!THREE.RGBELoader || !HDRI[name]) { res(null); return; }
+    new THREE.RGBELoader().setDataType(THREE.HalfFloatType).load(`${HDRI_BASE}${name}_1k.hdr`, (t) => {
+      t.minFilter = t.magFilter = THREE.LinearFilter; t.generateMipmaps = false; t.needsUpdate = true; res(t);
+    }, undefined, () => res(null));
+  });
+  return hdriCache[name];
+}
+// Custom shaders tone-map themselves on Fast quality; on High the final pass does it.
+const outU = { uLinear: shared.uLinear, uExp: { value: 1.1 } };
+const OUT_GLSL = `
+uniform float uLinear; uniform float uExp;
+vec3 outColor(vec3 c){
+  if (uLinear > 0.5) return c;
+  c *= uExp;
+  c = clamp((c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14), 0.0, 1.0);
+  return pow(c, vec3(1.0 / 2.2));
+}`;
+const dome = new THREE.Mesh(new THREE.SphereGeometry(540, 48, 24), new THREE.ShaderMaterial({
+  uniforms: { tDay: { value: null }, tDusk: { value: null }, tNight: { value: null }, uDayW: { value: 0 }, uDuskW: { value: 0 }, uNightW: { value: 0 }, uGradW: { value: 0 }, uYaw: { value: 0 }, uYawD: { value: 0 }, uTint: { value: new THREE.Color(1, 1, 1) }, uGlow: { value: [new THREE.Vector4(), new THREE.Vector4()] }, ...outU },
+  vertexShader: `varying vec3 vDir; void main(){ vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `${OUT_GLSL}
+uniform sampler2D tDay, tDusk, tNight; uniform float uDayW, uDuskW, uNightW, uGradW, uYaw, uYawD; uniform vec3 uTint; uniform vec4 uGlow[2];
+varying vec3 vDir;
+vec2 eq(vec3 d, float yaw){ float ph = atan(d.z, d.x) - yaw; return vec2(fract(ph * 0.15915494 + 0.5), asin(clamp(d.y, -1.0, 1.0)) * 0.31830989 + 0.5); }
+void main(){
+  vec3 d = normalize(vDir), c = vec3(0.0);
+  if (uDayW > 0.0005) c += min(texture2D(tDay, eq(d, uYaw)).rgb, vec3(4000.0)) * uDayW * uTint;
+  if (uDuskW > 0.0005) c += min(texture2D(tDusk, eq(d, uYawD)).rgb, vec3(4000.0)) * uDuskW;
+  if (uNightW > 0.0005) c += min(texture2D(tNight, eq(d, 0.0)).rgb, vec3(4000.0)) * uNightW;
+  // Plain night sky for sites with no night image: a faint glow at the horizon fading to black overhead.
+  c += mix(vec3(0.016, 0.019, 0.03), vec3(0.002, 0.003, 0.006), pow(max(d.y, 0.0), 0.45)) * uGradW;
+  c = min(c, vec3(60.0));
+  // Light pollution over a nearby city: an orange dome low on the horizon in its direction.
+  float up = max(d.y, 0.0); vec2 h = normalize(d.xz + 1e-5);
+  for (int i = 0; i < 2; i++) c += vec3(1.0, 0.6, 0.32) * uGlow[i].w * pow(max(dot(h, uGlow[i].xy), 0.0), 5.0) * exp(-up * 12.0);
+  gl_FragColor = vec4(outColor(c), 1.0);
+}`,
+  side: THREE.BackSide, depthWrite: false, fog: false,
+}));
+dome.renderOrder = -10; dome.frustumCulled = false; dome.visible = false;
+scene.add(dome);
+const pmrem = new THREE.PMREMGenerator(renderer), envCache = new Map();
+const surround = { key: '', spec: null, day: null, dusk: null, night: null, env: null, glow: [] };
+const sceneryU = { uDay: { value: 0 }, uLight: { value: 0 }, uSun: { value: new THREE.Vector3(0, 1, 0) }, uFog: { value: new THREE.Color() }, uTime: shared.uTime };
+const hazeC = new THREE.Color(), tmpFog = new THREE.Color();
+
+function scenerySpec() {
+  if (state.surround === 'off' || !isOutdoor()) return null;
+  const v = VENUE_BY_ID[state.venue];
+  return v ? v.scenery || null : GENERIC_SCENERY;
+}
+// Load the HDRIs for the current venue. They arrive asynchronously, so a late load for a venue no longer shown is dropped.
+function setSurroundings() {
+  const spec = scenerySpec(), key = spec ? `${spec.hdri}|${spec.dusk}|${spec.night}` : '';
+  surround.spec = spec;
+  if (key === surround.key) return;
+  surround.key = key; surround.day = surround.dusk = surround.night = null; scene.environment = null;
+  if (!spec) return;
+  Promise.all([loadHdri(spec.hdri), loadHdri(spec.dusk), loadHdri(spec.night)]).then(([d, k, n]) => {
+    if (surround.key !== key) return;
+    surround.day = d; surround.dusk = k; surround.night = n;
+    if (d) { if (!envCache.has(d)) envCache.set(d, pmrem.fromEquirectangular(d).texture); surround.env = envCache.get(d); }
+    updateLook();
+  });
+}
+
+// Place a feature: bearing is compass degrees from the stage, dist is metres. Anything beyond R is drawn at R and
+// scaled down so it keeps its real angular size.
+function aim(f, R = 370) {
+  const m = state.venueMeta || {}, a = ((f.bearing || 0) - (m.bearing ?? 0)) * DEG;
+  const dir = V(Math.sin(a), 0, -Math.cos(a)), s = f.dist > R ? R / f.dist : 1;
+  return { a, dir, s, r: f.dist * s, side: V(Math.cos(a), 0, Math.sin(a)) };
+}
+function facadeMat(f, wall, win) {
+  return new THREE.ShaderMaterial({
+    uniforms: { ...sceneryU, ...outU, uWall: { value: new THREE.Color(wall).convertSRGBToLinear() }, uWin: { value: win }, uBright: { value: f.bright || 1 }, uAerial: { value: 1 - Math.exp(-(f.dist || 100) / 30000) } },
+    extensions: { derivatives: true },
+    vertexShader: `varying vec2 vUv; varying vec3 vN; varying float vSeed;
+void main(){ vUv = uv; vN = normalize(mat3(modelMatrix) * normal); vSeed = fract(modelMatrix[3].x * 0.0137 + modelMatrix[3].z * 0.0731) * 97.0; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `${OUT_GLSL}
+uniform float uDay, uLight, uWin, uBright, uAerial, uTime; uniform vec3 uSun, uFog, uWall;
+varying vec2 vUv; varying vec3 vN; varying float vSeed;
+float h21(vec2 p){ vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
+void main(){
+  // uv is in metres on the walls and zero on roofs: a window every 3 m across and 3.6 m up, uWin of them lit at night.
+  vec2 cell = vUv / vec2(3.0, 3.6), f = fract(cell), id = floor(cell) + floor(vSeed + 0.5);
+  float win = step(0.001, uWin) * step(0.2, f.x) * step(f.x, 0.8) * step(0.25, f.y) * step(f.y, 0.85) * step(0.01, vUv.y);
+  float lit = step(1.0 - 0.4 * uWin, h21(id)) * (0.5 + 0.5 * h21(id * 1.7 + 11.0));
+  // Far away the window grid is smaller than a pixel, so it is drawn as its average glow instead.
+  float far = smoothstep(0.5, 1.2, max(fwidth(cell.x), fwidth(cell.y)));
+  win = mix(win, 0.36 * step(0.001, uWin) * step(0.01, vUv.y), far); lit = mix(lit, 0.18 * uWin, far);
+  float shade = 0.3 + 0.7 * max(dot(vN, uSun), 0.0) + 0.15 * max(vN.y, 0.0);
+  vec3 day = mix(uWall, vec3(0.16, 0.2, 0.25), win * 0.7) * shade * uLight;
+  vec3 night = uWall * 0.012 + win * lit * vec3(1.0, 0.78, 0.52) * 1.4 * uBright;
+  vec3 c = day + night * (1.0 - uDay);
+  c = mix(c, uFog, uAerial * (0.35 + 0.65 * uDay));
+  gl_FragColor = vec4(outColor(c), 1.0);
+}`,
+    fog: false,
+  });
+}
+// A box whose wall uvs are in metres, for the window grid. Faces: +x, -x, +y, -y, +z, -z, four vertices each.
+function tower(w, h, d) {
+  const g = new THREE.BoxGeometry(w, h, d), uv = g.attributes.uv;
+  for (let i = 0; i < 24; i++) { const face = i >> 2; if (face === 2 || face === 3) uv.setXY(i, 0, 0); else uv.setXY(i, uv.getX(i) * (face < 2 ? d : w), uv.getY(i) * h); }
+  g.translate(0, h / 2, 0);
+  return g;
+}
+const rnd = (a, b) => a + Math.random() * (b - a);
+// Nine drooping fronds, each a strip that narrows to a point.
+function palmCrown() {
+  const pos = [], idx = [], seg = 6, L = 4.6;
+  for (let f = 0; f < 9; f++) {
+    const th = f / 9 * Math.PI * 2 + (f % 2) * 0.2, cx = Math.cos(th), cz = Math.sin(th), base = pos.length / 3;
+    for (let i = 0; i <= seg; i++) {
+      const t = i / seg, r = t * L, y = 0.9 * t - 2.4 * t * t - (f % 3) * 0.25 * t, w = 0.75 * Math.sin(Math.PI * Math.min(1, t * 1.15));
+      pos.push(cx * r - cz * w, y, cz * r + cx * w, cx * r + cz * w, y, cz * r - cx * w);
+      if (i < seg) { const k = base + i * 2; idx.push(k, k + 2, k + 1, k + 1, k + 2, k + 3); }
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+  return g;
+}
+function clearOfVenue(box) { return (x, z, pad = 4) => x < box.min.x - pad || x > box.max.x + pad || z < box.min.z - pad || z > box.max.z + pad; }
+
+const SCENERY = {
+  // City towers: the listed heights are real buildings, filled out with lower ones across the cluster's width.
+  skyline(f, g) {
+    const { dir, side, s, r } = aim(f), mat = facadeMat(f, f.color || 0x7d8590, f.windows ?? 0.85);
+    const hs = [...(f.towers || [])].concat(Array.from({ length: f.fill || 0 }, () => rnd(...(f.fillH || [40, 120]))));
+    hs.sort(() => Math.random() - 0.5);
+    const tall = [];
+    hs.forEach((h, i) => {
+      const u = (hs.length > 1 ? i / (hs.length - 1) - 0.5 : 0) * f.width + rnd(-0.04, 0.04) * f.width, back = rnd(-0.25, 0.25) * Math.min(f.width, f.dist * 0.5);
+      const w = rnd(24, 46), m = new THREE.Mesh(tower(w, h, rnd(24, 46)), mat);
+      m.scale.setScalar(s);
+      m.position.copy(dir).multiplyScalar(r + back * s).addScaledVector(side, u * s).setY((f.base || 0) * s);
+      m.rotation.y = -Math.atan2(dir.x, -dir.z) + rnd(-0.3, 0.3);
+      g.add(m);
+      if (h > 150) tall.push(m.position.clone().setY(m.position.y + h * s + 0.3));
+    });
+    // Red aircraft warning lights on the tall ones.
+    if (tall.length) {
+      const p = new Float32Array(tall.length * 3);
+      tall.forEach((v, i) => p.set([v.x, v.y, v.z], i * 3));
+      const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(p, 3));
+      g.add(new THREE.Points(geo, new THREE.ShaderMaterial({
+        uniforms: { ...sceneryU },
+        vertexShader: `void main(){ gl_PointSize = 3.0; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+        fragmentShader: `uniform float uTime, uDay; void main(){ float on = step(0.5, fract(uTime * 0.5)); gl_FragColor = vec4(vec3(1.0, 0.08, 0.04) * on * (1.0 - uDay), 1.0); }`,
+        transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+      })));
+    }
+  },
+  // Low buildings around the site at real scale.
+  blocks(f, g, clear) {
+    const mat = facadeMat({ dist: 150 }, f.color || 0x6f6a64, f.windows ?? 0.5), [h0, h1] = f.h || [6, 18];
+    const placed = [];
+    for (let i = 0, k = 0; i < f.n * 6 && k < f.n; i++) {
+      const a = (f.spread ? (f.bearing || 0) + rnd(-0.5, 0.5) * f.spread - ((state.venueMeta || {}).bearing ?? 0) : rnd(0, 360)) * DEG, rr = rnd(f.r0, f.r1);
+      const x = Math.sin(a) * rr, z = -Math.cos(a) * rr;
+      const w = rnd(18, 50), d = rnd(18, 45), rad = Math.hypot(w, d) / 2;
+      if (!clear(x, z, 12 + rad * 0.5) || placed.some((q) => Math.hypot(q.x - x, q.z - z) < q.rad + rad + 2)) continue;
+      const m = new THREE.Mesh(tower(w, rnd(h0, h1), d), mat);
+      m.position.set(x, 0, z); m.rotation.y = rnd(0, Math.PI); g.add(m); placed.push({ x, z, rad }); k++;
+    }
+  },
+  // A ridge line: height from the real relief and distance, roughened with layered noise and tapered at the ends.
+  mountains(f, g) {
+    const R = 395, s = f.dist > R ? R / f.dist : 1, m = state.venueMeta || {}, spread = (f.spread || 60) * DEG, centre = ((f.bearing || 0) - (m.bearing ?? 0)) * DEG;
+    const n = Math.max(16, Math.round(f.spread || 60)), pos = [], idx = [], seed = rnd(0, 100);
+    const noise = (t) => 0.5 * Math.sin(t * 7 + seed) + 0.27 * Math.sin(t * 17.3 + seed * 2) + 0.15 * Math.sin(t * 41 + seed * 3) + 0.08 * Math.sin(t * 97 + seed);
+    for (let i = 0; i <= n; i++) {
+      const t = i / n, a = centre + (t - 0.5) * spread, taper = f.spread >= 360 ? 1 : Math.pow(Math.sin(Math.PI * t), 0.55);
+      const h = f.height * taper * (0.62 + 0.38 * noise(t * (f.spread || 60) / 60)) * s, x = Math.sin(a), z = -Math.cos(a);
+      pos.push(x * R, (f.base || 0) * s - 6, z * R, x * R, (f.base || 0) * s + h, z * R);
+      if (i < n) { const k = i * 2; idx.push(k, k + 2, k + 1, k + 1, k + 2, k + 3); }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(new Array(pos.length / 3 * 2).fill(0), 2));
+    geo.setIndex(idx); geo.computeVertexNormals();
+    const mesh = new THREE.Mesh(geo, facadeMat(f, f.color || 0x6b5e52, 0));
+    mesh.material.side = THREE.DoubleSide;
+    g.add(mesh);
+  },
+  water(f, g) {
+    const m = state.venueMeta || {}, centre = ((f.bearing || 0) - (m.bearing ?? 0)) * DEG, spread = (f.spread || 90) * DEG;
+    // RingGeometry runs anticlockwise from +x; the bearing direction (sin a, -cos a) sits at angle a - 90 deg there.
+    const geo = new THREE.RingGeometry(Math.min(f.r0, 400), Math.min(f.r1, 440), 96, 1, -(centre - Math.PI / 2) - spread / 2, spread);
+    geo.rotateX(-Math.PI / 2);
+    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0x0b1820, roughness: 0.08, metalness: 0.7 }));
+    mesh.position.y = 0.04; g.add(mesh);
+  },
+  trees(f, g, clear) {
+    const kind = f.kind || 'pine', n = f.n || 100, mtx = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), p = new THREE.Vector3();
+    let trunk, crown, cMat, tH;
+    if (kind === 'palm') {
+      trunk = new THREE.CylinderGeometry(0.22, 0.34, 1, 6); trunk.translate(0, 0.5, 0);
+      crown = palmCrown();
+      cMat = new THREE.MeshStandardMaterial({ color: 0x2c4a22, roughness: 0.9, side: THREE.DoubleSide, flatShading: true });
+    } else if (kind === 'broad') {
+      trunk = new THREE.CylinderGeometry(0.25, 0.4, 5, 6); trunk.translate(0, 2.5, 0);
+      crown = new THREE.IcosahedronGeometry(4.2, 1); crown.scale(1, 0.85, 1); crown.translate(0, 8, 0);
+      cMat = new THREE.MeshStandardMaterial({ color: 0x24361c, roughness: 1, flatShading: true });
+    } else {
+      trunk = new THREE.CylinderGeometry(0.22, 0.38, 9, 6); trunk.translate(0, 4.5, 0);
+      crown = new THREE.ConeGeometry(3, 11, 7); crown.translate(0, 12.5, 0);
+      cMat = new THREE.MeshStandardMaterial({ color: 0x15231a, roughness: 1, flatShading: true });
+    }
+    const trunks = new THREE.InstancedMesh(trunk, new THREE.MeshStandardMaterial({ color: kind === 'palm' ? 0x5a4a3a : 0x2a2018, roughness: 1 }), n);
+    const crowns = new THREE.InstancedMesh(crown, cMat, n), m = state.venueMeta || {};
+    const spots = [];
+    let k = 0;
+    for (let i = 0; i < n * 8 && k < n; i++) {
+      const a = (f.spread ? (f.bearing || 0) + rnd(-0.5, 0.5) * f.spread - (m.bearing ?? 0) : rnd(0, 360)) * DEG, rr = rnd(f.r0, f.r1);
+      p.set(Math.sin(a) * rr, 0, -Math.cos(a) * rr);
+      if (!clear(p.x, p.z, 3)) continue;
+      const gsc = rnd(0.75, 1.35);
+      q.setFromAxisAngle(up, rnd(0, Math.PI * 2));
+      if (kind === 'palm') {
+        tH = rnd(11, 20);
+        const lean = new THREE.Quaternion().setFromEuler(new THREE.Euler(rnd(-0.06, 0.06), 0, rnd(-0.06, 0.06)));
+        mtx.compose(p, lean, sc.set(1, tH, 1)); trunks.setMatrixAt(k, mtx);
+        const top = V(0, tH, 0).applyQuaternion(lean).add(p);
+        mtx.compose(top, q, sc.set(gsc, gsc, gsc)); crowns.setMatrixAt(k, mtx);
+        spots.push(top);
+      } else {
+        mtx.compose(p, q, sc.set(gsc, gsc, gsc)); trunks.setMatrixAt(k, mtx); crowns.setMatrixAt(k, mtx);
+        spots.push(p.clone().setY((kind === 'broad' ? 8 : 11) * gsc));
+      }
+      k++;
+    }
+    trunks.count = crowns.count = k;
+    g.add(trunks, crowns);
+    g.userData.treeSpots = (g.userData.treeSpots || []).concat(spots);
+  },
+  // Coloured lights strung through the trees, as in Sherwood Forest. They show after dark.
+  treelights(f, g) {
+    const spots = (g.userData.treeSpots || []).filter((p) => Math.hypot(p.x, p.z) < (f.r1 || 140));
+    if (!spots.length) return;
+    const n = f.n || 800, pos = new Float32Array(n * 3), col = new Float32Array(n * 3), c = new THREE.Color();
+    const pal = [0xff3d7f, 0x39d0ff, 0xffd23f, 0x7dff6a, 0xb36bff, 0xff8a3d];
+    for (let i = 0; i < n; i++) {
+      const s = spots[i % spots.length];
+      const a = rnd(0, Math.PI * 2), r = rnd(2.5, 6);
+      pos.set([s.x + Math.cos(a) * r, rnd(2.5, Math.max(4, s.y * 0.6)), s.z + Math.sin(a) * r], i * 3);
+      c.set(pal[Math.floor(Math.random() * pal.length)]); col.set([c.r, c.g, c.b], i * 3);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    g.add(new THREE.Points(geo, new THREE.ShaderMaterial({
+      uniforms: { ...sceneryU, uLinear: shared.uLinear },
+      vertexShader: `attribute vec3 color; varying vec3 vC; uniform float uTime; void main(){ vC = color * (0.7 + 0.3 * sin(uTime * 2.0 + position.x * 3.1 + position.z)); vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_PointSize = clamp(240.0 / -mv.z, 2.0, 9.0); gl_Position = projectionMatrix * mv; }`,
+      fragmentShader: `uniform float uDay, uLinear; varying vec3 vC; void main(){ vec2 d = gl_PointCoord - 0.5; float a = 1.0 - smoothstep(0.0, 0.5, length(d)); vec3 c = vC * a * 1.6 * (1.0 - 0.85 * uDay); gl_FragColor = vec4(mix(c, c * 2.5, uLinear), 1.0); }`,
+      transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+    })));
+  },
+  // A grandstand at real scale, its back to the stage's direction of view.
+  stand(f, g) {
+    const { dir, r } = aim(f, 440), rows = 8, depth = f.depth || 40, mat = M.stand;
+    const grp = new THREE.Group();
+    for (let i = 0; i < rows; i++) { const h = f.height * (i + 1) / rows; const b = new THREE.Mesh(new THREE.BoxGeometry(f.length, h, depth / rows), mat); b.position.set(0, h / 2, (i - rows / 2) * depth / rows); grp.add(b); }
+    grp.position.copy(dir).multiplyScalar(r); grp.lookAt(0, 0, 0); grp.rotateY(Math.PI);
+    g.add(grp);
+  },
+};
+
+function buildScenery() {
+  const spec = scenerySpec();
+  if (!spec) return;
+  const g = new THREE.Group(); g.name = 'Scenery';
+  const box = new THREE.Box3();
+  venue.children.forEach((o) => { if (o.isMesh && o.geometry.type !== 'PlaneGeometry' && !(o.material && o.material.isPointsMaterial)) box.expandByObject(o); });
+  if (box.isEmpty()) box.set(V(-30, 0, -30), V(30, 10, 60));
+  box.max.z = Math.max(box.max.z, camSet.front + 6);
+  const o = state.room || {};
+  if (o.crowdW) { box.min.x = Math.min(box.min.x, -o.crowdW / 2); box.max.x = Math.max(box.max.x, o.crowdW / 2); box.max.z = Math.max(box.max.z, (o.crowdDepth || 0) + 10); }
+  const clear = clearOfVenue(box);
+  (spec.features || []).forEach((f) => { if (SCENERY[f.type]) SCENERY[f.type](f, g, clear); });
+  surround.glow = (spec.features || []).filter((f) => f.type === 'glow').slice(0, 2).map((f) => aim({ ...f, dist: 1 }));
+  surround.glow.forEach((gl, i) => { gl.w = spec.features.filter((f) => f.type === 'glow')[i].strength || 1; });
+  venue.add(g);
 }
 
 const M = {
@@ -1060,7 +1374,8 @@ function build() {
   venue = new THREE.Group(); scene.add(venue);
   receivers = []; fixtures = []; trussList = []; screens = []; hangLines = [];
   crowds = []; laserSpots = []; lasers = []; glowMats = [];
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), M.floor);
+  const spec = scenerySpec();
+  const floor = spec ? new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), new THREE.MeshStandardMaterial({ color: GROUND[spec.ground] || GROUND.grass, roughness: 0.95 })) : new THREE.Mesh(new THREE.PlaneGeometry(400, 400), M.floor);
   floor.rotation.x = -Math.PI / 2; venue.add(floor); receivers.push(floor);
   sizeWallCanvas(state.wallW / state.wallH);
   camSet = BUILD[state.tpl](state);
@@ -1074,6 +1389,8 @@ function build() {
   wallLight.distance = Math.max(18, state.wallW * 2.4);
   // Solid, lit surfaces take part in sun shadows; beams, glows and LED faces do not.
   venue.traverse((o) => { if (o.isMesh && !o.material.isShaderMaterial && !o.material.isMeshBasicMaterial && !o.material.transparent) { o.castShadow = o !== floor; o.receiveShadow = true; } });
+  buildScenery();
+  setSurroundings();
   updateLook();
   updateReadouts();
   renderPatch();
@@ -1129,7 +1446,28 @@ function updateLook() {
   const el = look.elev = sunAt(state.tod, m.lat ?? 34, m.bearing ?? 270);
   const day = look.day = out ? smooth(-4, 14, el) : 0;
   const glow = out ? smooth(-12, -1, el) * (1 - smooth(4, 20, el)) : 0;
-  if (sky) { sky.visible = out && el > -8; sky.material.uniforms.sunPosition.value.copy(sunDir); }
+  const hd = out && surround.spec && (surround.day || surround.dusk) ? surround : null, hi = hd && HDRI[hd.spec.hdri];
+  if (sky) { sky.visible = out && el > -8 && !(hd && hd.day); sky.material.uniforms.sunPosition.value.copy(sunDir); }
+  dome.visible = !!hd;
+  if (hd) {
+    // Midday image above about 10 degrees of sun, the golden-hour image around sunrise and sunset, the night image after dusk.
+    const u = dome.material.uniforms, ni = hd.night && HDRI[hd.spec.night], ki = hd.dusk && HDRI[hd.spec.dusk], light = 0.3 + 0.7 * smooth(-2, 18, el);
+    const dayF = ki ? smooth(3, 14, el) : smooth(-7, 10, el), duskF = ki ? smooth(-7, 2, el) * (1 - dayF) : 0, sunPh = Math.atan2(sunDir.z, sunDir.x);
+    u.tDay.value = hd.day; u.tDusk.value = hd.dusk; u.tNight.value = hd.night;
+    u.uDayW.value = hd.day ? (1.5 / hi.sky) * dayF * light : 0;
+    u.uDuskW.value = ki ? (0.95 / ki.sky) * duskF * light : 0;
+    u.uNightW.value = hd.night ? (0.03 / ni.sky) * (1 - smooth(-9, 1, el)) : 0;
+    u.uGradW.value = hd.night ? 0 : 1 - smooth(-9, 1, el);
+    u.uTint.value.setRGB(1, 0.62, 0.45).lerp(new THREE.Color(1, 1, 1), smooth(0, 22, el));
+    u.uYaw.value = sunPh - (hi.sunU - 0.5) * Math.PI * 2;
+    if (ki) u.uYawD.value = sunPh - (ki.sunU - 0.5) * Math.PI * 2;
+    u.uGlow.value.forEach((g, i) => { const s = hd.glow[i]; if (s) g.set(s.dir.x, s.dir.z, 0, s.w * 0.06 * (1 - smooth(-8, 4, el))); else g.set(0, 0, 0, 0); });
+  }
+  scene.environment = hd && hd.day ? hd.env : null;
+  const envK = hd ? 0.04 + 0.22 * smooth(-2, 15, el) : 1;
+  venue.traverse((o) => { if (o.material && o.material.isMeshStandardMaterial) o.material.envMapIntensity = envK; });
+  hazeC.set(hi ? hi.haze : 0x9fb4cc);
+  if (hd && hd.dusk) hazeC.lerp(tmpFog.set(HDRI[hd.spec.dusk].haze), 1 - smooth(3, 14, el));
   const starA = out ? 1 - smooth(-10, 1, el) : 0;
   stars.visible = starA > 0.01; stars.material.opacity = starA * 0.9;
   sun.intensity = out ? 2.6 * smooth(-1, 10, el) : 0;
@@ -1137,7 +1475,7 @@ function updateLook() {
   hemi.color.copy(SKY.night).lerp(SKY.day, day); hemi.groundColor.copy(SKY.gNight).lerp(SKY.gDay, day);
   hemi.intensity = 0.35 + 0.65 * day;
   key.intensity = 0.35 * (1 - day);
-  lc.copy(SKY.dusk).lerp(SKY.haze, smooth(2, 25, el));
+  lc.copy(SKY.dusk).lerp(hazeC, smooth(2, 25, el));
   scene.fog.color.copy(NIGHT).lerp(lc, Math.max(day, glow * 0.35));
   // High quality writes linear light and encodes at the end, so the fog and clear colours are decoded to match.
   if (highOn()) scene.fog.color.convertSRGBToLinear();
@@ -1147,6 +1485,9 @@ function updateLook() {
   crowdMat.body.color.setScalar(skinLevel); crowdMat.skin.color.setScalar(skinLevel);
   look.exposure = 1.1 - 0.55 * day;
   renderer.toneMappingExposure = look.exposure;
+  outU.uExp.value = look.exposure;
+  sceneryU.uDay.value = day; sceneryU.uLight.value = 2.4 * smooth(-3, 20, el) * (out ? 1 : 0); sceneryU.uSun.value.copy(sunDir);
+  sceneryU.uFog.value.copy(hazeC).convertSRGBToLinear().multiplyScalar(1.4 * day).add(tmpFog.setRGB(0.004, 0.005, 0.008));
   if (post) { post.fin.uniforms.uExposure.value = look.exposure; post.bloom.threshold = 0.9 + 2.5 * day; post.bloom.strength = 0.75 - 0.35 * day; }
   const shadows = highOn() && sun.intensity > 0.05;
   sun.castShadow = shadows;
@@ -1325,6 +1666,7 @@ function tick(now) {
   }
   controls.update();
   if (sky) sky.position.copy(camera.position);
+  dome.position.copy(camera.position);
   stars.position.copy(camera.position);
   if (highOn()) post.composer.render(); else renderer.render(scene, camera);
   requestAnimationFrame(tick);
@@ -1660,6 +2002,7 @@ Object.keys(fmt).forEach((k) => {
 });
 ['program', 'dimfx', 'colorMode', 'lasers'].forEach((k) => $('#' + k).addEventListener('change', (e) => { state[k] = e.target.value; }));
 $('#quality').addEventListener('change', (e) => setQuality(e.target.value));
+$('#surround').addEventListener('change', (e) => { state.surround = e.target.value; build(); });
 $('#control').addEventListener('change', (e) => { state.control = e.target.value; live.touched = true; });
 $('#visual').addEventListener('change', (e) => { state.visual = e.target.value; tdFeed.touched = true; syncInputs(); sizeWallCanvas(state.wallW / state.wallH); if ($('#sceneDetails').open) $('#sceneJson').textContent = sceneJSON(); });
 $('#colA').addEventListener('input', (e) => { state.colA = e.target.value; });
@@ -1691,7 +2034,8 @@ function setVenue(v, tpl) {
     const conf = v.confidence || 'estimated', facts = v.facts || [];
     note.innerHTML = `<p><span class="badge ${conf}">${CONF_LABEL[conf]}</span>${esc(v.city)}, ${esc(v.region)} · ${v.capacity.toLocaleString()} capacity · ${esc(v.setting)}. ${esc(v.notes)}</p>`
       + (facts.length ? `<ul>${facts.map((f) => `<li><b>${esc(f.k)}:</b> ${esc(f.v)} <a href="${esc(safeUrl(f.src))}" target="_blank" rel="noopener">source</a></li>`).join('')}</ul>` : '')
-      + `<p>${conf === 'estimated' ? 'All sizes are estimates from public information.' : `Estimated: ${esc(v.estimated || 'other sizes.')}`}</p>`;
+      + `<p>${conf === 'estimated' ? 'All sizes are estimates from public information.' : `Estimated: ${esc(v.estimated || 'other sizes.')}`}</p>`
+      + (v.scenery ? `<p>Surroundings: ${esc(v.scenery.basis)}</p>` : '');
   }
   window.dispatchEvent(new CustomEvent('stagevenue', { detail: state.venueMeta }));
 }
