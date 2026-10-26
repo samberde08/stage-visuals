@@ -1,0 +1,893 @@
+<title>Stage Visuals Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: full-bleed 3D viewport with a console-style control rack beside it; the rack drops below the view on phones. */
+:root {
+  --bg: #07080b;
+  --rack: #101116;
+  --rack-2: #181a21;
+  --line: #272a34;
+  --fg: #e8e6e1;
+  --muted: #9a9ca6;
+  --amber: #f0a24a;
+  --amber-ink: #1d1407;
+  --steel: #7fb0ea;
+  --display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --body: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 14px; line-height: 1.45; overflow: hidden; }
+.app { height: 100%; display: grid; grid-template-columns: minmax(0, 1fr) 344px; }
+.view { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+#c { display: block; width: 100%; height: 100%; touch-action: none; }
+
+.hud { position: absolute; top: 12px; left: max(12px, env(safe-area-inset-left, 0px)); right: 12px; justify-self: start; width: fit-content; max-width: calc(100% - 24px); pointer-events: none; display: grid; gap: 4px; padding: 8px 12px 9px; background: rgba(7,8,11,.62); border-radius: 4px; backdrop-filter: blur(4px); }
+.hud h1 { margin: 0; font-family: var(--display); font-weight: 600; font-size: 30px; line-height: 1; letter-spacing: .01em; text-shadow: 0 1px 8px #000; }
+.hud .spec { font-family: var(--mono); font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; text-shadow: 0 1px 6px #000; }
+.cams { position: absolute; left: max(12px, env(safe-area-inset-left, 0px)); right: 12px; bottom: 12px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cams button, .btn { font: 500 12px var(--mono); letter-spacing: .04em; color: var(--fg); background: rgba(16,17,22,.82); border: 1px solid var(--line); padding: 7px 10px; border-radius: 4px; cursor: pointer; backdrop-filter: blur(6px); }
+.cams button:hover, .btn:hover { border-color: var(--amber); }
+.cams button[aria-pressed="true"] { background: var(--amber); color: var(--amber-ink); border-color: var(--amber); }
+.cams .hint { margin-left: auto; font: 11px var(--mono); color: var(--muted); text-shadow: 0 1px 6px #000; }
+button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+.rack { overflow-y: auto; background: var(--rack); border-left: 1px solid var(--line); padding-block: 16px 28px; padding-inline: 16px; display: grid; gap: 22px; align-content: start; min-height: 0; }
+.group { display: grid; gap: 10px; min-width: 0; }
+.eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--amber); display: flex; justify-content: space-between; gap: 8px; }
+.eyebrow span:last-child { color: var(--muted); letter-spacing: .04em; text-transform: none; }
+
+.chips { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.chips label { position: relative; display: grid; gap: 1px; padding: 8px 10px; background: var(--rack-2); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
+.chips label:last-child:nth-child(odd) { grid-column: span 2; }
+.chips input { position: absolute; opacity: 0; pointer-events: none; }
+.chips b { font-family: var(--display); font-weight: 600; font-size: 17px; line-height: 1.1; }
+.chips small { font-size: 11px; color: var(--muted); }
+.chips label:has(input:checked) { border-color: var(--amber); background: #22190e; }
+.chips label:has(input:focus-visible) { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+.row { display: grid; grid-template-columns: 92px minmax(0, 1fr) 56px; align-items: center; gap: 10px; }
+.row > label { color: var(--muted); font-size: 12.5px; }
+.row output { font-family: var(--mono); font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
+.row.two { grid-template-columns: 92px minmax(0, 1fr); }
+input[type="range"] { width: 100%; accent-color: var(--amber); }
+select, input[type="text"] { width: 100%; min-width: 0; font: 13px var(--body); color: var(--fg); background: var(--rack-2); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; }
+input[type="color"] { width: 100%; height: 30px; padding: 0 2px; background: var(--rack-2); border: 1px solid var(--line); border-radius: 4px; }
+.colors { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+input[type="file"] { font: 12px var(--body); color: var(--muted); width: 100%; }
+.readout { font-family: var(--mono); font-size: 11.5px; color: var(--steel); font-variant-numeric: tabular-nums; }
+.note { font-size: 12px; color: var(--muted); margin: 0; }
+.live { margin: 0; font: 11.5px/1.5 var(--mono); color: var(--muted); padding: 7px 9px; border: 1px solid var(--line); border-radius: 4px; background: var(--rack-2); }
+.live[data-state="rx"] { color: #7fd99a; border-color: #2d5a3a; }
+.live[data-state="rx"]::before { content: "● "; }
+.live code { font: inherit; color: var(--fg); }
+
+.patch { max-height: 230px; overflow: auto; border: 1px solid var(--line); border-radius: 4px; }
+.patch table { width: 100%; border-collapse: collapse; font: 11.5px var(--mono); font-variant-numeric: tabular-nums; }
+.patch th, .patch td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.patch th { position: sticky; top: 0; background: var(--rack-2); color: var(--muted); font-weight: 500; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; }
+details { border: 1px solid var(--line); border-radius: 4px; background: var(--rack-2); }
+summary { cursor: pointer; padding: 8px 10px; font: 12px var(--mono); color: var(--muted); }
+details pre { margin: 0; padding: 10px; max-height: 260px; overflow: auto; font: 11px/1.45 var(--mono); color: var(--fg); border-top: 1px solid var(--line); }
+details .btn { margin: 0 10px 10px; }
+
+@media (max-width: 760px) {
+  .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: 54% 46%; }
+  .rack { border-left: 0; border-top: 1px solid var(--line); padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); }
+  .hud h1 { font-size: 24px; }
+  .cams .hint { display: none; }
+  .cams { gap: 4px; left: 8px; right: 8px; bottom: 8px; }
+  .cams button { padding: 5px 7px; font-size: 11px; }
+}
+.fallback { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--muted); }
+</style>
+
+<div class="app">
+  <div class="view" id="view">
+    <canvas id="c" aria-label="3D stage view"></canvas>
+    <div class="hud">
+      <h1 id="hudTitle">Festival main stage</h1>
+      <div class="spec" id="hudSpec"></div>
+    </div>
+    <div class="cams" id="cams">
+      <button type="button" data-cam="foh" aria-pressed="true">FOH</button>
+      <button type="button" data-cam="crowd" aria-pressed="false">Crowd</button>
+      <button type="button" data-cam="wide" aria-pressed="false">Wide</button>
+      <button type="button" data-cam="side" aria-pressed="false">Stage left</button>
+      <button type="button" data-cam="top" aria-pressed="false">Plan</button>
+      <button type="button" id="pause" aria-pressed="false">Pause</button>
+      <span class="hint">Drag to orbit · scroll to zoom · right-drag to pan</span>
+    </div>
+  </div>
+
+  <aside class="rack" aria-label="Controls">
+    <section class="group">
+      <div class="eyebrow"><span>Venue</span><span>parametric template</span></div>
+      <div class="chips" id="templates"></div>
+    </section>
+
+    <section class="group">
+      <div class="eyebrow"><span>Stage</span><span>metres</span></div>
+      <div class="row"><label for="W">Width</label><input id="W" type="range" min="4" max="40" step="0.5"><output for="W"></output></div>
+      <div class="row"><label for="D">Depth</label><input id="D" type="range" min="3" max="24" step="0.5"><output for="D"></output></div>
+      <div class="row"><label for="H">Deck height</label><input id="H" type="range" min="0.2" max="3" step="0.1"><output for="H"></output></div>
+      <div class="row"><label for="trim">Truss trim</label><input id="trim" type="range" min="2.5" max="20" step="0.5"><output for="trim"></output></div>
+    </section>
+
+    <section class="group">
+      <div class="eyebrow"><span>Rig</span><span>generic spot · 16 ch</span></div>
+      <div class="row two"><label for="control">Control</label>
+        <select id="control">
+          <option value="effects">Built-in effects</option>
+          <option value="live">Live DMX from console</option>
+        </select></div>
+      <p class="live" id="liveOut" data-state="off"></p>
+      <div class="row"><label for="count">Fixtures</label><input id="count" type="range" min="4" max="48" step="1"><output for="count"></output></div>
+      <div class="row two"><label for="program">Movement</label>
+        <select id="program">
+          <option value="fan">Fan</option>
+          <option value="wave">Wave</option>
+          <option value="ballyhoo">Ballyhoo</option>
+          <option value="cross">Crossfire</option>
+          <option value="audience">Audience sweep</option>
+          <option value="pools">Static pools</option>
+        </select></div>
+      <div class="row two"><label for="dimfx">Intensity</label>
+        <select id="dimfx">
+          <option value="steady">Steady</option>
+          <option value="chase">Chase</option>
+          <option value="strobe">Strobe on beat</option>
+        </select></div>
+      <div class="row two"><label for="colorMode">Colour</label>
+        <select id="colorMode">
+          <option value="alt">Alternate A / B</option>
+          <option value="solid">Solid A</option>
+          <option value="rainbow">Rainbow spread</option>
+        </select></div>
+      <div class="colors"><input id="colA" type="color" value="#ff7a1a" aria-label="Colour A"><input id="colB" type="color" value="#2f6bff" aria-label="Colour B"></div>
+      <div class="row"><label for="bpm">Tempo</label><input id="bpm" type="range" min="60" max="180" step="1" value="124"><output for="bpm"></output></div>
+      <div class="row"><label for="zoom">Beam angle</label><input id="zoom" type="range" min="3" max="35" step="1" value="9"><output for="zoom"></output></div>
+      <div class="row"><label for="haze">Haze</label><input id="haze" type="range" min="0" max="1" step="0.05" value="0.55"><output for="haze"></output></div>
+    </section>
+
+    <section class="group">
+      <div class="eyebrow"><span>LED wall</span><span id="pitchOut"></span></div>
+      <div class="row two"><label for="visual">Content</label>
+        <select id="visual">
+          <option value="plasma">Plasma (generative)</option>
+          <option value="bars">Spectrum bars</option>
+          <option value="tunnel">Tunnel</option>
+          <option value="text">Text marquee</option>
+          <option value="media">Your image or video</option>
+        </select></div>
+      <div class="row two" id="textRow" hidden><label for="wallText">Text</label><input id="wallText" type="text" value="STAGE VISUALS" maxlength="60"></div>
+      <div class="row two" id="mediaRow" hidden><label for="media">File</label><input id="media" type="file" accept="image/*,video/*"></div>
+      <div class="row"><label for="wallW">Wall width</label><input id="wallW" type="range" min="2" max="30" step="0.5"><output for="wallW"></output></div>
+      <div class="row"><label for="wallH">Wall height</label><input id="wallH" type="range" min="1" max="14" step="0.5"><output for="wallH"></output></div>
+      <div class="row two"><label for="pitch">Pixel pitch</label>
+        <select id="pitch">
+          <option value="2.6">2.6 mm (broadcast)</option>
+          <option value="3.9" selected>3.9 mm (touring)</option>
+          <option value="5.9">5.9 mm (outdoor)</option>
+        </select></div>
+      <div class="readout" id="wallOut"></div>
+    </section>
+
+    <section class="group">
+      <div class="eyebrow"><span>Patch</span><span id="patchSum"></span></div>
+      <div class="patch"><table><thead><tr><th>Fix</th><th>Position</th><th>Univ.Addr</th><th>Mode</th></tr></thead><tbody id="patchBody"></tbody></table></div>
+      <details id="sceneDetails">
+        <summary>Scene data (MVR-shaped JSON)</summary>
+        <pre id="sceneJson"></pre>
+        <button type="button" class="btn" id="copyJson">Copy JSON</button>
+      </details>
+      <p class="note">Fixtures are a generic placeholder. Real fixture geometry, beams and DMX modes will come from GDTF files, and this scene structure maps onto MVR layers for import and export.</p>
+    </section>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(() => {
+const $ = (s) => document.querySelector(s);
+const DEG = Math.PI / 180;
+if (!window.THREE || !THREE.OrbitControls) {
+  $('#view').insertAdjacentHTML('beforeend', '<div class="fallback">The 3D engine could not load. Check your connection and reload the page.</div>');
+  return;
+}
+
+/* ---------- Templates ---------- */
+const TEMPLATES = {
+  proscenium: { label: 'Proscenium', blurb: 'Theatre with arch', W: 14, D: 10, H: 1.0, trim: 7, wallW: 10, wallH: 5.5, count: 16, program: 'fan', visual: 'tunnel' },
+  thrust:     { label: 'Thrust', blurb: 'Audience on 3 sides', W: 10, D: 8, H: 0.8, trim: 6.5, wallW: 8, wallH: 4.5, count: 14, program: 'ballyhoo', visual: 'plasma' },
+  arena:      { label: 'Arena', blurb: 'In the round', W: 12, D: 12, H: 1.5, trim: 14, wallW: 6, wallH: 3.5, count: 24, program: 'audience', visual: 'bars' },
+  festival:   { label: 'Festival', blurb: 'Main stage, roof', W: 24, D: 16, H: 2.2, trim: 13, wallW: 18, wallH: 9, count: 32, program: 'fan', visual: 'plasma' },
+  club:       { label: 'Club', blurb: 'DJ booth, low ceiling', W: 8, D: 4, H: 0.6, trim: 3.6, wallW: 6, wallH: 3, count: 10, program: 'cross', visual: 'text' },
+};
+const NAMES = { proscenium: 'Proscenium theatre', thrust: 'Thrust stage', arena: 'Arena in the round', festival: 'Festival main stage', club: 'Club stage' };
+
+const state = { tpl: 'festival', ...pick(TEMPLATES.festival), program: 'fan', dimfx: 'steady', colorMode: 'alt', colA: '#ff7a1a', colB: '#2f6bff', bpm: 124, zoom: 9, haze: 0.55, visual: 'plasma', text: 'STAGE VISUALS', pitch: 3.9, control: 'effects' };
+function pick(t) { return { W: t.W, D: t.D, H: t.H, trim: t.trim, wallW: t.wallW, wallH: t.wallH, count: t.count }; }
+
+/* ---------- Renderer ---------- */
+const canvas = $('#c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.1;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x07080b);
+scene.fog = new THREE.FogExp2(0x07080b, 0.012);
+const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 600);
+const controls = new THREE.OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.maxPolarAngle = Math.PI * 0.495;
+
+scene.add(new THREE.HemisphereLight(0x8090b0, 0x0a0a0a, 0.35));
+const key = new THREE.DirectionalLight(0xffe2c0, 0.35);
+key.position.set(4, 18, 30);
+scene.add(key);
+const wallLight = new THREE.PointLight(0xffffff, 1.4, 40, 1.5);
+scene.add(wallLight);
+
+const M = {
+  floor: new THREE.MeshStandardMaterial({ color: 0x101116, roughness: 0.42, metalness: 0.25 }),
+  deck: new THREE.MeshStandardMaterial({ color: 0x24252b, roughness: 0.65 }),
+  deckEdge: new THREE.MeshStandardMaterial({ color: 0x0c0c0e, roughness: 0.9 }),
+  wall: new THREE.MeshStandardMaterial({ color: 0x15161b, roughness: 0.95 }),
+  seat: new THREE.MeshStandardMaterial({ color: 0x3a2228, roughness: 0.85 }),
+  bowl: new THREE.MeshStandardMaterial({ color: 0x2a2d36, roughness: 0.9, side: THREE.DoubleSide }),
+  truss: new THREE.MeshStandardMaterial({ color: 0xb4b7bf, roughness: 0.35, metalness: 0.85 }),
+  lacing: new THREE.LineBasicMaterial({ color: 0x80838c }),
+  body: new THREE.MeshStandardMaterial({ color: 0x1c1d22, roughness: 0.45, metalness: 0.5 }),
+  crowd: new THREE.MeshStandardMaterial({ color: 0x1b1c22, roughness: 1 }),
+  pa: new THREE.MeshStandardMaterial({ color: 0x0d0d10, roughness: 0.7 }),
+  frame: new THREE.MeshStandardMaterial({ color: 0x0a0a0c, roughness: 0.6 }),
+};
+
+/* ---------- LED content canvas ---------- */
+const wc = document.createElement('canvas');
+const wctx = wc.getContext('2d');
+const pc = document.createElement('canvas');
+const pctx = pc.getContext('2d');
+const sc = document.createElement('canvas'); sc.width = sc.height = 1;
+const sctx = sc.getContext('2d', { willReadFrequently: true });
+const wallTex = { value: null };
+function sizeWallCanvas(aspect) {
+  const w = 384, h = Math.max(48, Math.min(768, Math.round(w / aspect)));
+  if (wc.width === w && wc.height === h && wallTex.value) return;
+  wc.width = w; wc.height = h;
+  pc.width = 96; pc.height = Math.max(12, Math.round(96 / aspect));
+  if (wallTex.value) wallTex.value.dispose();
+  wallTex.value = new THREE.CanvasTexture(wc);
+  wallTex.value.minFilter = THREE.LinearFilter;
+  wallTex.value.generateMipmaps = false;
+}
+
+const wallVert = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`;
+const wallFrag = `
+uniform sampler2D map; uniform vec2 uPixels; uniform vec2 uPanels; uniform float uBright;
+varying vec2 vUv;
+void main(){
+  vec3 c = texture2D(map, vUv).rgb;
+  vec2 p = vUv * uPixels;
+  float d = length(fract(p) - 0.5);
+  float led = 1.0 - smoothstep(0.22, 0.5, d);
+  float fw = max(fwidth(p.x), fwidth(p.y));
+  float amt = 1.0 - smoothstep(0.12, 0.55, fw);
+  c *= mix(1.0, led * 1.7, amt);
+  vec2 q = vUv * uPanels;
+  vec2 g = abs(fract(q) - 0.5);
+  float fq = max(fwidth(q.x), fwidth(q.y));
+  float seam = smoothstep(0.5 - fq, 0.5, max(g.x, g.y));
+  c *= 1.0 - seam * 0.55;
+  gl_FragColor = vec4(c * uBright, 1.0);
+}`;
+function wallMaterial(w, h) {
+  const m = new THREE.ShaderMaterial({
+    uniforms: { map: wallTex, uPixels: { value: new THREE.Vector2(w * 1000 / state.pitch, h * 1000 / state.pitch) }, uPanels: { value: new THREE.Vector2(w / 0.5, h / 0.5) }, uBright: { value: 1.0 } },
+    vertexShader: wallVert, fragmentShader: wallFrag, fog: false,
+  });
+  m.extensions.derivatives = true;
+  m.userData.size = [w, h];
+  return m;
+}
+
+/* ---------- Beams ---------- */
+const BASE_HALF = 10 * DEG;
+const beamGeo = new THREE.CylinderGeometry(Math.tan(BASE_HALF), 0.035, 1, 32, 1, true);
+beamGeo.translate(0, 0.5, 0);
+const beamVert = `
+uniform float uLen; varying float vDist; varying float vEdge;
+void main(){
+  vDist = position.y * uLen;
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  vec3 n = normalize(normalMatrix * normal);
+  vEdge = abs(dot(n, normalize(-mv.xyz)));
+  gl_Position = projectionMatrix * mv;
+}`;
+const beamFrag = `
+uniform vec3 uColor; uniform float uIntensity; uniform float uLen;
+varying float vDist; varying float vEdge;
+void main(){
+  float att = exp(-vDist * 0.04);
+  float endFade = 1.0 - smoothstep(uLen - 1.2, uLen, vDist);
+  float a = uIntensity * att * endFade * pow(vEdge, 1.6);
+  gl_FragColor = vec4(uColor * a, 1.0);
+}`;
+function poolTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const x = c.getContext('2d');
+  const g = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+  g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.45, 'rgba(255,255,255,.75)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(c);
+}
+const poolTex = poolTexture();
+const poolGeo = new THREE.PlaneGeometry(1, 1);
+
+/* ---------- Scene state ---------- */
+let venue = new THREE.Group(); scene.add(venue);
+let receivers = [], fixtures = [], trussList = [], screens = [], hangLines = [], camSet = {}, mainWall = null;
+
+function box(w, h, d, x, y, z, mat, recv) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+  m.position.set(x, y, z);
+  venue.add(m);
+  if (recv) receivers.push(m);
+  return m;
+}
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+
+function truss(name, a, b, s = 0.3, opts = {}) {
+  const g = new THREE.Group();
+  const dir = new THREE.Vector3().subVectors(b, a);
+  const len = dir.length(); dir.normalize();
+  const chord = new THREE.CylinderGeometry(0.024, 0.024, len, 6);
+  chord.rotateZ(Math.PI / 2); chord.translate(len / 2, 0, 0);
+  const h = s / 2, corners = [[h, h], [h, -h], [-h, -h], [-h, h]];
+  corners.forEach(([y, z]) => { const m = new THREE.Mesh(chord, M.truss); m.position.set(0, y, z); g.add(m); });
+  const pts = [], n = Math.max(1, Math.round(len / s));
+  for (let f = 0; f < 4; f++) {
+    const [y1, z1] = corners[f], [y2, z2] = corners[(f + 1) % 4];
+    for (let i = 0; i < n; i++) {
+      const xa = (i / n) * len, xb = ((i + 1) / n) * len;
+      if (i % 2 === 0) pts.push(xa, y1, z1, xb, y2, z2); else pts.push(xa, y2, z2, xb, y1, z1);
+    }
+  }
+  const lg = new THREE.BufferGeometry();
+  lg.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  g.add(new THREE.LineSegments(lg, M.lacing));
+  g.position.copy(a);
+  g.quaternion.setFromUnitVectors(V(1, 0, 0), dir);
+  venue.add(g);
+  trussList.push({ name, from: a.toArray().map(r2), to: b.toArray().map(r2), section: s });
+  if (opts.hang) hangLines.push({ name, a: a.clone().add(V(0, -s / 2 - 0.02, 0)), b: b.clone().add(V(0, -s / 2 - 0.02, 0)), flip: true, yaw: opts.yaw || 0, radial: !!opts.radial });
+}
+function floorLine(name, a, b) { hangLines.push({ name, a, b, flip: false, yaw: 0 }); }
+const r2 = (v) => Math.round(v * 100) / 100;
+
+function screen(name, w, h, pos, rotY = 0, frame = true) {
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), wallMaterial(w, h));
+  mesh.position.copy(pos); mesh.rotation.y = rotY;
+  venue.add(mesh); screens.push({ name, mesh, w, h });
+  receivers.push(mesh);
+  if (frame) {
+    const f = new THREE.Mesh(new THREE.BoxGeometry(w + 0.12, h + 0.12, 0.14), M.frame);
+    f.position.set(0, 0, -0.08); mesh.add(f);
+  }
+  return mesh;
+}
+
+function crowd(n, fn) {
+  const geo = new THREE.CylinderGeometry(0.15, 0.19, 1.65, 6); geo.translate(0, 0.83, 0);
+  const im = new THREE.InstancedMesh(geo, M.crowd, n);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3();
+  let k = 0;
+  for (let i = 0; i < n * 3 && k < n; i++) {
+    const p = fn(); if (!p) continue;
+    const sc = 0.88 + Math.random() * 0.22; s.set(1, sc, 1);
+    m.compose(p, q, s); im.setMatrixAt(k++, m);
+  }
+  im.count = k;
+  venue.add(im);
+}
+function seatRow(w, x, y, z, rotY = 0) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.45, 0.5), M.seat);
+  m.position.set(x, y + 0.22, z); m.rotation.y = rotY; venue.add(m);
+  const r = new THREE.Mesh(new THREE.BoxGeometry(w, y + 0.02, 0.9), M.wall);
+  r.position.set(x, (y + 0.02) / 2, z); r.rotation.y = rotY; venue.add(r);
+}
+
+/* ---------- Template builders ---------- */
+const BUILD = {
+  proscenium(s) {
+    const { W, D, H, trim } = s, top = H + trim, open = W * 0.86;
+    box(W, H, D, 0, H / 2, -D / 2, M.deck, true);
+    box(open * 0.9, H, 1.6, 0, H / 2, 0.8, M.deck, true);
+    const side = 5, hgt = top + 4;
+    box(side, hgt, 0.8, -(open / 2 + side / 2), hgt / 2, -0.4, M.wall);
+    box(side, hgt, 0.8, open / 2 + side / 2, hgt / 2, -0.4, M.wall);
+    box(open, 3, 0.8, 0, top + 2.5, -0.4, M.wall);
+    box(0.4, hgt, D + 2, -(W / 2 + 3), hgt / 2, -D / 2 - 0.5, M.wall);
+    box(0.4, hgt, D + 2, W / 2 + 3, hgt / 2, -D / 2 - 0.5, M.wall);
+    box(W + 6, hgt, 0.4, 0, hgt / 2, -D - 1.6, M.wall);
+    for (let i = 0; i < 16; i++) { const y = i * 0.32, z = 4 + i * 0.95, w = open + i * 0.7; seatRow(w, 0, y, z); }
+    const zs = [-1.2, -D * 0.38, -D * 0.64];
+    zs.forEach((z, i) => truss(`LX${i + 1}`, V(-W * 0.45, top, z), V(W * 0.45, top, z), 0.3, { hang: true }));
+    truss('FOH', V(-open * 0.45, top + 1.5, 9), V(open * 0.45, top + 1.5, 9), 0.3, { hang: true });
+    mainWall = screen('Upstage LED', s.wallW, s.wallH, V(0, H + 0.4 + s.wallH / 2, -D + 0.5));
+    return { target: V(0, H + 2, -D / 2), front: 21.5, fohY: 8.6, crowdEye: V(1.5, 0.32 * 8 + 1.2, 4 + 8 * 0.95) };
+  },
+  thrust(s) {
+    const { W, D, H, trim } = s, top = H + trim, tw = W * 0.5, tl = D * 0.75;
+    box(W, H, D, 0, H / 2, -D / 2, M.deck, true);
+    box(tw, H, tl, 0, H / 2, tl / 2, M.deck, true);
+    box(W + 4, top + 3, 0.4, 0, (top + 3) / 2, -D - 0.5, M.wall);
+    for (let i = 0; i < 10; i++) {
+      const y = i * 0.35, off = 1.8 + i * 0.95;
+      seatRow(tw + 2 * off, 0, y, tl + off);
+      seatRow(tl + 0.5, -(tw / 2 + off), y, tl / 2, Math.PI / 2);
+      seatRow(tl + 0.5, tw / 2 + off, y, tl / 2, Math.PI / 2);
+    }
+    const x0 = tw / 2 + 0.8, z1 = tl + 0.8, z0 = -0.6;
+    truss('Thrust SL', V(-x0, top, z0), V(-x0, top, z1), 0.3, { hang: true });
+    truss('Thrust SR', V(x0, top, z0), V(x0, top, z1), 0.3, { hang: true });
+    truss('Thrust DS', V(-x0, top, z1), V(x0, top, z1), 0.3, { hang: true });
+    truss('Thrust US', V(-x0, top, z0), V(x0, top, z0), 0.3);
+    truss('Mid', V(-W * 0.45, top, -D * 0.5), V(W * 0.45, top, -D * 0.5), 0.3, { hang: true });
+    mainWall = screen('Upstage LED', s.wallW, s.wallH, V(0, H + 0.3 + s.wallH / 2, -D + 0.4));
+    return { target: V(0, H + 1.5, -D * 0.2), front: tl + 13, fohY: 7.5, crowdEye: V(2, 0.35 * 5 + 1.2, tl + 1.8 + 5 * 0.95) };
+  },
+  arena(s) {
+    const { W, D, H, trim } = s, top = H + trim, R = Math.max(W, D) * 0.62;
+    box(W, H, D, 0, H / 2, 0, M.deck, true);
+    const R0 = Math.max(W, D) / 2 + 16, pts = [V(R0 - 0.01, 0, 0)];
+    for (let i = 0; i < 22; i++) { const r = R0 + i * 0.85, y = i * 0.5 + 0.6; pts.push(new THREE.Vector2(r, y - 0.5), new THREE.Vector2(r, y), new THREE.Vector2(r + 0.85, y)); }
+    const lathe = new THREE.LatheGeometry(pts.slice(1), 96);
+    venue.add(new THREE.Mesh(lathe, M.bowl));
+    const N = 24;
+    for (let i = 0; i < N; i++) {
+      const a0 = i / N * Math.PI * 2, a1 = (i + 1) / N * Math.PI * 2;
+      truss(`Ring ${String(i + 1).padStart(2, '0')}`, V(Math.sin(a0) * R, top, Math.cos(a0) * R), V(Math.sin(a1) * R, top, Math.cos(a1) * R), 0.4, { hang: true, radial: true });
+    }
+    const cy = top - 2.2 - s.wallH / 2, hw = s.wallW / 2;
+    for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2; screen(`Centre-hung ${'NESW'[i]}`, s.wallW, s.wallH, V(Math.sin(a) * hw, cy, Math.cos(a) * hw), a, false); }
+    mainWall = screens[0].mesh;
+    const lid = new THREE.Mesh(new THREE.BoxGeometry(s.wallW, 0.2, s.wallW), M.frame); lid.position.set(0, cy + s.wallH / 2 + 0.1, 0); venue.add(lid);
+    crowd(900, () => { const a = Math.random() * Math.PI * 2, r = Math.max(W, D) / 2 + 3 + Math.random() * 11; return V(Math.sin(a) * r, 0, Math.cos(a) * r); });
+    return { target: V(0, H + 4, 0), front: R0 + 12, fohY: 15, crowdEye: V(3, 6.5, R0 + 8 * 0.85) };
+  },
+  festival(s) {
+    const { W, D, H, trim } = s, top = H + trim, wing = 6;
+    box(W, H, D, 0, H / 2, -D / 2, M.deck, true);
+    box(wing, H, D * 0.7, -(W / 2 + wing / 2), H / 2, -D * 0.35, M.deck, true);
+    box(wing, H, D * 0.7, W / 2 + wing / 2, H / 2, -D * 0.35, M.deck, true);
+    const gx = W / 2 + 0.4;
+    [[-gx, 0.3], [gx, 0.3], [-gx, -D + 0.3], [gx, -D + 0.3]].forEach(([x, z], i) => truss(`Tower ${i + 1}`, V(x, H, z), V(x, top + 2.4, z), 0.52));
+    truss('Roof DS', V(-gx, top + 2.4, 0.3), V(gx, top + 2.4, 0.3), 0.52);
+    truss('Roof US', V(-gx, top + 2.4, -D + 0.3), V(gx, top + 2.4, -D + 0.3), 0.52);
+    truss('Roof SL', V(-gx, top + 2.4, 0.3), V(-gx, top + 2.4, -D + 0.3), 0.52);
+    truss('Roof SR', V(gx, top + 2.4, 0.3), V(gx, top + 2.4, -D + 0.3), 0.52);
+    const lx = W * 0.44;
+    [-1.2, -D * 0.32, -D * 0.58].forEach((z, i) => truss(`Pod ${'ABC'[i]}`, V(-lx, top, z), V(lx, top, z), 0.4, { hang: true }));
+    floorLine('Deck US', V(-W * 0.42, H, -D + 2.2), V(W * 0.42, H, -D + 2.2));
+    const roof = new THREE.Mesh(new THREE.PlaneGeometry(W + 1.2, D + 0.4), new THREE.MeshStandardMaterial({ color: 0x0b0c10, roughness: 1, side: THREE.DoubleSide, transparent: true, opacity: 0.55, depthWrite: false }));
+    roof.rotation.x = -Math.PI / 2; roof.position.set(0, top + 2.75, -D / 2 + 0.3); venue.add(roof);
+    [-1, 1].forEach((sx) => {
+      for (let i = 0; i < 12; i++) { const m = box(1.3, 0.38, 0.9, sx * (W / 2 + 2.2), top + 1.2 - i * 0.4, 0.2, M.pa); m.rotation.x = i * 0.6 * DEG; }
+      box(1.2, 1.2, 1.2, sx * (W / 2 + 2.2), H + 0.6 + 0.0, -0.4, M.pa);
+      const sw = s.wallH * 0.62 * 16 / 9, sh = s.wallH * 0.62;
+      screen(sx < 0 ? 'IMAG SL' : 'IMAG SR', sw, sh, V(sx * (W / 2 + wing + sw / 2 - 1.5), H + 2.2 + sh / 2, -1.5));
+    });
+    mainWall = screen('Upstage LED', s.wallW, s.wallH, V(0, H + 0.6 + s.wallH / 2, -D + 0.6));
+    box(W + 2 * wing, 1.1, 0.4, 0, 0.55, 3, M.frame);
+    box(6, 2.6, 4, 0, 1.3, 34, M.pa);
+    crowd(1600, () => { const x = (Math.random() - 0.5) * (W + 2 * wing + 6), z = 4 + Math.random() * 28; return Math.abs(x) < 3.5 && z > 31 ? null : V(x, 0, z); });
+    return { target: V(0, H + 4.5, -D / 2), front: 44, fohY: 9, crowdEye: V(2, 1.85, 12) };
+  },
+  club(s) {
+    const { W, D, H, trim } = s, ceil = H + trim + 0.9, roomW = Math.max(W + 8, 16), roomD = 22;
+    box(W, H, D, 0, H / 2, -D / 2, M.deck, true);
+    box(2.4, 1.05, 0.9, 0, H + 0.52, -D * 0.45, M.body);
+    box(0.3, ceil, roomD, -roomW / 2, ceil / 2, roomD / 2 - D - 0.5, M.wall);
+    box(0.3, ceil, roomD, roomW / 2, ceil / 2, roomD / 2 - D - 0.5, M.wall);
+    box(roomW, ceil, 0.3, 0, ceil / 2, -D - 0.6, M.wall);
+    const t = H + trim, x0 = Math.min(roomW / 2 - 1.5, W * 0.55), z0 = 1.2, z1 = 9;
+    truss('Box DS', V(-x0, t, z1), V(x0, t, z1), 0.3, { hang: true });
+    truss('Box US', V(-x0, t, z0), V(x0, t, z0), 0.3, { hang: true });
+    truss('Box SL', V(-x0, t, z0), V(-x0, t, z1), 0.3, { hang: true });
+    truss('Box SR', V(x0, t, z0), V(x0, t, z1), 0.3, { hang: true });
+    truss('Stage pipe', V(-W * 0.45, t, -D * 0.5), V(W * 0.45, t, -D * 0.5), 0.3);
+    mainWall = screen('DJ wall', s.wallW, s.wallH, V(0, H + 0.2 + s.wallH / 2, -D + 0.35));
+    crowd(260, () => V((Math.random() - 0.5) * (roomW - 2), 0, 1 + Math.random() * 12));
+    return { target: V(0, H + 1.6, -D / 2 + 1), front: 15, crowdEye: V(1, 1.85, 7.5) };
+  },
+};
+
+/* ---------- Fixtures ---------- */
+const lensGeo = new THREE.CircleGeometry(0.12, 20); lensGeo.rotateX(-Math.PI / 2);
+const headGeo = new THREE.CylinderGeometry(0.15, 0.17, 0.42, 16);
+function makeFixture(spec, idx) {
+  const root = new THREE.Group();
+  root.position.copy(spec.pos);
+  root.rotation.set(0, spec.yaw, spec.flip ? Math.PI : 0);
+  const base = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.12, 0.3), M.body); base.position.y = 0.06; root.add(base);
+  const pan = new THREE.Group(); pan.position.y = 0.12; root.add(pan);
+  const arm = new THREE.BoxGeometry(0.045, 0.44, 0.12);
+  [-0.2, 0.2].forEach((x) => { const a = new THREE.Mesh(arm, M.body); a.position.set(x, 0.22, 0); pan.add(a); });
+  const bar = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.04, 0.12), M.body); bar.position.y = 0.02; pan.add(bar);
+  const tilt = new THREE.Group(); tilt.position.y = 0.3; pan.add(tilt);
+  tilt.add(new THREE.Mesh(headGeo, M.body));
+  const lensMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const lens = new THREE.Mesh(lensGeo, lensMat); lens.position.y = 0.212; tilt.add(lens);
+  const beamMat = new THREE.ShaderMaterial({
+    uniforms: { uColor: { value: new THREE.Color() }, uIntensity: { value: 0 }, uLen: { value: 30 } },
+    vertexShader: beamVert, fragmentShader: beamFrag,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+  });
+  const beam = new THREE.Mesh(beamGeo, beamMat); beam.position.y = 0.21; beam.frustumCulled = false; tilt.add(beam);
+  const pool = new THREE.Mesh(poolGeo, new THREE.MeshBasicMaterial({ map: poolTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, color: 0x000000, polygonOffset: true, polygonOffsetFactor: -2, fog: false }));
+  venue.add(root); venue.add(pool);
+  return { ...spec, id: 101 + idx, root, pan, tilt, lens, beam, pool };
+}
+
+function distribute(n) {
+  const lens = hangLines.map((l) => Math.max(0.01, l.a.distanceTo(l.b)));
+  const total = lens.reduce((a, b) => a + b, 0);
+  const raw = lens.map((l) => n * l / total);
+  const alloc = raw.map(Math.floor);
+  let left = n - alloc.reduce((a, b) => a + b, 0);
+  raw.map((r, i) => [r - Math.floor(r), i]).sort((a, b) => b[0] - a[0]).forEach(([, i]) => { if (left > 0) { alloc[i]++; left--; } });
+  const out = [];
+  hangLines.forEach((l, i) => {
+    for (let j = 0; j < alloc[i]; j++) {
+      const pos = new THREE.Vector3().lerpVectors(l.a, l.b, (j + 0.5) / alloc[i]);
+      const yaw = l.radial ? Math.atan2(pos.x, pos.z) : l.yaw;
+      out.push({ pos, flip: l.flip, yaw, truss: l.name });
+    }
+  });
+  return out;
+}
+
+/* ---------- Build ---------- */
+function build() {
+  scene.remove(venue);
+  venue.traverse((o) => { if (o.geometry && o.geometry !== beamGeo && o.geometry !== poolGeo && o.geometry !== lensGeo && o.geometry !== headGeo) o.geometry.dispose(); if (o.material && o.material.dispose && !Object.values(M).includes(o.material)) o.material.dispose(); });
+  venue = new THREE.Group(); scene.add(venue);
+  receivers = []; fixtures = []; trussList = []; screens = []; hangLines = [];
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), M.floor);
+  floor.rotation.x = -Math.PI / 2; venue.add(floor); receivers.push(floor);
+  sizeWallCanvas(state.wallW / state.wallH);
+  camSet = BUILD[state.tpl](state);
+  distribute(state.count).forEach((s, i) => fixtures.push(makeFixture(s, i)));
+  const mw = mainWall;
+  const n = new THREE.Vector3(0, 0, 1).applyQuaternion(mw.quaternion);
+  wallLight.position.copy(mw.position).addScaledVector(n, 3);
+  wallLight.distance = Math.max(18, state.wallW * 2.4);
+  updateReadouts();
+  renderPatch();
+  if ($('#sceneDetails').open) $('#sceneJson').textContent = sceneJSON();
+}
+
+/* ---------- Cameras ---------- */
+let tween = null, activeCam = 'foh';
+function camPose(kind) {
+  const t = camSet.target, { W, D, H, trim } = state, span = Math.max(W, D) + 10;
+  switch (kind) {
+    case 'crowd': { const wp = mainWall.getWorldPosition(new THREE.Vector3()); return { pos: camSet.crowdEye.clone(), target: wp }; }
+    case 'wide': return { pos: V(span * 0.95, H + trim + 7, t.z + span * 1.05), target: t.clone() };
+    case 'side': return { pos: V(W / 2 + 2.5, H + 2.2, t.z + D * 0.45 + 1), target: V(-W * 0.1, H + trim * 0.45, t.z) };
+    case 'top': return { pos: V(0, Math.max(W, D) * 1.5 + trim + 18, t.z + 0.01), target: V(0, 0, t.z) };
+    default: return { pos: V(0, camSet.fohY || H + 4.5, camSet.front), target: t.clone() };
+  }
+}
+function goCam(kind, instant) {
+  activeCam = kind;
+  document.querySelectorAll('[data-cam]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.cam === kind)));
+  const p = camPose(kind);
+  if (instant || matchMedia('(prefers-reduced-motion: reduce)').matches) { camera.position.copy(p.pos); controls.target.copy(p.target); controls.update(); tween = null; return; }
+  tween = { t0: performance.now(), from: camera.position.clone(), fromT: controls.target.clone(), to: p.pos, toT: p.target };
+}
+
+/* ---------- Animation ---------- */
+const colA = new THREE.Color(), colB = new THREE.Color(), tmpC = new THREE.Color();
+const ray = new THREE.Raycaster(); ray.far = 90;
+const qW = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), dir = new THREE.Vector3(), org = new THREE.Vector3(), nrm = new THREE.Vector3();
+let time = 0, last = performance.now(), paused = false, frame = 0;
+
+function fixtureColor(i, n, beat, out) {
+  if (state.colorMode === 'solid') return out.copy(colA);
+  if (state.colorMode === 'rainbow') return out.setHSL(((i / n) + beat * 0.03) % 1, 1, 0.55);
+  return out.copy(i % 2 ? colB : colA);
+}
+function motion(i, n, beat) {
+  const u = n > 1 ? i / (n - 1) : 0.5, s = u * 2 - 1;
+  switch (state.program) {
+    case 'fan': return [Math.PI / 2, s * 48 * DEG * (0.55 + 0.45 * Math.sin(beat * Math.PI / 4))];
+    case 'wave': return [Math.PI / 2 + 0.25 * Math.sin(beat * 0.5), 38 * DEG * Math.sin(beat * Math.PI / 4 + u * Math.PI * 2)];
+    case 'ballyhoo': return [beat * 0.55 + i * 1.7, (28 + 16 * Math.sin(beat * 0.8 + i)) * DEG];
+    case 'cross': return [Math.PI / 2, (i % 2 ? 1 : -1) * (30 + 14 * Math.sin(beat * Math.PI / 2)) * DEG];
+    case 'audience': return [0.35 * Math.sin(beat * Math.PI / 8 + i * 0.6), (52 + 16 * Math.sin(beat * Math.PI / 4 + u * 3)) * DEG];
+    default: return [0, 0];
+  }
+}
+function dimmer(i, n, beat) {
+  if (state.dimfx === 'strobe') return ((beat * 2) % 1) < 0.14 ? 1 : 0.04;
+  if (state.dimfx === 'chase') { const ph = ((beat / 2 - i / n) % 1 + 1) % 1; return 0.08 + 0.92 * Math.pow(1 - ph, 5); }
+  return 1;
+}
+
+function drawWall(t, beat) {
+  const w = wc.width, h = wc.height, ctx = wctx, pulse = 0.55 + 0.45 * Math.exp(-((beat % 1)) * 5);
+  const A = '#' + colA.getHexString(), B = '#' + colB.getHexString();
+  ctx.globalAlpha = 1;
+  if (state.visual === 'plasma') {
+    const pw = pc.width, ph = pc.height, img = pctx.createImageData(pw, ph), d = img.data;
+    for (let y = 0; y < ph; y++) for (let x = 0; x < pw; x++) {
+      const dx = x - pw / 2, dy = y - ph / 2;
+      let v = Math.sin(x * 0.11 + t * 0.9) + Math.sin(y * 0.13 + t * 1.3) + Math.sin((x + y) * 0.06 + t * 0.6) + Math.sin(Math.sqrt(dx * dx + dy * dy) * 0.16 - t * 2.2);
+      v = (v + 4) / 8;
+      const k = 0.5 + 0.5 * Math.sin(v * Math.PI * 3), br = (0.25 + 0.75 * Math.pow(v, 1.4)) * pulse;
+      const o = (y * pw + x) * 4;
+      d[o] = (colA.r * k + colB.r * (1 - k)) * 255 * br; d[o + 1] = (colA.g * k + colB.g * (1 - k)) * 255 * br; d[o + 2] = (colA.b * k + colB.b * (1 - k)) * 255 * br; d[o + 3] = 255;
+    }
+    pctx.putImageData(img, 0, 0);
+    ctx.imageSmoothingEnabled = true; ctx.drawImage(pc, 0, 0, w, h);
+  } else if (state.visual === 'bars') {
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h);
+    const n = 28, bw = w / n, g = ctx.createLinearGradient(0, h, 0, 0); g.addColorStop(0, B); g.addColorStop(1, A);
+    ctx.fillStyle = g;
+    for (let i = 0; i < n; i++) {
+      const lv = Math.abs(Math.sin(t * 2.1 + i * 0.7) * Math.sin(t * 1.3 + i * 1.9)) * pulse * (0.65 + 0.35 * Math.sin(i / n * Math.PI));
+      const bh = h * (0.08 + 0.9 * lv);
+      ctx.fillRect(i * bw + 2, h - bh, bw - 4, bh);
+    }
+    ctx.fillStyle = '#000'; for (let y = 0; y < h; y += 7) ctx.fillRect(0, y, w, 2);
+  } else if (state.visual === 'tunnel') {
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h);
+    for (let k = 0; k < 14; k++) {
+      const s = ((k / 14) + t * 0.18 * state.bpm / 120) % 1, e = s * s;
+      ctx.strokeStyle = k % 2 ? B : A; ctx.globalAlpha = Math.min(1, e * 2.5) * pulse; ctx.lineWidth = 2 + e * 22;
+      ctx.strokeRect(w / 2 - e * w * 0.7, h / 2 - e * h * 0.7, e * w * 1.4, e * h * 1.4);
+    }
+    ctx.globalAlpha = 1;
+  } else if (state.visual === 'text') {
+    const g = ctx.createLinearGradient(0, 0, w, h); g.addColorStop(0, '#050507'); g.addColorStop(1, '#10101a');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+    const fs = Math.round(h * 0.62); ctx.font = `700 ${fs}px "Barlow Condensed", "Arial Narrow", sans-serif`;
+    ctx.textBaseline = 'middle';
+    const txt = (state.text || ' ').toUpperCase(), tw = ctx.measureText(txt).width, x = w - ((t * w * 0.35) % (tw + w));
+    ctx.shadowColor = B; ctx.shadowBlur = 18 * pulse; ctx.fillStyle = A; ctx.fillText(txt, x, h / 2); ctx.shadowBlur = 0;
+  } else {
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h);
+    const el = media.el, ready = el && (el.tagName === 'IMG' ? el.complete && el.naturalWidth : el.readyState >= 2);
+    if (ready) {
+      const iw = el.videoWidth || el.naturalWidth, ih = el.videoHeight || el.naturalHeight, s = Math.max(w / iw, h / ih);
+      ctx.drawImage(el, (w - iw * s) / 2, (h - ih * s) / 2, iw * s, ih * s);
+    } else {
+      ctx.fillStyle = '#9a9ca6'; ctx.font = `600 ${Math.round(h * 0.12)}px "IBM Plex Sans", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('Choose an image or video in the LED wall panel', w / 2, h / 2, w * 0.9); ctx.textAlign = 'left';
+    }
+  }
+  wallTex.value.needsUpdate = true;
+  if (frame % 6 === 0) {
+    sctx.drawImage(wc, 0, 0, 1, 1);
+    const p = sctx.getImageData(0, 0, 1, 1).data;
+    wallLight.color.setRGB(p[0] / 255, p[1] / 255, p[2] / 255);
+  }
+}
+
+function tick(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (!paused) time += dt;
+  frame++;
+  const beat = time * state.bpm / 60;
+  colA.set(state.colA); colB.set(state.colB);
+  const n = fixtures.length, half = state.zoom / 2 * DEG, k = Math.tan(half) / Math.tan(BASE_HALF);
+  const hz = 0.05 + state.haze * 0.55;
+  scene.fog.density = 0.004 + state.haze * 0.012;
+  fixtures.forEach((f, i) => {
+    let p, tl, dim, kf = k, hf = half;
+    if (state.control === 'live') {
+      const d = liveFixture(i, now);
+      p = d.pan; tl = d.tilt; dim = d.dim; tmpC.setRGB(d.r, d.g, d.b);
+      hf = d.zoom / 2 * DEG; kf = Math.tan(hf) / Math.tan(BASE_HALF);
+    } else {
+      [p, tl] = motion(i, n, beat);
+      if (!f.flip) { p = Math.PI / 2; tl = (i % 2 ? 1 : -1) * (12 + 14 * Math.sin(beat * Math.PI / 4)) * DEG; if (state.program === 'pools') tl = 0; }
+      dim = dimmer(i, n, beat);
+      fixtureColor(i, n, beat, tmpC);
+    }
+    f.pan.rotation.y = p; f.tilt.rotation.x = tl;
+    f.lens.material.color.copy(tmpC).multiplyScalar(0.2 + dim * 1.4);
+    f.tilt.updateMatrixWorld(true);
+    f.tilt.getWorldQuaternion(qW); dir.copy(up).applyQuaternion(qW);
+    f.beam.getWorldPosition(org);
+    ray.set(org, dir);
+    const hit = ray.intersectObjects(receivers, false)[0];
+    const L = hit ? Math.max(0.5, hit.distance) : 45;
+    f.beam.scale.set(L * kf, L, L * kf);
+    const u = f.beam.material.uniforms; u.uLen.value = L; u.uColor.value.copy(tmpC); u.uIntensity.value = dim * hz;
+    if (hit && dim > 0.02) {
+      nrm.copy(hit.face.normal).transformDirection(hit.object.matrixWorld);
+      f.pool.visible = true;
+      f.pool.position.copy(hit.point).addScaledVector(nrm, 0.03);
+      f.pool.lookAt(org.copy(f.pool.position).add(nrm));
+      const r = Math.max(0.4, L * Math.tan(hf) * 2.6);
+      f.pool.scale.set(r, r, 1);
+      f.pool.material.color.copy(tmpC).multiplyScalar(dim * (0.55 - state.haze * 0.2));
+    } else f.pool.visible = false;
+  });
+  drawWall(time, beat);
+  if (tween) {
+    const e = Math.min(1, (now - tween.t0) / 900), s = e < 0.5 ? 2 * e * e : 1 - Math.pow(-2 * e + 2, 2) / 2;
+    camera.position.lerpVectors(tween.from, tween.to, s); controls.target.lerpVectors(tween.fromT, tween.toT, s);
+    if (e >= 1) tween = null;
+  }
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+
+/* ---------- Live DMX (sACN / Art-Net via the local bridge) ---------- */
+// Generic 16ch spot profile, 16-bit pan/tilt. Channel numbers are 1-based offsets from the fixture's address.
+//  1-2 pan (540°)   3-4 tilt (270°)   5 dimmer   6 shutter (0-31 open, 32-255 strobe 1-20 Hz)
+//  7 red  8 green  9 blue  10 white   11 zoom (3°-35°)   12-16 reserved (focus, colour wheel, gobo, speed, control)
+// Pan and tilt at 50% point the beam straight along the fixture's hang direction.
+const BRIDGE = window.STAGE_BRIDGE;
+const live = { ws: null, state: BRIDGE ? 'connecting' : 'none', unis: new Map(), sources: [], touched: false };
+const DARK = { pan: 0, tilt: 0, dim: 0, r: 0, g: 0, b: 0, zoom: 9 };
+function liveFixture(i, now) {
+  const at = i * 16, data = live.unis.get(Math.floor(at / 512) + 1);
+  if (!data) return DARK;
+  const o = at % 512, c = (ch) => data[o + ch - 1] || 0;
+  let dim = c(5) / 255;
+  const sh = c(6);
+  if (sh >= 32) { const hz = 1 + (sh - 32) / 223 * 19; if (((now / 1000) * hz) % 1 > 0.35) dim = 0; }
+  const w = c(10) / 255;
+  return {
+    pan: (((c(1) << 8) | c(2)) / 65535 - 0.5) * 540 * DEG,
+    tilt: (((c(3) << 8) | c(4)) / 65535 - 0.5) * 270 * DEG,
+    dim, r: Math.min(1, c(7) / 255 + w), g: Math.min(1, c(8) / 255 + w), b: Math.min(1, c(9) / 255 + w),
+    zoom: 3 + c(11) / 255 * 32,
+  };
+}
+function connectLive() {
+  if (!BRIDGE || live.ws) return;
+  const sock = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/dmx');
+  sock.binaryType = 'arraybuffer';
+  sock.onopen = () => { live.state = 'open'; renderLive(); };
+  sock.onmessage = (e) => {
+    if (typeof e.data === 'string') {
+      try { live.sources = JSON.parse(e.data).sources || []; } catch (_) { live.sources = []; }
+      renderLive();
+      return;
+    }
+    const u = new DataView(e.data).getUint16(0);
+    live.unis.set(u, new Uint8Array(e.data, 2, 512));
+    if (!live.touched && state.control !== 'live') { state.control = 'live'; $('#control').value = 'live'; renderLive(); }
+  };
+  sock.onclose = () => { live.ws = null; live.state = 'closed'; renderLive(); setTimeout(connectLive, 1500); };
+  live.ws = sock;
+}
+function renderLive() {
+  const el = $('#liveOut'), opt = $('#control option[value="live"]');
+  opt.disabled = !BRIDGE;
+  let st = 'off', html;
+  if (!BRIDGE) html = 'Live DMX needs the local bridge: run <code>npm start</code> and open <code>http://localhost:8080</code>.';
+  else if (live.state === 'connecting') html = 'Connecting to the bridge…';
+  else if (live.state === 'closed') html = 'Bridge stopped. Reconnecting…';
+  else if (!live.sources.length) html = 'Bridge connected. Waiting for sACN or Art-Net from a console. Patch fixtures from universe 1, address 1.';
+  else { st = 'rx'; html = live.sources.map((s) => `${esc(s.name)} · ${s.proto} U${s.universe} · ${s.pps} pkt/s`).join('<br>'); }
+  el.dataset.state = st;
+  el.innerHTML = html;
+}
+const esc = (t) => String(t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+
+/* ---------- Readouts, patch, scene data ---------- */
+function updateReadouts() {
+  const s = state;
+  $('#hudTitle').textContent = NAMES[s.tpl];
+  const px = (m) => Math.round(m * 1000 / s.pitch);
+  const nScreens = screens.length;
+  $('#hudSpec').textContent = `${s.W.toFixed(1)} × ${s.D.toFixed(1)} m deck · ${s.H.toFixed(1)} m high · trim ${(s.H + s.trim).toFixed(1)} m AFF · ${fixtures.length} fixtures · ${nScreens} LED surface${nScreens === 1 ? '' : 's'}`;
+  $('#wallOut').textContent = `${s.wallW.toFixed(1)} × ${s.wallH.toFixed(1)} m · ${px(s.wallW)} × ${px(s.wallH)} px · ${Math.round(s.wallW / 0.5) * Math.round(s.wallH / 0.5)} cabinets (500 mm)`;
+  $('#pitchOut').textContent = `${s.pitch} mm pitch`;
+}
+function addr(i) { const a = i * 16; return { u: Math.floor(a / 512) + 1, a: (a % 512) + 1 }; }
+function renderPatch() {
+  const rows = fixtures.map((f, i) => { const { u, a } = addr(i); return `<tr><td>${f.id}</td><td>${f.truss}${f.flip ? '' : ' (floor)'}</td><td>${u}.${String(a).padStart(3, '0')}</td><td>Spot 16ch</td></tr>`; });
+  $('#patchBody').innerHTML = rows.join('');
+  const last = fixtures.length ? addr(fixtures.length - 1).u : 0;
+  $('#patchSum').textContent = `${fixtures.length} fixtures · ${last} universe${last === 1 ? '' : 's'}`;
+}
+function sceneJSON() {
+  const s = state;
+  const data = {
+    format: 'MVR-shaped scene (prototype, not yet a real .mvr)',
+    venue: { template: s.tpl, stage: { width: s.W, depth: s.D, deckHeight: s.H }, trimAboveDeck: s.trim },
+    layers: [
+      { name: 'Truss', objects: trussList.map((t) => ({ type: 'Truss', name: t.name, from: t.from, to: t.to, section: t.section })) },
+      { name: 'Fixtures', objects: fixtures.map((f, i) => { const { u, a } = addr(i); return { type: 'Fixture', fixtureId: f.id, gdtfSpec: 'Generic@Spot_16ch.gdtf', gdtfMode: 'Standard 16ch', address: { universe: u, channel: a }, position: f.pos.toArray().map(r2), hanging: f.flip, focus: f.truss }; }) },
+      { name: 'Video', objects: screens.map((sc) => ({ type: 'VideoScreen', name: sc.name, size: [sc.w, sc.h].map(r2), position: sc.mesh.position.toArray().map(r2), pixelPitchMm: s.pitch, source: s.visual })) },
+    ],
+  };
+  return JSON.stringify(data, null, 2);
+}
+
+/* ---------- Media upload ---------- */
+const media = { el: null, url: null };
+$('#media').addEventListener('change', (e) => {
+  const file = e.target.files && e.target.files[0]; if (!file) return;
+  if (media.url) URL.revokeObjectURL(media.url);
+  if (media.el && media.el.pause) media.el.pause();
+  media.url = URL.createObjectURL(file);
+  if (file.type.startsWith('video/')) {
+    const v = document.createElement('video'); v.src = media.url; v.muted = true; v.loop = true; v.playsInline = true; v.play().catch(() => {}); media.el = v;
+  } else { const img = new Image(); img.src = media.url; media.el = img; }
+});
+
+/* ---------- UI wiring ---------- */
+const tplBox = $('#templates');
+tplBox.innerHTML = Object.entries(TEMPLATES).map(([k, t]) => `<label><input type="radio" name="tpl" id="tpl-${k}" value="${k}"${k === state.tpl ? ' checked' : ''}><b>${t.label}</b><small>${t.blurb}</small></label>`).join('');
+const fmt = { W: (v) => v.toFixed(1), D: (v) => v.toFixed(1), H: (v) => v.toFixed(1), trim: (v) => v.toFixed(1), count: (v) => String(v), bpm: (v) => v + '', zoom: (v) => v + '°', haze: (v) => Math.round(v * 100) + '%', wallW: (v) => v.toFixed(1), wallH: (v) => v.toFixed(1) };
+const rebuildKeys = ['W', 'D', 'H', 'trim', 'count', 'wallW', 'wallH'];
+function syncInputs() {
+  Object.keys(fmt).forEach((k) => { const el = $('#' + k); el.value = state[k]; el.nextElementSibling.textContent = fmt[k](state[k]); });
+  ['program', 'dimfx', 'colorMode', 'visual'].forEach((k) => { $('#' + k).value = state[k]; });
+  $('#textRow').hidden = state.visual !== 'text';
+  $('#mediaRow').hidden = state.visual !== 'media';
+}
+let pending = 0;
+function scheduleBuild(cam) { cancelAnimationFrame(pending); pending = requestAnimationFrame(() => { build(); if (cam) goCam(activeCam === 'crowd' ? 'foh' : activeCam, false); }); }
+Object.keys(fmt).forEach((k) => {
+  $('#' + k).addEventListener('input', (e) => {
+    state[k] = k === 'count' || k === 'bpm' || k === 'zoom' ? parseInt(e.target.value, 10) : parseFloat(e.target.value);
+    e.target.nextElementSibling.textContent = fmt[k](state[k]);
+    if (rebuildKeys.includes(k)) scheduleBuild(false);
+  });
+});
+['program', 'dimfx', 'colorMode'].forEach((k) => $('#' + k).addEventListener('change', (e) => { state[k] = e.target.value; }));
+$('#control').addEventListener('change', (e) => { state.control = e.target.value; live.touched = true; });
+$('#visual').addEventListener('change', (e) => { state.visual = e.target.value; syncInputs(); if ($('#sceneDetails').open) $('#sceneJson').textContent = sceneJSON(); });
+$('#colA').addEventListener('input', (e) => { state.colA = e.target.value; });
+$('#colB').addEventListener('input', (e) => { state.colB = e.target.value; });
+$('#wallText').addEventListener('input', (e) => { state.text = e.target.value; });
+$('#pitch').addEventListener('change', (e) => { state.pitch = parseFloat(e.target.value); screens.forEach((sc) => sc.mesh.material.uniforms.uPixels.value.set(sc.w * 1000 / state.pitch, sc.h * 1000 / state.pitch)); updateReadouts(); });
+tplBox.addEventListener('change', (e) => {
+  const k = e.target.value, t = TEMPLATES[k];
+  Object.assign(state, { tpl: k }, pick(t), { program: t.program, visual: t.visual });
+  syncInputs(); build(); goCam('foh', false);
+});
+document.querySelectorAll('[data-cam]').forEach((b) => b.addEventListener('click', () => goCam(b.dataset.cam)));
+$('#pause').addEventListener('click', (e) => { paused = !paused; e.target.textContent = paused ? 'Play' : 'Pause'; e.target.setAttribute('aria-pressed', String(paused)); });
+$('#sceneDetails').addEventListener('toggle', (e) => { if (e.target.open) $('#sceneJson').textContent = sceneJSON(); });
+$('#copyJson').addEventListener('click', (e) => {
+  const btn = e.target, txt = $('#sceneJson').textContent;
+  const done = (ok) => { btn.textContent = ok ? 'Copied' : 'Select the text above to copy'; setTimeout(() => { btn.textContent = 'Copy JSON'; }, 1800); };
+  try { navigator.clipboard.writeText(txt).then(() => done(true), () => { selectPre(); done(false); }); } catch (_) { selectPre(); done(false); }
+});
+function selectPre() { const r = document.createRange(); r.selectNodeContents($('#sceneJson')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+
+function resize() {
+  const v = $('#view'), w = v.clientWidth, h = v.clientHeight;
+  if (!w || !h) return;
+  renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe($('#view'));
+
+syncInputs();
+renderLive();
+connectLive();
+build();
+resize();
+goCam('foh', true);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => {});
+requestAnimationFrame(tick);
+})();
+</script>

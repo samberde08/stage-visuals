@@ -1,0 +1,13 @@
+{
+  "name": "stage-visuals",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Browser stage previsualizer with live sACN / Art-Net input from a lighting console",
+  "license": "UNLICENSED",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node bridge/server.js",
+    "fake-console": "node tools/fake-console.js",
+    "test": "node --test test/*.test.js"
+  }
+}
