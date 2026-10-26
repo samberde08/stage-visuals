@@ -40,6 +40,7 @@ function parseRange(s) {
 }
 
 const PAGE = path.join(__dirname, '..', 'app', 'stage.html');
+const VENUES = path.join(__dirname, '..', 'app', 'venues.js');
 // The visualizer source is a body fragment (the same file is published as a claude.ai artifact),
 // so the bridge wraps it in a document and flags that live DMX is available.
 function renderPage() {
@@ -97,6 +98,9 @@ function start(opts) {
     if (url === '/' || url === '/index.html') {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
       res.end(renderPage());
+    } else if (url === '/venues.js') {
+      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' });
+      res.end(fs.readFileSync(VENUES, 'utf8'));
     } else if (url === '/status.json') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ sources: merger.status(), clients: clients.size, video: videoStatus() }));
