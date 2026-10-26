@@ -66,3 +66,23 @@ test('mix of clubs and festival stages', () => {
   const kinds = VENUES.reduce((a, v) => ({ ...a, [v.kind]: (a[v.kind] || 0) + 1 }), {});
   assert.ok(kinds.club >= 12 && kinds.festival >= 10, JSON.stringify(kinds));
 });
+
+test('outdoor scenery uses shipped HDRIs and known feature types', () => {
+  const hdri = new Set(fs.readdirSync(path.join(__dirname, '..', 'app', 'hdri')).filter((f) => f.endsWith('_1k.hdr')).map((f) => f.replace('_1k.hdr', '')));
+  const types = new Set(['skyline', 'blocks', 'mountains', 'water', 'trees', 'treelights', 'stand', 'glow']);
+  const withScenery = VENUES.filter((v) => v.scenery);
+  assert.ok(withScenery.length >= 15, 'most outdoor venues have scenery');
+  for (const v of withScenery) {
+    const sc = v.scenery;
+    assert.ok(v.setting !== 'indoor', `${v.id} is outdoors`);
+    for (const k of ['hdri', 'dusk']) assert.ok(hdri.has(sc[k]), `${v.id}.${k}: ${sc[k]}`);
+    assert.ok(sc.night === null || hdri.has(sc.night), `${v.id}.night: ${sc.night}`);
+    assert.ok(typeof sc.basis === 'string' && sc.basis.length > 20, `${v.id} says what the scenery is based on`);
+    assert.ok(v.audienceFacing !== null, `${v.id} needs an audience direction to place scenery`);
+    for (const f of sc.features) {
+      assert.ok(types.has(f.type), `${v.id}: ${f.type}`);
+      if ('bearing' in f) assert.ok(f.bearing >= 0 && f.bearing < 360, `${v.id}: bearing ${f.bearing}`);
+      if (f.type === 'skyline') assert.ok(f.dist > 0 && f.width > 0 && f.towers.every((h) => h > 0 && h < 600), `${v.id}: ${f.name}`);
+    }
+  }
+});
