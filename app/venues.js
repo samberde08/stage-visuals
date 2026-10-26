@@ -569,6 +569,32 @@
     },
   ];
 
+  /* Photos of the real places, freely licensed on Wikimedia Commons. `file` is the Commons file name (its page names
+   * the photographer and licence), `view` what it shows: 'show' (during an event), 'site' (the place, no show on) or
+   * 'outside' (the building the venue is in). Venues with no freely licensed photo are left out. */
+  const PHOTOS = {
+    'red-rocks': { file: 'Red_Rocks_Amphitheater.JPG', view: 'site' },
+    'the-gorge': { file: 'Gorge_Amphitheatre.jpg', view: 'site' },
+    'brooklyn-mirage': { file: 'Glass_Animals_-_Brooklyn_Mirage_2022_07.jpg', view: 'show' },
+    'knockdown-center': { file: 'Alice_Longyu_Gao_Knockdown_Center_2024.jpg', view: 'show' },
+    'echostage': { file: 'Echostage_Washington,_D.C._1.jpg', view: 'site' },
+    'club-space': { file: 'Club_Space_in_Downtown_Miami.jpg', view: 'outside' },
+    'exchange-la': { file: 'Los_Angeles_Stock_Exchange_Building.jpg', view: 'outside' },
+    'xs-las-vegas': { file: 'Encore,_Las_Vegas_Strip.jpg', view: 'outside' },
+    'smartbar': { file: 'TheMetroChicagoJI1.jpg', view: 'outside' },
+    'edc-kineticfield': { file: 'Electric_Daisy_Carnival_2011_-_Main_Stage.jpg', view: 'show' },
+    'edc-circuitgrounds': { file: 'Electric_Daisy_Carnival_2011.jpg', view: 'show' },
+    'coachella-sahara': { file: 'Coachella_2014_Week_2_Day_2_-_Sahara_Tent.jpg', view: 'show' },
+    'ultra-main': { file: 'Panoramic_View_of_Bayfront_Park_during_the_2013_Ultra_Music_Festival_in_Miami,_Florida.jpg', view: 'show' },
+    'ultra-resistance': { file: 'Panoramic_View_of_Bayfront_Park_during_the_2013_Ultra_Music_Festival_in_Miami,_Florida.jpg', view: 'show' },
+    'ef-ranch-arena': { file: 'Electric_Forest_(29357092918).jpg', view: 'show' },
+    'ef-sherwood-court': { file: 'Electric_Forest_(29357092918).jpg', view: 'show' },
+    'lolla-perrys': { file: 'Lollapalooza_2015.JPG', view: 'show' },
+    'movement-detroit': { file: 'Hart_Plaza_Detroit.jpg', view: 'site' },
+    'crssd-city-steps': { file: 'Waterfront_Park,_San_Diego_County_Administration_Center_1.jpg', view: 'site' },
+  };
+  VENUES.forEach((v) => { if (PHOTOS[v.id]) v.photo = PHOTOS[v.id]; });
+
   if (typeof module !== 'undefined' && module.exports) module.exports = VENUES;
   else root.STAGE_VENUES = VENUES;
 })(this);
