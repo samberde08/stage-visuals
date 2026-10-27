@@ -30,6 +30,25 @@ Nothing is copied from venue drawings, and festival stages are proportions for t
 - **Venue photos.** Picking a real venue shows a photo of the place from Wikimedia Commons where a freely licensed one exists (19 of the 30), with a link to its photographer and licence, plus a link to search for more. These load from Wikimedia when you run the app; the online preview can't load outside images, so it shows the links instead.
 - **Venue sound.** With *Sound: In the venue*, music plays through the room you're standing in: a reverb tail for the kind of space (short outdoors, long in a warehouse or arena), a slap back off the rocks at Red Rocks and off the stands in a stadium, high end lost to distance from the PA, the PA placed around your head in 3D, and a crowd that roars on the drop. Reverb times are typical for each kind of space, not measurements of these venues. Headphones help.
 
+### Real sites in 3D (venue packs)
+
+Red Rocks is no longer drawn from a template. It is the real site, built from public survey data by `tools/venue3d/build_pack.py`:
+
+- **Ground and rocks** come from USGS 3DEP aerial lidar (Denver regional survey, 2020): about 2.5 million laser returns within 370 m of the stage, turned into a 0.5 m height grid 512 m across. Creation Rock, Ship Rock, the paths, the bowl and the hills behind it are the real shapes, not sculpted stand-ins. In the app the grid becomes an adaptive mesh that stays within 7 cm of the survey, so rock faces stay sharp and flat ground uses few triangles.
+- **Rows, roof and trees** are measured from the same points. The stage roof is the largest high, flat patch of returns (34 × 22 m, which agrees with the published 8,500 sq ft). The rows repeat every 1.215 m in the ground returns across the bowl, and 69 of them rise 30.7 m, which matches the published 69 rows and 100 ft drop. Each row's height follows the lidar ground along it. Where the bowl ends is where the trees and rock begin. Every tree taller than 2.5 m is placed where the lidar found it, at its measured height and crown width: about 1,600 of them.
+- **Colour** is Sentinel-2 satellite imagery (10 m), sharpened with the lidar's own return brightness (0.5 m). Up close, sandstone and soil grain take over, and steep rock faces get the sandstone's own colour. The bake also stores how much sky each spot sees, so hollows, cracks and the ground under trees are darker in daylight.
+- **The horizon** is real land out to 25 km (AWS Terrain Tiles): the foothills behind the rows, the hogback and the plains out to Denver, dropped for the curve of the earth. Land beyond 240 m is drawn closer than it really is, at the same angle you would see it from the rows, so it fits inside the sky.
+
+Anything that can be measured is measured, and the rest is labelled as estimated in the venue's facts. The stage deck, rig, PA and LED wall still come from the venue's published specs.
+
+**Adding a site.** Any US venue covered by 3DEP lidar can get a pack: copy `tools/venue3d/red-rocks.json`, set the venue's position, the lidar project (listed at https://usgs-lidar-public.s3.amazonaws.com/?delimiter=/), a cloud-free Sentinel-2 scene and roughly where the stage roof is, run `python3 tools/venue3d/build_pack.py tools/venue3d/<venue>.json`, and add `pack: '<venue>'` to its entry in `app/venues.js`. Rebuilding needs Python with `numpy scipy pillow pyproj rasterio laspy lazrs` and takes about a minute. It downloads only from open AWS buckets that need no account.
+
+**Next steps for a pack:**
+
+1. Hand-modelled parts in Blender, exported as glTF, placed in the pack's frame: the stage house and backstage, railings, light poles, stairs and signage. The lidar gives exact positions to model against.
+2. Photogrammetry or Gaussian splats of the rock faces, from photos taken on site (with permission), for detail the lidar is too sparse to show.
+3. Indoor venues have no lidar from the air. They need a scan from inside (iPhone LiDAR with Polycam or Scaniverse) or a model built from the venue's plans.
+
 ### Further realism, using your Mac
 
 These need assets or hardware the cloud build can't fetch:
@@ -103,6 +122,8 @@ bridge/server.js     HTTP page + WebSocket /dmx + UDP receivers, merges sources,
 bridge/dmx.js        sACN and Art-Net parsers and builders, source merge
 bridge/ws.js         minimal WebSocket server
 tools/fake-console.js  sends a test show over sACN or Art-Net
+tools/venue3d/       builds venue packs (the real site in 3D) from public lidar, imagery and terrain
+app/venues3d/        the built packs: height grids, colour, measured rows, roof and trees
 touchdesigner/       sender script for live TouchDesigner video
 test/                node --test suite (npm test)
 ```

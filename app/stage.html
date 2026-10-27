@@ -132,6 +132,7 @@ details .btn { margin: 0 10px 10px; }
         <figcaption id="venueCap"></figcaption>
       </figure>
       <div class="note venue-note" id="venueNote" hidden></div>
+      <p class="note" id="packNote" role="status" hidden></p>
       <div class="chips" id="templates"></div>
     </section>
 
@@ -636,7 +637,7 @@ function clearOfVenue(box) { return (x, z, pad = 4) => x < box.min.x - pad || x 
 const SCENERY = {
   // City towers: the listed heights are real buildings, filled out with lower ones across the cluster's width.
   skyline(f, g) {
-    const { dir, side, s, r } = aim(f), mat = facadeMat(f, f.color || 0x7d8590, f.windows ?? 0.85);
+    const { dir, side, s, r } = aim(f, f.R), mat = facadeMat(f, f.color || 0x7d8590, f.windows ?? 0.85);
     const hs = [...(f.towers || [])].concat(Array.from({ length: f.fill || 0 }, () => rnd(...(f.fillH || [40, 120]))));
     hs.sort(() => Math.random() - 0.5);
     const tall = [];
@@ -783,7 +784,14 @@ function buildScenery() {
   const o = state.room || {};
   if (o.crowdW) { box.min.x = Math.min(box.min.x, -o.crowdW / 2); box.max.x = Math.max(box.max.x, o.crowdW / 2); box.max.z = Math.max(box.max.z, (o.crowdDepth || 0) + 10); }
   const clear = clearOfVenue(box);
-  (spec.features || []).forEach((f) => { if (SCENERY[f.type]) SCENERY[f.type](f, g, clear); });
+  // With a venue pack the land, rocks and trees are real, so only far-off features are added. They sit at the
+  // distance the pack's land is drawn at, at their real height below the rows.
+  const feats = camSet.pack ? (spec.features || []).filter((f) => f.type === 'skyline' || f.type === 'glow').map((f) => {
+    if (f.type !== 'skyline') return f;
+    const R = packR(f.dist), k = R / f.dist, y = (f.ground ?? 0) - camSet.pack.m.elevation - f.dist * f.dist / (2 * EARTH_R);
+    return { ...f, R, base: (PACK_EYE + (y - PACK_EYE) * k) / k };
+  }) : spec.features || [];
+  feats.forEach((f) => { if (SCENERY[f.type]) SCENERY[f.type](f, g, clear); });
   surround.glow = (spec.features || []).filter((f) => f.type === 'glow').slice(0, 2).map((f) => aim({ ...f, dist: 1 }));
   surround.glow.forEach((gl, i) => { gl.w = spec.features.filter((f) => f.type === 'glow')[i].strength || 1; });
   venue.add(g);
@@ -1496,7 +1504,13 @@ function treeParts(kind) {
   if (TREE_GEO[kind]) return TREE_GEO[kind];
   const jag = (g, amt, seed) => { const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i), z = p.getZ(i), n = noise3(x * 1.3 + seed, y * 1.3, z * 1.3) - 0.5; p.setXYZ(i, x * (1 + n * amt), y + n * amt * 0.6, z * (1 + n * amt)); } g.computeVertexNormals(); return g; };
   let crown, trunk;
-  if (kind === 'broad') {
+  if (kind === 'ponderosa') {
+    // Ponderosa pine, 16 m: a long bare trunk and an open, clumped crown over its top half.
+    trunk = new THREE.CylinderGeometry(0.16, 0.4, 13, 7); trunk.translate(0, 6.5, 0);
+    const clumps = [];
+    for (let i = 0; i < 9; i++) { const t = i / 8, a = i * 2.4, r = 2.4 * Math.sin(Math.PI * (0.25 + 0.7 * t)) + 0.4; clumps.push([1.5 + 0.8 * (1 - t), Math.cos(a) * r * 0.6, 7 + t * 8.4, Math.sin(a) * r * 0.6]); }
+    crown = mergeGeos(clumps.map(([r, x, y, z], i) => [jag(new THREE.IcosahedronGeometry(r, 1), 0.6, i * 2.7).toNonIndexed(), MX(x, y, z, 0, 0, 0)]));
+  } else if (kind === 'broad') {
     trunk = new THREE.CylinderGeometry(0.22, 0.42, 6, 7); trunk.translate(0, 3, 0);
     crown = mergeGeos([[2.6, 0, 8.6, 0], [1.9, 1.6, 7.6, 0.6], [2.0, -1.5, 7.8, -0.5], [1.7, 0.2, 7.4, -1.6], [1.5, -0.3, 10.3, 0.4]].map(([r, x, y, z], i) => [jag(new THREE.IcosahedronGeometry(r, 2), 0.55, i * 3.1).toNonIndexed(), MX(x, y, z)]));
   } else {
@@ -1555,6 +1569,263 @@ function clubFitOut(roomW, z0, z1, ceil, stageW, opts = {}) {
   const exit = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.1, 2.2, 0.45) });
   [-1, 1].forEach((sx) => box(0.04, 0.16, 0.4, sx * (roomW / 2 - 0.17), 2.4, z1 - 2, exit));
   [-1, 1].forEach((sx) => [0, 1].forEach((k) => box(1.1, 0.6, 0.75, sx * (stageW / 2 - 0.7 - k * 1.15), 0.3, 0.45, PA_MATS)));
+}
+
+/* ---------- Venue packs: the real site, from survey data ---------- */
+// A venue with `pack` in venues.js has a folder in venues3d/ built by tools/venue3d/build_pack.py from public survey
+// data: lidar ground and rocks, measured rows and stage roof, every tree at its real place and height, satellite
+// ground colour and the land out to the horizon. While it loads, or with Surroundings off, the venue is drawn from
+// its template as before. Land beyond PACK_NEAR metres is pulled in towards the audience so it fits inside the sky,
+// keeping the angle it is seen at from the rows (the same trick the scenery uses for distant skylines).
+const PACK_BASE = window.STAGE_PACK_BASE || 'venues3d/';
+const PACK_NEAR = 240, PACK_EDGE = 170, PACK_EYE = 15, PACK_C = 40, EARTH_R = 6371000 / 0.87;
+const packs = {};
+function packR(d) { return d <= PACK_NEAR ? d : PACK_NEAR + PACK_EDGE * (1 - Math.exp(-(d - PACK_NEAR) / 1200)); }
+function activePack() {
+  const v = VENUE_BY_ID[state.venue], p = v && v.pack && packs[v.pack];
+  return p && p.ready && state.surround !== 'off' ? p : null;
+}
+function wantPack() {
+  const v = VENUE_BY_ID[state.venue];
+  if (!v || !v.pack || state.surround === 'off' || packs[v.pack]) return;
+  const p = packs[v.pack] = { ready: false };
+  packNote(v, 'Loading the lidar model of the site…');
+  loadPack(v.pack).then((data) => {
+    Object.assign(p, data, { ready: true });
+    if (state.venue === v.id) { packNote(v, ''); scheduleBuild(false); }
+  }).catch((e) => { p.failed = true; packNote(v, 'The 3D site model could not load, so this is the template version.'); console.warn('venue pack', e); });
+}
+function packNote(v, text) { const el = $('#packNote'); if (el) { el.textContent = text; el.hidden = !text; } }
+function packImage(url) {
+  return fetch(url).then((r) => r.ok ? r.blob() : Promise.reject(new Error(url)))
+    .then((b) => createImageBitmap(b, { premultiplyAlpha: 'none', colorSpaceConversion: 'none' }));
+}
+// Heights are centimetres in red * 256 + green; blue is the baked sky visibility.
+function decodeHeights(bmp, lo) {
+  const c = document.createElement('canvas'); c.width = bmp.width; c.height = bmp.height;
+  const x = c.getContext('2d'); x.drawImage(bmp, 0, 0);
+  const d = x.getImageData(0, 0, c.width, c.height).data, n = c.width * c.height, h = new Float32Array(n), ao = new Uint8Array(n * 4);
+  for (let i = 0; i < n; i++) { h[i] = lo + (d[i * 4] * 256 + d[i * 4 + 1]) / 100; ao[i * 4] = ao[i * 4 + 1] = ao[i * 4 + 2] = d[i * 4 + 2]; ao[i * 4 + 3] = 255; }
+  return { h, ao, size: c.width };
+}
+function loadPack(id) {
+  const base = `${PACK_BASE}${id}/`, tex = (f) => new Promise((res, rej) => new THREE.TextureLoader().load(base + f, (t) => { t.encoding = THREE.sRGBEncoding; t.anisotropy = 8; res(t); }, undefined, rej));
+  return fetch(base + 'manifest.json').then((r) => r.ok ? r.json() : Promise.reject(new Error('manifest'))).then((m) => Promise.all(
+    ['core', 'mid', 'far'].map((k) => Promise.all([packImage(`${base}${k}-height.png`), tex(`${k}-albedo.jpg`)]).then(([bmp, alb]) => ({ k, grid: decodeHeights(bmp, m[k].min), alb })))
+  ).then((layers) => {
+    const out = { m };
+    layers.forEach((l) => { out[l.k] = { ...m[l.k], ...l.grid, alb: l.alb }; });
+    return out;
+  }));
+}
+
+// Right-triangulated irregular network (after Mapbox's Martini, ISC licence): an adaptive mesh of a (2^k + 1)
+// square height grid that keeps the rock faces sharp and spends few triangles on flat ground.
+function rtin(h, size, maxErr) {
+  const tile = size - 1, nTri = tile * tile * 2 - 2, nParent = nTri - tile * tile;
+  const coords = new Uint16Array(nTri * 4), err = new Float32Array(size * size);
+  for (let i = 0; i < nTri; i++) {
+    let id = i + 2, ax = 0, ay = 0, bx = 0, by = 0, cx = 0, cy = 0;
+    if (id & 1) bx = by = cx = tile; else ax = ay = cy = tile;
+    while ((id >>= 1) > 1) {
+      const mx = (ax + bx) >> 1, my = (ay + by) >> 1;
+      if (id & 1) { bx = ax; by = ay; ax = cx; ay = cy; } else { ax = bx; ay = by; bx = cx; by = cy; }
+      cx = mx; cy = my;
+    }
+    coords.set([ax, ay, bx, by], i * 4);
+  }
+  for (let i = nTri - 1; i >= 0; i--) {
+    const k = i * 4, ax = coords[k], ay = coords[k + 1], bx = coords[k + 2], by = coords[k + 3];
+    const mx = (ax + bx) >> 1, my = (ay + by) >> 1, cx = mx + my - ay, cy = my + ax - mx, mid = my * size + mx;
+    err[mid] = Math.max(err[mid], Math.abs((h[ay * size + ax] + h[by * size + bx]) / 2 - h[mid]));
+    if (i < nParent) err[mid] = Math.max(err[mid], err[((ay + cy) >> 1) * size + ((ax + cx) >> 1)], err[((by + cy) >> 1) * size + ((bx + cx) >> 1)]);
+  }
+  const vid = new Int32Array(size * size).fill(-1), verts = [], tris = [];
+  const v = (x, y) => { const k = y * size + x; if (vid[k] < 0) { vid[k] = verts.length / 2; verts.push(x, y); } return vid[k]; };
+  const walk = (ax, ay, bx, by, cx, cy) => {
+    const mx = (ax + bx) >> 1, my = (ay + by) >> 1;
+    if (Math.abs(ax - cx) + Math.abs(ay - cy) > 1 && err[my * size + mx] > maxErr) { walk(cx, cy, ax, ay, mx, my); walk(bx, by, cx, cy, mx, my); } else tris.push(v(ax, ay), v(bx, by), v(cx, cy));
+  };
+  walk(0, 0, tile, tile, tile, 0); walk(tile, tile, 0, 0, 0, tile);
+  return { verts, tris };
+}
+// Plan position of grid cell (col, row) of a layer, in the scene.
+function packXZ(L, f, col, row) {
+  const e = -L.half + col * L.res, n = L.half - row * L.res;
+  return [e * Math.cos(f) - n * Math.sin(f), -(e * Math.sin(f) + n * Math.cos(f))];
+}
+// skip(x, z) drops triangles already covered by the finer layer inside; sink(x, z) lowers vertices under its edge.
+function packMesh(L, f, maxErr, mat, skip, sink) {
+  const { verts, tris } = rtin(L.h, L.size, maxErr), nv = verts.length / 2;
+  const pos = new Float32Array(nv * 3), uv = new Float32Array(nv * 2);
+  for (let i = 0; i < nv; i++) {
+    const c = verts[i * 2], r = verts[i * 2 + 1], [x, z] = packXZ(L, f, c, r);
+    pos.set([x, L.h[r * L.size + c] - (sink ? sink(x, z) : 0), z], i * 3); uv.set([c / (L.size - 1), 1 - r / (L.size - 1)], i * 2);
+  }
+  const idx = [];
+  for (let t = 0; t < tris.length; t += 3) {
+    let [a, b, c] = [tris[t], tris[t + 1], tris[t + 2]];
+    if (skip) { const x = (pos[a * 3] + pos[b * 3] + pos[c * 3]) / 3, z = (pos[a * 3 + 2] + pos[b * 3 + 2] + pos[c * 3 + 2]) / 3; if (skip(x, z)) continue; }
+    // Wind every triangle to face up.
+    const ux = pos[b * 3] - pos[a * 3], uz = pos[b * 3 + 2] - pos[a * 3 + 2], vx = pos[c * 3] - pos[a * 3], vz = pos[c * 3 + 2] - pos[a * 3 + 2];
+    if (uz * vx - ux * vz < 0) [b, c] = [c, b];
+    idx.push(a, b, c);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); g.setAttribute('uv2', g.attributes.uv);
+  g.setIndex(nv > 65535 ? new THREE.Uint32BufferAttribute(idx, 1) : new THREE.Uint16BufferAttribute(idx, 1));
+  // Shade from the true shape, then pull distant land in and drop it for the curve of the earth.
+  g.computeVertexNormals();
+  for (let i = 0; i < nv; i++) {
+    const x = pos[i * 3], z = pos[i * 3 + 2] - PACK_C, d = Math.hypot(x, z);
+    if (d <= PACK_NEAR) continue;
+    const s = packR(d) / d, y = pos[i * 3 + 1] - d * d / (2 * EARTH_R);
+    pos.set([x * s, PACK_EYE + (y - PACK_EYE) * s, z * s + PACK_C], i * 3);
+  }
+  g.computeBoundingSphere();
+  const mesh = new THREE.Mesh(g, mat);
+  mesh.userData.pack = true;
+  return mesh;
+}
+// Ground material: the measured colour, darkened in hollows by the baked sky visibility, with sandstone grain on
+// steep rock and soil grain on the flats, in world space so it holds up when you walk right up to a rock.
+function packGroundMat(L) {
+  const ao = new THREE.DataTexture(L.ao, L.size, L.size, THREE.RGBAFormat); ao.flipY = true; ao.minFilter = THREE.LinearMipmapLinearFilter; ao.magFilter = THREE.LinearFilter; ao.generateMipmaps = true; ao.needsUpdate = true;
+  const m = new THREE.MeshStandardMaterial({ map: L.alb, aoMap: ao, aoMapIntensity: 1, roughness: 0.92 });
+  const rock = surfTexture('sandstone'), soil = surfTexture('rock');
+  const u = { tRock: { value: rock }, tSoil: { value: soil }, uAvgR: { value: rock.avg }, uAvgS: { value: soil.avg } };
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, u);
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vTpP; varying vec3 vTpN;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\n  vTpP = (modelMatrix * vec4(transformed, 1.0)).xyz; vTpN = normalize(mat3(modelMatrix) * objectNormal);');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform sampler2D tRock, tSoil; uniform float uAvgR, uAvgS; varying vec3 vTpP; varying vec3 vTpN; float tpH;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+  vec3 tn = normalize(vTpN), tw = pow(abs(tn), vec3(4.0)); tw /= tw.x + tw.y + tw.z;
+  vec3 tr = vTpP / 9.0, ts = vTpP / 4.0;
+  vec3 rk = mapTexelToLinear(texture2D(tRock, tr.zy) * tw.x + texture2D(tRock, tr.xz) * tw.y + texture2D(tRock, tr.xy) * tw.z).rgb;
+  vec3 sl = mapTexelToLinear(texture2D(tSoil, ts.zy) * tw.x + texture2D(tSoil, ts.xz) * tw.y + texture2D(tSoil, ts.xy) * tw.z).rgb;
+  // Seen from above, a cliff gets only a smear of colour, so steep faces take the sandstone's own colour, matched to the measured brightness.
+  float steep = smoothstep(0.45, 0.8, 1.0 - abs(tn.y));
+  float lum = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11));
+  vec3 grain = mix(vec3(sl.g / uAvgS), vec3(rk.g / uAvgR), steep);
+  diffuseColor.rgb = mix(diffuseColor.rgb, rk * (0.55 + 1.6 * lum), steep * 0.7) * mix(vec3(1.0), clamp(grain, 0.5, 1.6), 0.55);
+  tpH = mix(sl.g / uAvgS, rk.g / uAvgR, steep) * 0.25;`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+  {
+    vec3 tpDx = dFdx(-vViewPosition), tpDy = dFdy(-vViewPosition);
+    float tpHx = dFdx(tpH), tpHy = dFdy(tpH);
+    vec3 tpR1 = cross(tpDy, normal), tpR2 = cross(normal, tpDx);
+    float tpDet = dot(tpDx, tpR1);
+    normal = normalize(abs(tpDet) * normal - 0.9 * sign(tpDet) * (tpHx * tpR1 + tpHy * tpR2));
+  }`);
+  };
+  m.customProgramCacheKey = () => 'packGround';
+  return m;
+}
+// Height of the ground (not the rows) at a scene point, from the core grid; null outside it.
+function packGroundY(p, x, z) {
+  const L = p.core, f = p.m.facing * DEG, e = x * Math.cos(f) - z * Math.sin(f), n = -x * Math.sin(f) - z * Math.cos(f);
+  const c = (e + L.half) / L.res, r = (L.half - n) / L.res;
+  if (c < 0 || r < 0 || c >= L.size - 1 || r >= L.size - 1) return null;
+  const c0 = Math.floor(c), r0 = Math.floor(r), fc = c - c0, fr = r - r0, k = r0 * L.size + c0, h = L.h;
+  return (h[k] * (1 - fc) + h[k + 1] * fc) * (1 - fr) + (h[k + L.size] * (1 - fc) + h[k + L.size + 1] * fc) * fr;
+}
+// Row under a scene point: { row, deg, y } when on a row's tread.
+function packRowAt(p, x, z) {
+  const S = p.m.seating, xc = x - S.centreX, rr = Math.hypot(xc, z + S.focus) - S.focus, deg = Math.atan2(xc, z + S.focus) / DEG;
+  const i = Math.floor((rr - S.rows[0][0]) / S.rowDepth), row = S.rows[i];
+  if (!row || deg < row[1] || deg > row[2]) return null;
+  return { row, i, deg, rr, y: row[3] + row[4] * deg + row[5] * deg * deg };
+}
+function rowPoint(S, rad, deg, y) { const a = deg * DEG; return V(S.centreX + rad * Math.sin(a), y, -S.focus + rad * Math.cos(a)); }
+// The rows as built: a concrete step for each, its height following the lidar ground along the row, and the long
+// bench along its front edge.
+function packRows(S) {
+  const stone = [], wood = [], rise = S.rise;
+  const quad = (arr, a, b, c, d) => arr.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z, a.x, a.y, a.z, c.x, c.y, c.z, d.x, d.y, d.z);
+  S.rows.forEach((row) => {
+    const [r, a0, a1, h0, h1, h2] = row, R1 = S.focus + r, R2 = R1 + S.rowDepth, hy = (d) => h0 + h1 * d + h2 * d * d;
+    const n = Math.max(2, Math.ceil((a1 - a0) * DEG * R1 / 0.8));
+    for (let j = 0; j < n; j++) {
+      const da = a0 + (a1 - a0) * j / n, db = a0 + (a1 - a0) * (j + 1) / n, ya = hy(da), yb = hy(db);
+      quad(stone, rowPoint(S, R1, da, ya), rowPoint(S, R2, da, ya), rowPoint(S, R2, db, yb), rowPoint(S, R1, db, yb));
+      quad(stone, rowPoint(S, R1, da, ya - rise - 0.6), rowPoint(S, R1, da, ya), rowPoint(S, R1, db, yb), rowPoint(S, R1, db, yb - rise - 0.6));
+      // Bench: a slatted seat 0.43 m up on a concrete plinth along the front of the row.
+      const b0 = R1 + 0.1, b1 = R1 + 0.46, top = 0.43;
+      quad(wood, rowPoint(S, b0, da, ya + top), rowPoint(S, b1, da, ya + top), rowPoint(S, b1, db, yb + top), rowPoint(S, b0, db, yb + top));
+      quad(wood, rowPoint(S, b0, da, ya + top - 0.07), rowPoint(S, b0, da, ya + top), rowPoint(S, b0, db, yb + top), rowPoint(S, b0, db, yb + top - 0.07));
+      quad(stone, rowPoint(S, b0 + 0.08, da, ya), rowPoint(S, b0 + 0.08, da, ya + top - 0.07), rowPoint(S, b0 + 0.08, db, yb + top - 0.07), rowPoint(S, b0 + 0.08, db, yb));
+      quad(stone, rowPoint(S, b1 - 0.06, db, yb), rowPoint(S, b1 - 0.06, db, yb + top - 0.07), rowPoint(S, b1 - 0.06, da, ya + top - 0.07), rowPoint(S, b1 - 0.06, da, ya));
+    }
+  });
+  const mk = (arr, mat) => {
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3)); g.computeVertexNormals();
+    const m = new THREE.Mesh(g, mat); venue.add(m); receivers.push(m); return m;
+  };
+  mk(stone, M.bowl); mk(wood, M.wood);
+}
+// Trees from the lidar canopy: tall ones as ponderosa pines, short ones as juniper and scrub oak.
+function packTrees(p, S) {
+  const list = p.m.trees.filter(([x, z]) => !packRowAt(p, x, z) && !(Math.abs(x - p.m.roof.at[0]) < p.m.roof.width / 2 + 1 && Math.abs(z - p.m.roof.at[1]) < p.m.roof.depth / 2 + 1));
+  const groups = [['ponderosa', list.filter((t) => t[3] >= 6), 0x182614, 16], ['broad', list.filter((t) => t[3] < 6), 0x232b18, 11.5]];
+  const mtx = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), pos = new THREE.Vector3();
+  groups.forEach(([kind, ts, col, h0]) => {
+    if (!ts.length) return;
+    const { trunk, crown } = treeParts(kind), r0 = 2.6;
+    const trunks = new THREE.InstancedMesh(trunk, new THREE.MeshStandardMaterial({ color: 0x2e241b, roughness: 1 }), ts.length);
+    const crowns = new THREE.InstancedMesh(crown, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1 }), ts.length);
+    ts.forEach(([x, z, y, h, r], i) => {
+      const sy = h / h0, sxz = Math.max(0.35, Math.min(1.3, r / r0, sy * 1.2));
+      q.setFromAxisAngle(up, (x * 7.13 + z * 3.7) % (Math.PI * 2));
+      mtx.compose(pos.set(x, y - 0.2, z), q, sc.set(sxz, sy, sxz)); trunks.setMatrixAt(i, mtx); crowns.setMatrixAt(i, mtx);
+    });
+    tintTrees(crowns, col, ts.length);
+    trunks.castShadow = crowns.castShadow = true; trunks.receiveShadow = crowns.receiveShadow = true;
+    venue.add(trunks, crowns);
+  });
+}
+// Red Rocks and any other pack venue: the stage from the venue's own numbers under the measured roof, set into the
+// real site.
+function packAmphi(s, p) {
+  const { W, D, H, trim } = s, m = p.m, o = s.room, S = m.seating, f = m.facing * DEG, top = H + trim;
+  // Ground: the core lidar grid, then the land to the horizon in two coarser rings, each overlapping the one inside.
+  const core = p.core, cHalf = core.half * 0.98, mHalf = p.mid.half * 0.97;
+  const inSquare = (L, half) => (x, z) => { const e = x * Math.cos(f) - z * Math.sin(f), n = -x * Math.sin(f) - z * Math.cos(f); return Math.abs(e) < half && Math.abs(n) < half; };
+  const groundMesh = packMesh(core, f, 0.07, p.groundMat || (p.groundMat = packGroundMat(core)));
+  venue.add(groundMesh);
+  const mid = packMesh(p.mid, f, 0.6, p.midMat || (p.midMat = new THREE.MeshStandardMaterial({ map: p.mid.alb, roughness: 1 })), inSquare(p.mid, cHalf - 30), (x, z) => (inSquare(p.mid, cHalf + 10)(x, z) ? 2 : 0));
+  const far = packMesh(p.far, f, 3, p.farMat || (p.farMat = new THREE.MeshStandardMaterial({ map: p.far.alb, roughness: 1 })), inSquare(p.far, mHalf - 300), (x, z) => (inSquare(p.far, mHalf + 100)(x, z) ? 25 : 0));
+  venue.add(mid, far);
+  [mid, far].forEach((g) => { g.userData.noShadow = true; });
+  // Stage deck and the measured roof on four columns, with the rigging grid at the venue's trim.
+  box(W, H + 0.6, D, 0, (H - 0.6) / 2, -D / 2, M.deck, true);
+  const R = m.roof, rx = R.width / 2 - 0.6, z0 = R.at[1] + R.depth / 2 - 0.6, z1 = R.at[1] - R.depth / 2 + 0.6;
+  [[-rx, z0], [rx, z0], [-rx, z1], [rx, z1]].forEach(([x, z], i) => truss(`Column ${i + 1}`, V(x, -0.5, z), V(x, R.top - 1.4, z), 0.76));
+  box(R.width, 1.2, R.depth, R.at[0], R.top - 0.6, R.at[1], M.roof);
+  truss('Roof DS', V(-rx, R.top - 1.6, z0), V(rx, R.top - 1.6, z0), 0.76);
+  truss('Roof US', V(-rx, R.top - 1.6, z1), V(rx, R.top - 1.6, z1), 0.76);
+  box(W + 4, top + 1, 0.4, 0, (top + 1) / 2, -D - 0.5, M.skirt);
+  const lx = W * 0.44;
+  [-1.2, -D * 0.36, -D * 0.66].forEach((z, i) => truss(`Pod ${'ABC'[i]}`, V(-lx, top, z), V(lx, top, z), 0.4, { hang: true }));
+  [-1, 1].forEach((sx) => { for (let i = 0; i < 4; i++) { const b = box(1.3, 0.38, 0.9, sx * (W / 2 + 1.5), top - 1 - i * 0.4, 0.2, PA_MATS); b.rotation.x = i * 2.5 * DEG; } });
+  if (o.pa === 'lcr') for (let i = 0; i < 4; i++) { const b = box(1.3, 0.38, 0.9, 0, top - 0.4 - i * 0.4, 0.4, PA_MATS); b.rotation.x = i * 2.5 * DEG; }
+  mainWall = screen('Upstage LED', s.wallW, s.wallH, V(0, H + 0.5 + s.wallH / 2, -D + 0.5));
+  packRows(S);
+  // The mix position in the middle of the rows, where the lidar shows a raised platform.
+  const foh = packRowAt(p, S.centreX, 18.6);
+  if (foh) { const k = venue.children.length; fohTent(S.centreX, 18.6); venue.children[k].position.y = foh.y; }
+  packTrees(p, S);
+  [-0.42, -0.15, 0.15, 0.42].forEach((u) => laser(u * W, H, -0.5, 0));
+  const rows = S.rows;
+  crowd(o.crowdN || 2000, () => {
+    const row = rows[Math.floor(Math.random() * rows.length)], deg = row[1] + Math.random() * (row[2] - row[1]);
+    if (Math.abs(deg) < 3.2 && row[0] > 15 && row[0] < 22.5) return null;
+    return rowPoint(S, S.focus + row[0] + 0.55 + Math.random() * (S.rowDepth - 0.65), deg, row[3] + row[4] * deg + row[5] * deg * deg);
+  });
+  const at = (r) => { const q = packRowAt(p, S.centreX + 2, r) || { y: 0 }; return q.y; };
+  return { target: V(0, H + 4, -D / 2), front: 34, fohY: at(34) + 1.9, crowdEye: V(2, at(10.6) + 1.7, 10.6), pack: p };
 }
 
 /* ---------- Template builders ---------- */
@@ -1762,6 +2033,8 @@ const BUILD = {
   },
   // Raked bowl in front of a roofed stage. Rows are concentric arcs spanning `fan` degrees, centred on +z.
   amphi(s) {
+    const pk = activePack();
+    if (pk) return packAmphi(s, pk);
     const { W, D, H, trim } = s, o = s.room, top = H + trim;
     const rows = o.rows || 40, rd = o.rowDepth || 1, rise = o.rise || 0.4, fan = (o.fan || 70) * DEG, r0 = o.r0 || Math.max(10, W * 0.6);
     box(W, H, D, 0, H / 2, -D / 2, M.deck, true);
@@ -1945,8 +2218,10 @@ function build() {
   receivers = []; fixtures = []; trussList = []; screens = []; hangLines = [];
   crowds = []; laserSpots = []; lasers = []; glowMats = [];
   const spec = scenerySpec();
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(spec ? 1000 : 400, spec ? 1000 : 400), spec ? groundMat(spec.ground) : M.floor);
-  floor.rotation.x = -Math.PI / 2; venue.add(floor); receivers.push(floor);
+  wantPack();
+  // A venue pack brings its own ground.
+  const floor = activePack() ? null : new THREE.Mesh(new THREE.PlaneGeometry(spec ? 1000 : 400, spec ? 1000 : 400), spec ? groundMat(spec.ground) : M.floor);
+  if (floor) { floor.rotation.x = -Math.PI / 2; venue.add(floor); receivers.push(floor); }
   sizeWallCanvas(state.wallW / state.wallH);
   camSet = BUILD[state.tpl](state);
   finishCrowds(camSet.target);
@@ -1960,7 +2235,7 @@ function build() {
   wallLight.position.copy(mw.position).addScaledVector(n, 3);
   wallLight.distance = Math.max(18, state.wallW * 2.4);
   // Solid, lit surfaces take part in sun shadows; beams, glows and LED faces do not.
-  venue.traverse((o) => { if (o.isMesh && !o.material.isShaderMaterial && !o.material.isMeshBasicMaterial && !o.material.transparent) { o.castShadow = o !== floor; o.receiveShadow = true; } });
+  venue.traverse((o) => { if (o.isMesh && !o.material.isShaderMaterial && !o.material.isMeshBasicMaterial && !o.material.transparent && !o.userData.noShadow) { o.castShadow = o !== floor; o.receiveShadow = true; } });
   buildScenery();
   setSurroundings();
   setRoom();
@@ -1972,12 +2247,13 @@ function build() {
 
 /* ---------- Cameras ---------- */
 let tween = null, activeCam = 'foh', droneAng = 0;
-function droneOrbit() { const { W, D, H } = state; return { R: Math.max(W, D) * 1.1 + 14, h: H + Math.max(W, D) * 0.35 + 7 }; }
+function droneOrbit() { const { W, D, H } = state; if (camSet.pack) return { R: 120, h: 75 }; return { R: Math.max(W, D) * 1.1 + 14, h: H + Math.max(W, D) * 0.35 + 7 }; }
 function camPose(kind) {
   const t = camSet.target, { W, D, H, trim } = state, span = Math.max(W, D) + 10;
   switch (kind) {
     case 'crowd': { const wp = mainWall.getWorldPosition(new THREE.Vector3()); return { pos: camSet.crowdEye.clone(), target: wp }; }
-    case 'wide': return { pos: V(span * 0.95, H + trim + 7, t.z + span * 1.05), target: t.clone() };
+    // On a real site, Wide is the view from the top of the rows.
+    case 'wide': if (camSet.pack) return { pos: V(14, 34, 96), target: V(0, 4, -10) }; return { pos: V(span * 0.95, H + trim + 7, t.z + span * 1.05), target: t.clone() };
     case 'side': return { pos: V(W / 2 + 2.5, H + 2.2, t.z + D * 0.45 + 1), target: V(-W * 0.1, H + trim * 0.45, t.z) };
     case 'drone': { const o = droneOrbit(); return { pos: V(t.x, o.h, t.z + o.R), target: t.clone() }; }
     case 'dj': case 'behind': {
@@ -2020,7 +2296,10 @@ const downRay = new THREE.Raycaster(), DOWN = new THREE.Vector3(0, -1, 0), EYE =
 function groundAt(x, z, from) {
   downRay.set(org.set(x, from + 1.0, z), DOWN); downRay.far = 40;
   const hit = downRay.intersectObjects(receivers, false).find((h) => h.face && Math.abs(nrm.copy(h.face.normal).transformDirection(h.object.matrixWorld).y) > 0.5);
-  return hit ? hit.point.y : null;
+  // On a venue pack the lidar ground is read straight from its height grid.
+  const g = camSet.pack ? packGroundY(camSet.pack, x, z) : null;
+  if (hit && (g === null || hit.point.y > g)) return hit.point.y;
+  return g;
 }
 function enterWalk() {
   const e = camSet.crowdEye, t = camSet.target;
@@ -2273,7 +2552,8 @@ function tick(now) {
   colA.set(state.colA); colB.set(state.colB);
   const n = fixtures.length, half = state.zoom / 2 * DEG, k = Math.tan(half) / Math.tan(BASE_HALF);
   const hz = (0.05 + Math.min(1, state.haze + (drop === 'on' ? 0.2 : 0)) * 0.55) * (1 - 0.8 * look.day);
-  scene.fog.density = (0.004 + state.haze * 0.012) * (1 - 0.65 * look.day);
+  // A real site runs hundreds of metres out, so the stage haze thins with distance there rather than hiding the rocks.
+  scene.fog.density = (0.004 + state.haze * 0.012) * (1 - 0.65 * look.day) * (camSet.pack ? 0.45 : 1);
   shared.uTime.value = time; shared.uHaze.value = state.haze;
   rimSum.setRGB(0, 0, 0);
   const glareK = (1 - 0.75 * look.day) * (highOn() ? 1 : 0.6);
