@@ -2253,7 +2253,7 @@ function camPose(kind) {
   switch (kind) {
     case 'crowd': { const wp = mainWall.getWorldPosition(new THREE.Vector3()); return { pos: camSet.crowdEye.clone(), target: wp }; }
     // On a real site, Wide is the view from the top of the rows.
-    case 'wide': if (camSet.pack) return { pos: V(14, 34, 96), target: V(0, 4, -10) }; return { pos: V(span * 0.95, H + trim + 7, t.z + span * 1.05), target: t.clone() };
+    case 'wide': if (camSet.pack) return { pos: V(16, 44, 90), target: V(0, 4, -10) }; return { pos: V(span * 0.95, H + trim + 7, t.z + span * 1.05), target: t.clone() };
     case 'side': return { pos: V(W / 2 + 2.5, H + 2.2, t.z + D * 0.45 + 1), target: V(-W * 0.1, H + trim * 0.45, t.z) };
     case 'drone': { const o = droneOrbit(); return { pos: V(t.x, o.h, t.z + o.R), target: t.clone() }; }
     case 'dj': case 'behind': {
