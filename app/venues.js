@@ -245,15 +245,17 @@
     /* ---------- Amphitheatres ---------- */
     {
       id: 'red-rocks', name: 'Red Rocks Amphitheatre', city: 'Morrison', region: 'CO', kind: 'amphitheatre', template: 'amphi',
-      setting: 'outdoor', capacity: 9525, lat: 39.6654, lon: -105.2057, elevationM: 1966, audienceFacing: 90, tz: 'America/Denver',
+      setting: 'outdoor', capacity: 9525, lat: 39.6654, lon: -105.2057, elevationM: 1966, audienceFacing: 77, tz: 'America/Denver',
+      // The real site in 3D, built from USGS lidar by tools/venue3d/build_pack.py (app/venues3d/red-rocks/).
+      pack: 'red-rocks',
       season: [4, 5, 6, 7, 8, 9, 10], showHours: ['18:00', '23:00'],
       stage: { W: 28, D: 18, H: 1.5, trim: 12.2 }, led: { wallW: 6.25, wallH: 4.4, pitch: 8 }, rig: { count: 40, program: 'fan', visual: 'plasma', lasers: 'fan' },
-      room: { rows: 69, rowDepth: 1.55, rise: 0.44, fan: 48, r0: 12, rocks: { left: 91, right: 61 }, pa: 'lcr', crowdN: 4500 },
+      room: { rows: 69, rowDepth: 1.215, rise: 0.445, fan: 48, r0: 12, rocks: { left: 91, right: 61 }, pa: 'lcr', crowdN: 4500 },
       scenery: {
         hdri: 'quarry_01', dusk: 'kiara_1_dawn', night: 'dikhololo_night', ground: 'rock',
         basis: 'The audience looks east over the plains to Denver, 24 km away and 330 m lower; the foothills rise behind the rows. Denver\'s tallest towers are at their real heights.',
         features: [
-          { type: 'skyline', name: 'Downtown Denver', bearing: 62, dist: 24000, width: 2500, towers: [218, 216, 213, 195, 183, 172, 166, 155], fill: 30, fillH: [60, 140] },
+          { type: 'skyline', name: 'Downtown Denver', bearing: 62, dist: 24000, ground: 1609, width: 2500, towers: [218, 216, 213, 195, 183, 172, 166, 155], fill: 30, fillH: [60, 140] },
           { type: 'glow', bearing: 62, strength: 1.5 },
           { type: 'mountains', name: 'Foothills and Mount Morrison', bearing: 270, spread: 150, dist: 3000, height: 450, color: 0x4a4030 },
           { type: 'trees', kind: 'pine', n: 120, r0: 150, r1: 380 },
@@ -270,8 +272,9 @@
         { k: 'House PA', v: 'd&b left, centre and right arrays of four boxes each: ALi160 left and right, ALi90 centre', src: 'http://www.lightingandsoundamerica.com/reprint/RedRocks.pdf' },
         { k: 'Rocks', v: 'Creation Rock on the north, 300 ft (91 m); Ship Rock on the south, 200 ft (61 m)', src: 'https://www.redrocksonline.com/our-story/architecture/' },
         { k: 'Site', v: 'Open space between the rocks 320 × 480 ft (98 × 146 m), dropping 100 ft to Stage Rock', src: 'https://www.redrocksonline.com/our-story/architecture/' },
+        { k: '3D site (lidar)', v: 'Ground, rocks and about 1,600 trees from USGS 3DEP lidar (2020). Measured from it: stage roof 34 × 22 m, top 14.4 m above the pit; rows 1.215 m deep rising 30.7 m over 69 rows; audience faces 77°', src: 'https://registry.opendata.aws/usgs-lidar/' },
       ],
-      estimated: 'Stage deck size (scaled from the roof area), row count and rake, exact audience bearing.',
+      estimated: 'Stage deck size (scaled from the roof area); the exact curve of the rows (fitted to the lidar, which is too sparse to show each step).',
     },
     {
       id: 'the-gorge', name: 'The Gorge Amphitheatre', city: 'George', region: 'WA', kind: 'amphitheatre', template: 'amphi',

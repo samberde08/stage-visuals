@@ -95,3 +95,14 @@ test('venue photos name a Commons file and what it shows', () => {
     assert.ok(['show', 'site', 'outside'].includes(v.photo.view), v.id);
   }
 });
+
+test('venue packs exist and hold what the app reads', () => {
+  for (const v of VENUES.filter((x) => x.pack)) {
+    const dir = path.join(__dirname, '..', 'app', 'venues3d', v.pack);
+    for (const f of ['manifest.json', 'core-height.png', 'core-albedo.jpg', 'mid-height.png', 'mid-albedo.jpg', 'far-height.png', 'far-albedo.jpg']) assert.ok(fs.existsSync(path.join(dir, f)), `${v.pack}/${f}`);
+    const m = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
+    for (const k of ['core', 'mid', 'far']) assert.ok(Number.isInteger(Math.log2(m[k].size - 1)), `${k} grid must be 2^k + 1`);
+    assert.ok(m.seating.rows.length > 0 && m.seating.rows.every((r) => r.length === 6 && r[1] < r[2]));
+    assert.ok(Array.isArray(m.trees) && m.credits.length > 0);
+  }
+});
