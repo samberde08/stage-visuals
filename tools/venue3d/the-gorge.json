@@ -1,0 +1,43 @@
+{
+  "id": "the-gorge",
+  "name": "The Gorge Amphitheatre",
+  "lat": 47.101315,
+  "lon": -119.995898,
+  "facing": 300,
+  "lidar": "WA_CentralWildfire_2_D22",
+  "core": {
+    "half": 256,
+    "res": 0.5
+  },
+  "mid": {
+    "half": 3200,
+    "res": 12.5,
+    "zoom": 13
+  },
+  "far": {
+    "half": 25600,
+    "res": 100,
+    "zoom": 11
+  },
+  "clear": [
+    [
+      -110,
+      -25,
+      110,
+      125
+    ]
+  ],
+  "level": {
+    "kind": "ground"
+  },
+  "albedoGain": 1.3,
+  "notes": "Stage at the foot of the lawn bowl on the lip of the gorge, the audience on the real slope looking west-north-west over the stage to the Columbia River (the sun sets behind the stage). The lawn is the lidar ground as measured; only the stage pad is levelled.",
+  "flat": [
+    [
+      -24,
+      -22,
+      24,
+      4
+    ]
+  ]
+}

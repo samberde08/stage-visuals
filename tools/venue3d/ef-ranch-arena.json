@@ -1,0 +1,35 @@
+{
+  "id": "ef-ranch-arena",
+  "name": "Electric Forest: Ranch Arena",
+  "lat": 43.499347,
+  "lon": -86.346232,
+  "facing": 0,
+  "lidar": "USGS_LPC_MI_31Co_Oceana_2016_LAS_2018",
+  "core": {
+    "half": 256,
+    "res": 0.5
+  },
+  "mid": {
+    "half": 3200,
+    "res": 12.5,
+    "zoom": 13
+  },
+  "far": {
+    "half": 25600,
+    "res": 100,
+    "zoom": 11
+  },
+  "clear": [
+    [
+      -59.0,
+      -30,
+      59.0,
+      98
+    ]
+  ],
+  "level": {
+    "kind": "ground"
+  },
+  "albedoGain": 1.3,
+  "notes": "The open arena of the Double JJ ranch that gives Ranch Arena its name, measured in the lidar; the stage is placed at its north end. Facing estimated."
+}

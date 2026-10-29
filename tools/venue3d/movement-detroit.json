@@ -1,0 +1,48 @@
+{
+  "id": "movement-detroit",
+  "name": "Movement Detroit: Movement Stage",
+  "lat": 42.327647,
+  "lon": -83.04296,
+  "facing": 150,
+  "lidar": "USGS_LPC_MI_WayneCo_2017_LAS_2018",
+  "core": {
+    "half": 256,
+    "res": 0.5
+  },
+  "outer": {
+    "half": 1200,
+    "res": 2,
+    "spacing": 1.5
+  },
+  "mid": {
+    "half": 3200,
+    "res": 12.5,
+    "zoom": 13
+  },
+  "far": {
+    "half": 25600,
+    "res": 100,
+    "zoom": 11
+  },
+  "clear": [
+    [
+      -50,
+      -25,
+      50,
+      75
+    ]
+  ],
+  "level": {
+    "kind": "ground"
+  },
+  "albedoGain": 1.3,
+  "notes": "Movement Stage in Hart Plaza's sunken amphitheater (movementfestival.com), the crowd on the real tiers and floor of the bowl, looking south-south-east towards the river. Position in the bowl and facing estimated from the lidar.",
+  "flat": [
+    [
+      -22,
+      -22,
+      22,
+      4
+    ]
+  ]
+}

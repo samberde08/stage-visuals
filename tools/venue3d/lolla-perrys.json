@@ -1,0 +1,40 @@
+{
+  "id": "lolla-perrys",
+  "name": "Lollapalooza: Perry's",
+  "lat": 41.870137,
+  "lon": -87.619517,
+  "facing": 180,
+  "lidar": "USGS_LPC_IL_4County_Cook_2017_LAS_2019",
+  "core": {
+    "half": 256,
+    "res": 0.5
+  },
+  "outer": {
+    "half": 1400,
+    "res": 2,
+    "spacing": 1.5
+  },
+  "mid": {
+    "half": 3200,
+    "res": 12.5,
+    "zoom": 13
+  },
+  "far": {
+    "half": 25600,
+    "res": 100,
+    "zoom": 11
+  },
+  "clear": [
+    [
+      -64.0,
+      -30,
+      64.0,
+      108
+    ]
+  ],
+  "level": {
+    "kind": "ground"
+  },
+  "albedoGain": 1.3,
+  "notes": "Placed at the south end of Hutchinson Field in Grant Park, the audience looking south. Position and facing estimated; Perry's has moved over the years and the current map is an image we could not read."
+}
