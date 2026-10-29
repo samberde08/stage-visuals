@@ -1,0 +1,35 @@
+{
+  "id": "edc-circuitgrounds",
+  "name": "EDC Las Vegas: circuitGROUNDS",
+  "lat": 36.269744,
+  "lon": -115.011826,
+  "facing": 204,
+  "lidar": "NV_ClarkCo_2_B22",
+  "core": {
+    "half": 256,
+    "res": 0.5
+  },
+  "mid": {
+    "half": 3200,
+    "res": 12.5,
+    "zoom": 13
+  },
+  "far": {
+    "half": 25600,
+    "res": 100,
+    "zoom": 11
+  },
+  "clear": [
+    [
+      -61.5,
+      -30,
+      61.5,
+      93
+    ]
+  ],
+  "level": {
+    "kind": "ground"
+  },
+  "albedoGain": 1.3,
+  "notes": "Stage placed in the infield tucked into Turn 2 at the south-west end of the oval (jeffgluck.com), the audience looking out towards the turn. Exact spot and facing estimated."
+}

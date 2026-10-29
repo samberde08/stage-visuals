@@ -344,6 +344,8 @@ scene.background = NIGHT.clone();
 scene.fog = new THREE.FogExp2(0x07080b, 0.012);
 const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 600);
 const controls = new THREE.OrbitControls(camera, canvas);
+// ?debug exposes the camera for scripted screenshots.
+if (/[?&]debug\b/.test(location.search)) window.stageDebug = { camera, controls };
 controls.enableDamping = true;
 controls.maxPolarAngle = Math.PI * 0.495;
 
@@ -798,7 +800,9 @@ function buildScenery() {
   const clear = clearOfVenue(box);
   // With a venue pack the land, rocks and trees are real, so only far-off features are added. They sit at the
   // distance the pack's land is drawn at, at their real height below the rows.
-  const feats = camSet.pack ? (spec.features || []).filter((f) => f.type === 'skyline' || f.type === 'glow').map((f) => {
+  // A city pack draws the real buildings out to `reach` metres, so only skylines beyond that are added.
+  const reach = camSet.pack ? (camSet.pack.m.reach || 0) + 150 : 0;
+  const feats = camSet.pack ? (spec.features || []).filter((f) => (f.type === 'skyline' && f.dist > reach) || f.type === 'glow').map((f) => {
     if (f.type !== 'skyline') return f;
     const R = packR(f.dist), k = R / f.dist, y = (f.ground ?? 0) - camSet.pack.m.elevation - f.dist * f.dist / (2 * EARTH_R);
     return { ...f, R, base: (PACK_EYE + (y - PACK_EYE) * k) / k };
@@ -1583,6 +1587,174 @@ function clubFitOut(roomW, z0, z1, ceil, stageW, opts = {}) {
   [-1, 1].forEach((sx) => [0, 1].forEach((k) => box(1.1, 0.6, 0.75, sx * (stageW / 2 - 0.7 - k * 1.15), 0.3, 0.45, PA_MATS)));
 }
 
+/* ---------- Interiors: the real rooms ---------- */
+// A venue's `room.interior` (venues.js) describes what its main room is really like, from published specs and
+// write-ups: wall finish, ceiling, balconies, bars, chandeliers, LED surfaces, proscenium, floor. The club and warehouse
+// templates build the shell and the stage; this dresses the shell to match. R is the shell: width w, back wall (behind
+// the stage) at z0, rear wall at z1, ceiling height, and the stage size.
+const INT_MAT = {};
+function intMat(kind) {
+  if (INT_MAT[kind]) return INT_MAT[kind];
+  const mk = {
+    brick: () => M.wall,
+    concrete: () => M.concrete,
+    black: () => surf('concrete', 4, { tint: 0x1a1a1d, roughness: 0.95, bump: 0.3 }),
+    plaster: () => surf('concrete', 6, { tint: 0xc9bca6, roughness: 0.9, bump: 0.15 }),
+    deco: () => surf('concrete', 6, { tint: 0xb9a888, roughness: 0.75, bump: 0.12 }),
+    wood: () => M.wood,
+    whitebrick: () => surf('brick', 1.72, { tint: 0xd8d4cc, roughness: 0.9, bump: 0.6 }),
+    gold: () => new THREE.MeshStandardMaterial({ color: 0xa8854e, roughness: 0.35, metalness: 0.9 }),
+    steel: () => new THREE.MeshStandardMaterial({ color: 0x3b3e44, roughness: 0.5, metalness: 0.7 }),
+    timber: () => surf('wood', 2, { tint: 0x8a6a4a, roughness: 0.85, bump: 0.4 }),
+    rail: () => new THREE.MeshStandardMaterial({ color: 0x111114, roughness: 0.4, metalness: 0.6 }),
+  }[kind];
+  return (INT_MAT[kind] = mk ? mk() : M.wall);
+}
+// A hand-painted ceiling in the Exchange's manner: a repeating geometric medallion in teal, ochre and gold.
+let paintedTex = null;
+function paintedCeiling() {
+  if (paintedTex) return paintedTex;
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const x = c.getContext('2d');
+  x.fillStyle = '#5b4a32'; x.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) {
+    const cx = 64 + i * 128, cy = 64 + j * 128;
+    x.save(); x.translate(cx, cy);
+    for (let k = 0; k < 8; k++) { x.rotate(Math.PI / 4); x.fillStyle = k % 2 ? '#2f6a68' : '#b8873e'; x.beginPath(); x.moveTo(0, 0); x.lineTo(14, 46); x.lineTo(-14, 46); x.closePath(); x.fill(); }
+    x.fillStyle = '#d9b45e'; x.beginPath(); x.arc(0, 0, 13, 0, Math.PI * 2); x.fill();
+    x.restore();
+  }
+  x.strokeStyle = '#c9a457'; x.lineWidth = 4; x.strokeRect(2, 2, 252, 252); x.beginPath(); x.moveTo(128, 0); x.lineTo(128, 256); x.moveTo(0, 128); x.lineTo(256, 128); x.stroke();
+  paintedTex = new THREE.CanvasTexture(c); paintedTex.wrapS = paintedTex.wrapT = THREE.RepeatWrapping; paintedTex.encoding = THREE.sRGBEncoding; paintedTex.anisotropy = 8;
+  return paintedTex;
+}
+function fitInterior(it, R) {
+  const { w, z0, z1, ceil, W, D, H } = R, L = z1 - z0, zc = (z0 + z1) / 2, hw = w / 2 - 0.32;
+  // Wall finish: a lining just inside the template's walls, floor to ceiling.
+  if (it.walls) {
+    const m = intMat(it.walls), stageWall = it.stageWall ? intMat(it.stageWall) : m;
+    [-1, 1].forEach((sx) => box(0.08, ceil, L, sx * hw, ceil / 2, zc, m));
+    box(w - 0.7, ceil, 0.08, 0, ceil / 2, z1 - 0.3, m);
+    box(w - 0.7, ceil, 0.08, 0, ceil / 2, z0 + 0.32, stageWall);
+  }
+  // Art deco: fluted pilasters every few metres with gilded capitals, and a moulded cornice under the ceiling.
+  if (it.pilasters) {
+    const pm = intMat(it.walls || 'deco'), gold = intMat('gold'), step = it.pilasters;
+    for (let z = z0 + step; z < z1 - 1; z += step) [-1, 1].forEach((sx) => {
+      box(0.25, ceil - 0.8, 0.7, sx * (hw - 0.12), (ceil - 0.8) / 2, z, pm);
+      box(0.32, 0.35, 0.85, sx * (hw - 0.15), ceil - 0.95, z, gold);
+    });
+    [-1, 1].forEach((sx) => box(0.5, 0.45, L, sx * (hw - 0.2), ceil - 0.5, zc, gold));
+  }
+  // Ceilings.
+  const c = it.ceiling;
+  if (c === 'beams' || c === 'trusses') {
+    // Timber beams on steel (Knockdown's factory floor), or steel roof trusses, across the room.
+    const step = c === 'beams' ? 4 : 7, beam = c === 'beams' ? intMat('timber') : intMat('steel');
+    for (let z = z0 + step / 2; z < z1; z += step) {
+      if (c === 'beams') box(w - 0.7, 0.55, 0.3, 0, ceil - 0.3, z, beam);
+      else {
+        const rise = Math.min(2.4, w * 0.08);
+        box(w - 0.7, 0.25, 0.25, 0, ceil - rise - 0.15, z, beam);
+        [-1, 1].forEach((sx) => { const m = box(Math.hypot(w / 2, rise), 0.25, 0.25, sx * w / 4, ceil - rise / 2 - 0.15, z, beam); m.rotation.z = -sx * Math.atan2(rise, w / 2); });
+        for (let k = 1; k < 6; k++) { const x = (k / 6 - 0.5) * (w - 1), hgt = rise * (1 - Math.abs(x) / (w / 2)); box(0.12, hgt, 0.12, x, ceil - rise - 0.15 + hgt / 2, z, beam); }
+      }
+    }
+    if (c === 'beams') [-0.25, 0.25].forEach((u) => box(0.25, 0.35, L, u * w, ceil - 0.75, zc, intMat('steel')));
+  } else if (c === 'vault') {
+    // Barrel vault springing from the side walls, painted.
+    const rise = it.vaultRise || 3, r = (w * w / 4 + rise * rise) / (2 * rise), a = Math.asin((w / 2) / r);
+    // Cylinder along z with its arc on top: the crown at the ceiling, springing from the walls `rise` lower.
+    const g = new THREE.CylinderGeometry(r, r, L, 48, 1, true, Math.PI - a, 2 * a).rotateX(Math.PI / 2);
+    const t = paintedCeiling().clone(); t.needsUpdate = true; t.repeat.set(w / 4, L / 4);
+    const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: t, roughness: 0.8, side: THREE.BackSide }));
+    m.position.set(0, ceil - r, zc);
+    venue.add(m);
+  } else if (c === 'coffered') {
+    const pm = intMat(it.walls || 'plaster');
+    for (let z = z0 + 3; z < z1; z += 3) box(w - 0.7, 0.35, 0.3, 0, ceil - 0.2, z, pm);
+    for (let x = -w / 2 + 3; x < w / 2; x += 3) box(0.3, 0.35, L, x, ceil - 0.2, zc, pm);
+  } else if (c === 'skylights') {
+    const sky = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.25, 0.32, 0.42) });
+    for (let z = z0 + 4; z < z1 - 2; z += 6) box(w * 0.3, 0.05, 2.2, 0, ceil - 0.02, z, sky);
+  }
+  // LED surfaces that show the same content as the main wall.
+  if (it.ledCeiling) {
+    // Rows of LED panels over the crowd (Academy LA), with moving heads between them.
+    const rows = it.ledCeiling.rows || 6, pw = Math.min(w - 4, it.ledCeiling.w || w * 0.7);
+    for (let i = 0; i < rows; i++) { const z = 1.5 + i * Math.min(4, (z1 - 4) / rows), s = screen(`Ceiling LED ${i + 1}`, pw, 1.2, V(0, ceil - 0.3, z), 0, false); s.rotation.x = Math.PI / 2; }
+  }
+  if (it.ledWalls) {
+    // Video down both side walls, from the stage towards the back (Academy, Avalon's surround panels).
+    const len = Math.min(L - 4, it.ledWalls.len || L * 0.6), hgt = it.ledWalls.h || Math.min(3, ceil - 2.5), y = it.ledWalls.y || ceil - hgt / 2 - 0.8;
+    [-1, 1].forEach((sx) => screen(`Side LED ${sx < 0 ? 'L' : 'R'}`, len, hgt, V(sx * (hw - 0.1), y, 0.5 + len / 2), -sx * Math.PI / 2, false));
+  }
+  if (it.ledColumns) {
+    // Tall LED columns either side of the stage (The Midway).
+    [-1, 1].forEach((sx) => [0, 1].forEach((k) => screen(`LED column ${sx < 0 ? 'L' : 'R'}${k + 1}`, 0.9, ceil - 2, V(sx * (W / 2 + 1.2 + k * 1.6), (ceil - 2) / 2 + 0.6, -D * 0.4), 0, false)));
+  }
+  if (it.mosaic) {
+    // A wall of mosaic panels behind the stage that light up and change colour (Elsewhere).
+    screen('Mosaic wall', Math.min(w - 2, W + 8), ceil - H - 1.5, V(0, H + (ceil - H - 1.5) / 2 + 0.6, z0 + 0.45), 0, false);
+  }
+  // Proscenium: the theatre's arch round the stage, plaster with a gilded edge.
+  if (it.proscenium) {
+    const { w: pw, h: ph } = it.proscenium, pm = intMat(it.walls || 'plaster'), side = (w - pw) / 2;
+    if (side > 0.5) [-1, 1].forEach((sx) => box(side, ceil, 0.8, sx * (pw / 2 + side / 2), ceil / 2, 0.2, pm));
+    if (ceil - ph > 0.3) box(w, ceil - ph, 0.8, 0, ph + (ceil - ph) / 2, 0.2, pm);
+    const gold = intMat('gold');
+    [-1, 1].forEach((sx) => box(0.3, ph, 0.9, sx * pw / 2, ph / 2, 0.2, gold));
+    box(pw + 0.6, 0.3, 0.9, 0, ph, 0.2, gold);
+  }
+  // Balconies: a slab on columns with a rail, along any of the back and side walls, with people in them.
+  (it.balconies || []).forEach((b) => {
+    const y = b.y || 4.2, d = b.d || 4, rail = intMat('rail'), slab = intMat(it.walls === 'deco' || it.walls === 'plaster' ? it.walls : 'black');
+    const span = b.side === 'back' ? [w - 0.7, d, 0, z1 - d / 2 - 0.3] : [d, (b.len || L * 0.6), (b.side === 'left' ? -1 : 1) * (hw - d / 2), b.z ?? (z1 - (b.len || L * 0.6) / 2 - 0.4)];
+    const [bw, bd, bx, bz] = span;
+    box(bw, 0.35, bd, bx, y, bz, slab);
+    if (b.side === 'back') { box(bw, 1.05, 0.06, bx, y + 0.7, bz - bd / 2, rail); for (let x = -bw / 2 + 2; x < bw / 2; x += 5) box(0.35, y, 0.35, x, y / 2, bz - bd / 2 + 0.4, slab); }
+    else { const ex = bx - Math.sign(bx) * bd / 2; box(0.06, 1.05, bw === d ? bd : bw, ex, y + 0.7, bz, rail); for (let z = bz - bw / 2 + 2; z < bz + bw / 2; z += 5) box(0.35, y, 0.35, ex + Math.sign(bx) * 0.4, y / 2, z, slab); }
+    if (b.booths) for (let k = 0; k < (b.side === 'back' ? bw : bw) / 3; k++) {
+      const t = -bw / 2 + 1.5 + k * 3;
+      if (b.side === 'back') box(2.2, 0.45, 0.8, bx + t, y + 0.4, bz + bd / 2 - 0.6, M.seat); else box(0.8, 0.45, 2.2, bx + Math.sign(bx) * (bd / 2 - 0.6), y + 0.4, bz + t, M.seat);
+    }
+    crowd(b.people || Math.round(bw * bd / 3), () => b.side === 'back'
+      ? V(bx + (Math.random() - 0.5) * (bw - 1), y + 0.18, bz - bd / 2 + 0.6 + Math.random() * (bd - 1.4))
+      : V(bx + (Math.random() - 0.5) * (bd - 1.2), y + 0.18, bz + (Math.random() - 0.5) * (bw - 1)));
+  });
+  // Bars: a counter with a lit back bar, along a side or the rear wall.
+  (it.bars || []).forEach((b) => {
+    const len = Math.min(b.len || 9, b.side === 'back' ? w - 4 : L - 4), glow = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 0.75, 0.3) });
+    if (b.side === 'back') {
+      const bz = z1 - 0.65;
+      box(len, 1.08, 0.6, b.x || 0, 0.54, bz - 1.4, DJ_MAT.table); box(len, 0.05, 0.7, b.x || 0, 1.1, bz - 1.4, M.metal);
+      [1.25, 1.75].forEach((y) => box(len, 0.3, 0.05, b.x || 0, y, bz, glow));
+    } else {
+      const sx = b.side === 'left' ? -1 : 1, bx = sx * (hw - 0.05), bz = b.z ?? (z1 - len / 2 - 2);
+      box(0.6, 1.08, len, bx - sx * 1.4, 0.54, bz, DJ_MAT.table); box(0.7, 0.05, len, bx - sx * 1.4, 1.1, bz, M.metal);
+      [1.25, 1.75].forEach((y) => box(0.05, 0.3, len, bx, y, bz, glow));
+    }
+  });
+  // Chandeliers: tiered frosted-glass art deco fittings, or a crystal cluster.
+  const nCh = it.chandeliers || 0;
+  for (let i = 0; i < nCh; i++) {
+    const z = z0 + L * (i + 1) / (nCh + 1), g = new THREE.Group();
+    const glass = new THREE.MeshStandardMaterial({ color: 0xfff1d8, emissive: new THREE.Color(1.0, 0.75, 0.45), emissiveIntensity: 0.9, roughness: 0.4 });
+    [[1.1, 0.5, 0], [0.8, 0.45, -0.55], [0.5, 0.4, -1.05]].forEach(([r, h, y]) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.7, r, h, 16, 1, true), glass); m.position.y = y; g.add(m); });
+    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.4, 6), intMat('gold')); rod.position.y = 0.9; g.add(rod);
+    g.position.set(0, ceil - 1.8, z); venue.add(g);
+  }
+  // Mirror balls.
+  for (let i = 0; i < (it.mirrorballs || 0); i++) {
+    const m = new THREE.Mesh(new THREE.IcosahedronGeometry(0.35, 2), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.08, metalness: 1, flatShading: true }));
+    m.position.set((i % 2 ? 1 : -1) * w * 0.15, ceil - 0.9, 2 + Math.floor(i / 2) * 4); venue.add(m);
+  }
+  // Floor finish over the dance floor.
+  if (it.floor === 'wood') {
+    const f = new THREE.Mesh(new THREE.PlaneGeometry(w - 0.8, L - D - 1), M.wood); f.rotation.x = -Math.PI / 2; f.position.set(0, 0.01, z0 + D + (L - D) / 2); venue.add(f); receivers.push(f);
+  }
+}
+
 /* ---------- Venue packs: the real site, from survey data ---------- */
 // A venue with `pack` in venues.js has a folder in venues3d/ built by tools/venue3d/build_pack.py from public survey
 // data: lidar ground and rocks, measured rows and stage roof, every tree at its real place and height, satellite
@@ -1623,10 +1795,13 @@ function decodeHeights(bmp, lo) {
 function loadPack(id) {
   const base = `${PACK_BASE}${id}/`, tex = (f) => new Promise((res, rej) => new THREE.TextureLoader().load(base + f, (t) => { t.encoding = THREE.sRGBEncoding; t.anisotropy = 8; res(t); }, undefined, rej));
   return fetch(base + 'manifest.json').then((r) => r.ok ? r.json() : Promise.reject(new Error('manifest'))).then((m) => Promise.all(
-    ['core', 'mid', 'far'].map((k) => Promise.all([packImage(`${base}${k}-height.png`), tex(`${k}-albedo.jpg`)]).then(([bmp, alb]) => ({ k, grid: decodeHeights(bmp, m[k].min), alb })))
+    ['core', 'mid', 'far'].map((k) => Promise.all([packImage(`${base}${k}-height.png`), tex(`${k}-albedo.jpg`),
+      // Water masks came with the second generation of packs; without one the layer is all land.
+      m.water !== undefined ? tex(`${k}-water.png`).then((t) => { t.encoding = THREE.LinearEncoding; return t; }, () => null) : null,
+    ]).then(([bmp, alb, water]) => ({ k, grid: decodeHeights(bmp, m[k].min), alb, water })))
   ).then((layers) => {
     const out = { m };
-    layers.forEach((l) => { out[l.k] = { ...m[l.k], ...l.grid, alb: l.alb }; });
+    layers.forEach((l) => { out[l.k] = { ...m[l.k], ...l.grid, alb: l.alb, water: l.water }; });
     return out;
   }));
 }
@@ -1701,11 +1876,14 @@ function packMesh(L, f, maxErr, mat, skip, sink) {
 }
 // Ground material: the measured colour, darkened in hollows by the baked sky visibility, with sandstone grain on
 // steep rock and soil grain on the flats, in world space so it holds up when you walk right up to a rock.
-function packGroundMat(L) {
+// On a city or festival site the grain is the venue's own ground (grass, asphalt, dirt), and water from the survey's
+// water mask is drawn as a still, reflective surface.
+function packGroundMat(L, rockKind = 'sandstone', soilKind = 'rock') {
   const ao = new THREE.DataTexture(L.ao, L.size, L.size, THREE.RGBAFormat); ao.flipY = true; ao.minFilter = THREE.LinearMipmapLinearFilter; ao.magFilter = THREE.LinearFilter; ao.generateMipmaps = true; ao.needsUpdate = true;
   const m = new THREE.MeshStandardMaterial({ map: L.alb, aoMap: ao, aoMapIntensity: 1, roughness: 0.92 });
-  const rock = surfTexture('sandstone'), soil = surfTexture('rock');
+  const rock = surfTexture(rockKind), soil = surfTexture(soilKind);
   const u = { tRock: { value: rock }, tSoil: { value: soil }, uAvgR: { value: rock.avg }, uAvgS: { value: soil.avg }, uHole: { value: 0 } };
+  packWater(m, L.water);
   m.userData.hole = u.uHole;
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
@@ -1736,7 +1914,30 @@ function packGroundMat(L) {
     normal = normalize(abs(tpDet) * normal - 0.9 * sign(tpDet) * (tpHx * tpR1 + tpHy * tpR2));
   }`);
   };
-  m.customProgramCacheKey = () => 'packGround';
+  const base = m.onBeforeCompile;
+  m.onBeforeCompile = (sh) => { m.userData.waterHook(sh); base(sh); };
+  m.customProgramCacheKey = () => `packGround|${rockKind}|${soilKind}|${!!L.water}`;
+  return m;
+}
+// Water from a layer's mask: dark, smooth and a little metallic, so it mirrors the sky and the stage lights.
+function packWater(m, tex) {
+  m.userData.waterHook = (sh) => {
+    if (!tex) return;
+    sh.uniforms.tWater = { value: tex };
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform sampler2D tWater; float wtr;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+  wtr = smoothstep(0.3, 0.7, texture2D(tWater, vUv).r);
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.012, 0.03, 0.04), wtr);`)
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  roughnessFactor = mix(roughnessFactor, 0.07, wtr);')
+      .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n  metalnessFactor = mix(metalnessFactor, 0.55, wtr);');
+  };
+  return m;
+}
+function packRingMat(L) {
+  const m = packWater(new THREE.MeshStandardMaterial({ map: L.alb, roughness: 1 }), L.water);
+  m.onBeforeCompile = m.userData.waterHook;
+  m.customProgramCacheKey = () => `packRing|${!!L.water}`;
   return m;
 }
 // Height of the ground (not the rows) at a scene point, from the core grid; null outside it.
@@ -1783,8 +1984,11 @@ function packRows(S) {
 }
 // Trees from the lidar canopy: tall ones as ponderosa pines, short ones as juniper and scrub oak.
 function packTrees(p, S) {
-  const list = p.m.trees.filter(([x, z]) => !packRowAt(p, x, z) && !(Math.abs(x - p.m.roof.at[0]) < p.m.roof.width / 2 + 1 && Math.abs(z - p.m.roof.at[1]) < p.m.roof.depth / 2 + 1));
-  const groups = [['ponderosa', list.filter((t) => t[3] >= 6), 0x182614, 16], ['broad', list.filter((t) => t[3] < 6), 0x232b18, 11.5]];
+  const R = p.m.roof, list = S ? p.m.trees.filter(([x, z]) => !packRowAt(p, x, z) && !(Math.abs(x - R.at[0]) < R.width / 2 + 1 && Math.abs(z - R.at[1]) < R.depth / 2 + 1)) : p.m.trees;
+  // Species: Red Rocks' ponderosa pine and scrub; elsewhere the kinds the venue's scenery names, tall ones first.
+  const kinds = S ? ['ponderosa', 'broad'] : (() => { const k = [...new Set(((VENUE_BY_ID[state.venue] || {}).scenery?.features || []).filter((f) => f.type === 'trees').map((f) => f.kind || 'pine'))].filter((k) => k !== 'palm'); return k.length > 1 ? k : [k[0] || 'broad', 'broad']; })();
+  const H0 = { ponderosa: 16, broad: 11.5, pine: 16 }, COL = { ponderosa: 0x182614, broad: 0x232b18, pine: 0x17271b };
+  const groups = [[kinds[0], list.filter((t) => t[3] >= 6), COL[kinds[0]], H0[kinds[0]]], [kinds[1], list.filter((t) => t[3] < 6), COL[kinds[1]], H0[kinds[1]]]];
   const mtx = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), pos = new THREE.Vector3();
   groups.forEach(([kind, ts, col, h0]) => {
     if (!ts.length) return;
@@ -1794,7 +1998,11 @@ function packTrees(p, S) {
     ts.forEach(([x, z, y, h, r], i) => {
       const sy = h / h0, sxz = Math.max(0.35, Math.min(1.3, r / r0, sy * 1.2));
       q.setFromAxisAngle(up, (x * 7.13 + z * 3.7) % (Math.PI * 2));
-      mtx.compose(pos.set(x, y - 0.2, z), q, sc.set(sxz, sy, sxz)); trunks.setMatrixAt(i, mtx); crowns.setMatrixAt(i, mtx);
+      pos.set(x, y - 0.2, z);
+      // Trees past the near ground are pulled in with the land, and shrunk with it.
+      const d = Math.hypot(x, z - PACK_C), k = d > PACK_NEAR ? packR(d) / d : 1;
+      if (k < 1) packPull(pos);
+      mtx.compose(pos, q, sc.set(sxz * k, sy * k, sxz * k)); trunks.setMatrixAt(i, mtx); crowns.setMatrixAt(i, mtx);
     });
     tintTrees(crowns, col, ts.length);
     trunks.castShadow = crowns.castShadow = true; trunks.receiveShadow = crowns.receiveShadow = true;
@@ -1802,19 +2010,91 @@ function packTrees(p, S) {
     venue.add(trunks, crowns);
   });
 }
+// Ground: the core lidar grid, then the land to the horizon in two coarser rings, each overlapping the one inside.
+function packLand(p, rockKind, soilKind) {
+  const f = p.m.facing * DEG, core = p.core, cHalf = core.half * 0.98, mHalf = p.mid.half * 0.97;
+  const inSquare = (L, half) => (x, z) => { const e = x * Math.cos(f) - z * Math.sin(f), n = -x * Math.sin(f) - z * Math.cos(f); return Math.abs(e) < half && Math.abs(n) < half; };
+  const groundMesh = packMesh(core, f, 0.07, p.groundMat || (p.groundMat = packGroundMat(core, rockKind, soilKind)));
+  venue.add(groundMesh);
+  const mid = packMesh(p.mid, f, 0.6, p.midMat || (p.midMat = packRingMat(p.mid)), inSquare(p.mid, cHalf - 30), (x, z) => (inSquare(p.mid, cHalf + 10)(x, z) ? 2 : 0));
+  const far = packMesh(p.far, f, 3, p.farMat || (p.farMat = packRingMat(p.far)), inSquare(p.far, mHalf - 300), (x, z) => (inSquare(p.far, mHalf + 100)(x, z) ? 25 : 0));
+  venue.add(mid, far);
+  [mid, far].forEach((g) => { g.userData.noShadow = true; });
+  return groundMesh;
+}
+// Pull a point beyond PACK_NEAR in towards the audience, as packMesh does for the land.
+function packPull(v) {
+  const z = v.z - PACK_C, d = Math.hypot(v.x, z);
+  if (d <= PACK_NEAR) return v;
+  const k = packR(d) / d, y = v.y - d * d / (2 * EARTH_R);
+  return v.set(v.x * k, PACK_EYE + (y - PACK_EYE) * k, z * k + PACK_C);
+}
+// Buildings measured from the lidar: each part a prism from its ground to its roof, the footprint traced from the
+// returns. Walls carry the window grid of the skyline buildings (lit at night), in a few facade colours.
+const PACK_FACADES = [[0x8a7f72, 0.3], [0x6e5a4c, 0.25], [0x9a968e, 0.4], [0x5d6168, 0.5]];
+function packBuildings(p) {
+  const list = p.m.buildings || [];
+  if (!list.length) return;
+  const groups = PACK_FACADES.map(() => ({ pos: [], uv: [] }));
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), d = new THREE.Vector3();
+  const pts = (flat) => { const out = []; for (let i = 0; i + 1 < flat.length; i += 2) out.push(new THREE.Vector2(flat[i], flat[i + 1])); if (out.length > 2 && out[0].equals(out[out.length - 1])) out.pop(); return out; };
+  list.forEach((bl, k) => {
+    const ring = pts(bl.p), holes = (bl.h || []).map(pts).filter((h) => h.length > 2);
+    if (ring.length < 3) return;
+    // Taller buildings are more often offices with more glass.
+    const g = groups[bl.t - bl.b > 25 ? 3 : (Math.abs(Math.round(bl.p[0] * 7 + bl.p[1] * 13)) + k) % 3];
+    const put = (v, u, w) => { packPull(v); g.pos.push(v.x, v.y, v.z); g.uv.push(u, w); };
+    const h = bl.t - bl.b;
+    // Walls face out of the footprint and into its courtyards: wind the outline one way and the holes the other.
+    const area = (r) => r.reduce((s, q, i) => { const n = r[(i + 1) % r.length]; return s + q.x * n.y - n.x * q.y; }, 0);
+    [ring, ...holes].forEach((r0, j) => {
+      const r = (area(r0) > 0) === (j === 0) ? [...r0].reverse() : r0;
+      let run = 0;
+      for (let i = 0; i < r.length; i++) {
+        const p0 = r[i], p1 = r[(i + 1) % r.length], len = p0.distanceTo(p1);
+        a.set(p0.x, bl.b - 0.5, p0.y); b.set(p1.x, bl.b - 0.5, p1.y); c.set(p1.x, bl.t, p1.y); d.set(p0.x, bl.t, p0.y);
+        put(a.clone(), run, 0.01); put(b.clone(), run + len, 0.01); put(c.clone(), run + len, h);
+        put(a.clone(), run, 0.01); put(c.clone(), run + len, h); put(d.clone(), run, h);
+        run += len;
+      }
+    });
+    const all = [ring, ...holes].flat();
+    THREE.ShapeUtils.triangulateShape(ring, holes).forEach((tri) => {
+      const [i, j, k2] = tri, up = (all[j].x - all[i].x) * (all[k2].y - all[i].y) - (all[j].y - all[i].y) * (all[k2].x - all[i].x) < 0;
+      (up ? [i, j, k2] : [i, k2, j]).forEach((q) => put(a.set(all[q].x, bl.t, all[q].y), 0, 0));
+    });
+  });
+  groups.forEach((g, i) => {
+    if (!g.pos.length) return;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(g.pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(g.uv, 2));
+    geo.computeVertexNormals();
+    const mat = facadeMat({ dist: 200 }, PACK_FACADES[i][0], PACK_FACADES[i][1]);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.userData.pack = true; mesh.userData.lidarHidden = true;
+    venue.add(mesh);
+  });
+}
+// Any venue on a 'site' pack (festival fields, parks, open-air clubs, rooftops): the template builds the stage, crowd
+// and fit-out on the levelled venue area as usual, and around it is the real place.
+function packSite(p) {
+  const v = VENUE_BY_ID[state.venue] || {}, sc = v.scenery || {};
+  const soil = { grass: 'grass', dirt: 'dirt', asphalt: 'asphalt', concrete: 'concrete', sand: 'sand' }[sc.ground] || 'dirt';
+  const ground = packLand(p, 'concrete', soil);
+  receivers.push(ground);
+  packBuildings(p);
+  packTrees(p, null);
+  // People on the floor stand on the real ground, so a sloping lawn or a sunken plaza fills as it does in life.
+  crowds.forEach((c) => {
+    const f0 = c.fn;
+    c.fn = () => { const q = f0(); if (q && Math.abs(q.y) < 0.3) { const g = packGroundY(p, q.x, q.z); if (g !== null) q.y += g; } return q; };
+  });
+}
 // Red Rocks and any other pack venue: the stage from the venue's own numbers under the measured roof, set into the
 // real site.
 function packAmphi(s, p) {
-  const { W, D, H, trim } = s, m = p.m, o = s.room, S = m.seating, f = m.facing * DEG, top = H + trim;
-  // Ground: the core lidar grid, then the land to the horizon in two coarser rings, each overlapping the one inside.
-  const core = p.core, cHalf = core.half * 0.98, mHalf = p.mid.half * 0.97;
-  const inSquare = (L, half) => (x, z) => { const e = x * Math.cos(f) - z * Math.sin(f), n = -x * Math.sin(f) - z * Math.cos(f); return Math.abs(e) < half && Math.abs(n) < half; };
-  const groundMesh = packMesh(core, f, 0.07, p.groundMat || (p.groundMat = packGroundMat(core)));
-  venue.add(groundMesh);
-  const mid = packMesh(p.mid, f, 0.6, p.midMat || (p.midMat = new THREE.MeshStandardMaterial({ map: p.mid.alb, roughness: 1 })), inSquare(p.mid, cHalf - 30), (x, z) => (inSquare(p.mid, cHalf + 10)(x, z) ? 2 : 0));
-  const far = packMesh(p.far, f, 3, p.farMat || (p.farMat = new THREE.MeshStandardMaterial({ map: p.far.alb, roughness: 1 })), inSquare(p.far, mHalf - 300), (x, z) => (inSquare(p.far, mHalf + 100)(x, z) ? 25 : 0));
-  venue.add(mid, far);
-  [mid, far].forEach((g) => { g.userData.noShadow = true; });
+  const { W, D, H, trim } = s, m = p.m, o = s.room, S = m.seating, top = H + trim;
+  packLand(p);
   // Stage deck and the measured roof on four columns, with the rigging grid at the venue's trim.
   box(W, H + 0.6, D, 0, (H - 0.6) / 2, -D / 2, M.deck, true);
   const R = m.roof, rx = R.width / 2 - 0.6, z0 = R.at[1] + R.depth / 2 - 0.6, z1 = R.at[1] - R.depth / 2 + 0.6;
@@ -2136,7 +2416,7 @@ const BUILD = {
     [-0.42, -0.15, 0.15, 0.42].forEach((u) => laser(u * W, H, -0.5, 0));
     laser(-(W / 2 + wing / 2), H, -1, 0.3); laser(W / 2 + wing / 2, H, -1, -0.3);
     crowd(o.crowdN || 1600, () => { const x = (Math.random() - 0.5) * cw, z = 4 + Math.random() * cd; return Math.abs(x) < 3.5 && Math.abs(z - fz) < 3 ? null : V(x, 0, z); });
-    if (o.trees) forest(cw, cd);
+    if (o.trees && !activePack()) forest(cw, cd);
     return { target: V(0, H + 4.5, -D / 2), front: Math.max(44, fz + 10), fohY: Math.max(9, H + trim * 0.45), crowdEye: V(2, 1.85, 12) };
   },
   stadium(s) {
@@ -2166,8 +2446,10 @@ const BUILD = {
     box(0.6, wallH, roomL, roomW / 2, wallH / 2, zc, M.concrete);
     box(roomW, open ? top + 3 : ceil, 0.6, 0, (open ? top + 3 : ceil) / 2, -D - 1.2, M.concrete);
     if (!open) {
-      for (let z = 6; z < floorL; z += 9) [-1, 1].forEach((sx) => box(0.8, ceil, 0.8, sx * roomW * 0.27, ceil / 2, z, M.concrete));
-      for (let z = 2; z < roomL - D - 2; z += 9) box(roomW, 0.7, 0.5, 0, ceil - 0.35, z, M.concrete);
+      // Columns and beams, unless the venue's interior says what the room really has.
+      const it = o.interior || {};
+      if (it.columns !== false) for (let z = 6; z < floorL; z += 9) [-1, 1].forEach((sx) => box(0.8, ceil, 0.8, sx * roomW * 0.27, ceil / 2, z, it.columns === 'steel' ? intMat('steel') : M.concrete));
+      if (!it.ceiling) for (let z = 2; z < roomL - D - 2; z += 9) box(roomW, 0.7, 0.5, 0, ceil - 0.35, z, M.concrete);
     } else if (o.roof) {
       // Open-air with a space-frame roof over the stage on four corner towers, with a grid of trusses inside it.
       const rw = o.roof.w / 2, rd = o.roof.d, ry = top + 0.6, z0 = 0.5, z1 = z0 - rd;
@@ -2188,7 +2470,8 @@ const BUILD = {
     grid.forEach((z, i) => { if (open) [-1, 1].forEach((sx) => truss(`Tower ${i + 1}${sx < 0 ? 'L' : 'R'}`, V(sx * tx, 0, z), V(sx * tx, top, z), 0.4)); truss(`Grid ${i + 1}`, V(-tx, top, z), V(tx, top, z), 0.4, { hang: true }); });
     truss('Stage', V(-W * 0.45, top, -D * 0.5), V(W * 0.45, top, -D * 0.5), 0.4, { hang: true });
     mainWall = screen('Stage LED', s.wallW, s.wallH, V(0, H + 0.4 + s.wallH / 2, -D + 0.5));
-    clubFitOut(roomW, -D - 1.2, roomL - D - 1.2, open ? 0 : ceil + 0.01, W, { ducts: false });
+    clubFitOut(roomW, -D - 1.2, roomL - D - 1.2, open ? 0 : ceil + 0.01, W, { ducts: false, bar: !(o.interior && o.interior.bars) });
+    if (o.interior && !open) fitInterior(o.interior, { w: roomW, z0: -D - 1.2, z1: roomL - D - 1.2, ceil, W, D, H });
     [-1, -0.33, 0.33, 1].forEach((u) => laser(u * W * 0.42, H, -0.4, 0));
     const back = Math.min(34, floorL);
     laser(-roomW * 0.4, open ? 4 : top + 0.6, back, Math.PI); laser(roomW * 0.4, open ? 4 : top + 0.6, back, Math.PI);
@@ -2242,7 +2525,7 @@ const BUILD = {
   // Raked bowl in front of a roofed stage. Rows are concentric arcs spanning `fan` degrees, centred on +z.
   amphi(s) {
     const pk = activePack();
-    if (pk) return packAmphi(s, pk);
+    if (pk && pk.m.seating) return packAmphi(s, pk);
     const { W, D, H, trim } = s, o = s.room, top = H + trim;
     const rows = o.rows || 40, rd = o.rowDepth || 1, rise = o.rise || 0.4, fan = (o.fan || 70) * DEG, r0 = o.r0 || Math.max(10, W * 0.6);
     box(W, H, D, 0, H / 2, -D / 2, M.deck, true);
@@ -2261,15 +2544,15 @@ const BUILD = {
     const prof = [];
     for (let i = 0; i < rows; i++) { const r = r0 + i * rd, y = i * rise; prof.push(new THREE.Vector2(r, y), new THREE.Vector2(r + rd, y), new THREE.Vector2(r + rd, y + rise)); }
     const bowlMat = o.lawn ? new THREE.MeshStandardMaterial({ color: 0x16211a, roughness: 1, side: THREE.DoubleSide }) : M.bowl;
-    const bowl = new THREE.Mesh(new THREE.LatheGeometry(prof, 64, -fan / 2, fan), bowlMat);
-    venue.add(bowl); receivers.push(bowl);
+    // On a site pack the bowl is the real ground (a lawn that the crowd stands on), so none is modelled.
+    if (!pk) { const bowl = new THREE.Mesh(new THREE.LatheGeometry(prof, 64, -fan / 2, fan), bowlMat); venue.add(bowl); receivers.push(bowl); }
     // Bench seating along the front of each stone row, as at Red Rocks. Lawns have none.
-    if (!o.lawn) {
+    if (!o.lawn && !pk) {
       const benches = mergeGeos(Array.from({ length: rows }, (_, i) => { const r = r0 + i * rd + 0.06, y = (i + 1) * rise; return [new THREE.LatheGeometry([new THREE.Vector2(r, y), new THREE.Vector2(r, y + 0.42), new THREE.Vector2(r + 0.32, y + 0.42), new THREE.Vector2(r + 0.32, y + 0.36)], 48, -fan / 2, fan), null]; }));
       venue.add(new THREE.Mesh(benches, M.wood));
     }
     const rEnd = r0 + rows * rd, yEnd = rows * rise;
-    if (o.rocks) {
+    if (o.rocks && !pk) {
       // Two sandstone monoliths flanking the bowl and stage.
       [-1, 1].forEach((sx) => {
         // Slab whose inner face runs from beside the stage to the outer corner of the bowl.
@@ -2286,8 +2569,12 @@ const BUILD = {
       });
     }
     [-0.42, -0.15, 0.15, 0.42].forEach((u) => laser(u * W, H, -0.5, 0));
-    crowd(o.crowdN || 2000, () => { const i = Math.floor(Math.random() * rows), ph = (Math.random() - 0.5) * fan * 0.94, r = r0 + i * rd + rd * 0.5; return V(Math.sin(ph) * r, i * rise, Math.cos(ph) * r); });
+    crowd(o.crowdN || 2000, () => { const i = Math.floor(Math.random() * rows), ph = (Math.random() - 0.5) * fan * 0.94, r = r0 + i * rd + rd * 0.5; return V(Math.sin(ph) * r, pk ? 0 : i * rise, Math.cos(ph) * r); });
     const mid = Math.floor(rows * 0.45), eye = Math.min(8, rows - 1);
+    if (pk) {
+      const gy = (z) => packGroundY(pk, 0, z) ?? 0, zf = r0 + mid * rd + 0.5, ze = r0 + eye * rd + 0.5;
+      return { target: V(0, H + 4, -D / 2), front: zf, fohY: gy(zf) + 4, crowdEye: V(2, gy(ze) + 1.7, ze) };
+    }
     return { target: V(0, H + 4, -D / 2), front: r0 + mid * rd + 0.5, fohY: mid * rise + 4, crowdEye: V(2, eye * rise + 1.7, r0 + eye * rd + 0.5) };
   },
   club(s) {
@@ -2318,7 +2605,8 @@ const BUILD = {
     truss('Stage pipe', V(-W * 0.45, t, -D * 0.5), V(W * 0.45, t, -D * 0.5), 0.3);
     if (o.pa === 'lr') [-1, 1].forEach((sx) => { for (let i = 0; i < 8; i++) { const m = box(1.0, 0.3, 0.7, sx * (W / 2 + 0.9), t - 0.2 - i * 0.32, 0.4, PA_MATS); m.rotation.x = i * 1.0 * DEG; } });
     mainWall = screen('DJ wall', s.wallW, s.wallH, V(0, H + 0.2 + s.wallH / 2, -D + 0.35));
-    clubFitOut(roomW, -D - 0.6, back, open ? 0 : ceil, W);
+    clubFitOut(roomW, -D - 0.6, back, open ? 0 : ceil, W, { bar: !(o.interior && o.interior.bars), ducts: !(o.interior && o.interior.ceiling) });
+    if (o.interior) fitInterior(o.interior, { w: roomW, z0: -D - 0.6, z1: back, ceil, W, D, H });
     [-0.35, 0.35].forEach((u) => laser(u * W, H, -0.3, 0));
     const floorEnd = o.balcony ? back - balD - 0.5 : floorD;
     crowd(o.crowdN || 260, () => o.balcony && Math.random() < 0.15
@@ -2432,6 +2720,16 @@ function build() {
   if (floor) { floor.rotation.x = -Math.PI / 2; venue.add(floor); receivers.push(floor); }
   sizeWallCanvas(state.wallW / state.wallH);
   camSet = BUILD[state.tpl](state);
+  const site = activePack();
+  if (site && !camSet.pack) {
+    packSite(site); camSet.pack = site;
+    // Eye heights from the template are above a flat floor; on the real ground they rise and fall with it.
+    if (state.tpl !== 'amphi') {
+      const gy = (x, z) => packGroundY(site, x, z) ?? 0;
+      camSet.crowdEye = camSet.crowdEye.clone(); camSet.crowdEye.y += gy(camSet.crowdEye.x, camSet.crowdEye.z);
+      if (camSet.fohY !== undefined) camSet.fohY += gy(0, camSet.front);
+    }
+  }
   finishCrowds(camSet.target);
   djRig = null;
   djBooth(camSet.djAt || V(0, state.H, -state.D * 0.38), camSet.djYaw || 0, state.W >= 14);
@@ -2462,7 +2760,7 @@ function camPose(kind) {
   switch (kind) {
     case 'crowd': { const wp = mainWall.getWorldPosition(new THREE.Vector3()); return { pos: camSet.crowdEye.clone(), target: wp }; }
     // On a real site, Wide is the view from the top of the rows.
-    case 'wide': if (camSet.pack) return { pos: V(16, 44, 90), target: V(0, 4, -10) }; return { pos: V(span * 0.95, H + trim + 7, t.z + span * 1.05), target: t.clone() };
+    case 'wide': if (camSet.pack && camSet.pack.m.seating) return { pos: V(16, 44, 90), target: V(0, 4, -10) }; return { pos: V(span * 0.95, H + trim + 7, t.z + span * 1.05), target: t.clone() };
     case 'side': return { pos: V(W / 2 + 2.5, H + 2.2, t.z + D * 0.45 + 1), target: V(-W * 0.1, H + trim * 0.45, t.z) };
     case 'drone': { const o = droneOrbit(); return { pos: V(t.x, o.h, t.z + o.R), target: t.clone() }; }
     case 'dj': case 'behind': {

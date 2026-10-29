@@ -1,0 +1,43 @@
+{
+  "id": "lost-lands",
+  "name": "Lost Lands: Main Stage",
+  "lat": 39.938497,
+  "lon": -82.402218,
+  "facing": 95,
+  "lidar": "OH_Statewide_Phase2_4_2020",
+  "core": {
+    "half": 256,
+    "res": 0.5
+  },
+  "mid": {
+    "half": 3200,
+    "res": 12.5,
+    "zoom": 13
+  },
+  "far": {
+    "half": 25600,
+    "res": 100,
+    "zoom": 11
+  },
+  "clear": [
+    [
+      -74,
+      -28,
+      74,
+      118
+    ]
+  ],
+  "level": {
+    "kind": "ground"
+  },
+  "albedoGain": 1.3,
+  "notes": "Legend Valley (latlong.net coordinates). The main stage is placed at the foot of the long east-facing slope, the crowd on the real slope looking east. Position and facing estimated; the festival map is an image we could not read.",
+  "flat": [
+    [
+      -40,
+      -26,
+      40,
+      6
+    ]
+  ]
+}

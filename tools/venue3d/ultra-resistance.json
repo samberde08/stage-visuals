@@ -1,0 +1,40 @@
+{
+  "id": "ultra-resistance",
+  "name": "Ultra Miami: Resistance Megastructure",
+  "lat": 25.776559,
+  "lon": -80.1862,
+  "facing": 315,
+  "lidar": "FL_TopobathyFLKeysNOAA_Hydroflattened_2019",
+  "core": {
+    "half": 256,
+    "res": 0.5
+  },
+  "outer": {
+    "half": 1200,
+    "res": 2,
+    "spacing": 1.5
+  },
+  "mid": {
+    "half": 3200,
+    "res": 12.5,
+    "zoom": 13
+  },
+  "far": {
+    "half": 25600,
+    "res": 100,
+    "zoom": 11
+  },
+  "clear": [
+    [
+      -54.0,
+      -30,
+      54.0,
+      78
+    ]
+  ],
+  "level": {
+    "kind": "ground"
+  },
+  "albedoGain": 1.3,
+  "notes": "Resistance placed on the lawn north of the Pepper Fountain, the audience looking north-west. Position and facing estimated; sources only say Resistance sits deeper inside Bayfront Park."
+}

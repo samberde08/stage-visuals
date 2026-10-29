@@ -1,0 +1,35 @@
+{
+  "id": "coachella-sahara",
+  "name": "Coachella: Sahara",
+  "lat": 33.680054,
+  "lon": -116.235981,
+  "facing": 160,
+  "lidar": "CA_SaltonSea_EarthMRI_3_D21",
+  "core": {
+    "half": 256,
+    "res": 0.5
+  },
+  "mid": {
+    "half": 3200,
+    "res": 12.5,
+    "zoom": 13
+  },
+  "far": {
+    "half": 25600,
+    "res": 100,
+    "zoom": 11
+  },
+  "clear": [
+    [
+      -67.0,
+      -22,
+      67.0,
+      133
+    ]
+  ],
+  "level": {
+    "kind": "ground"
+  },
+  "albedoGain": 1.3,
+  "notes": "Sahara on the polo fields in the south part of the Empire Polo Club, where it moved in 2024 (between Avenue 51 and Polo Road, per the Desert Sun). Exact spot and the way the tent opens are estimated."
+}

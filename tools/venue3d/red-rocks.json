@@ -1,20 +1,62 @@
 {
   "id": "red-rocks",
   "name": "Red Rocks Amphitheatre",
-  "lat": 39.6654, "lon": -105.2057,
+  "lat": 39.6654,
+  "lon": -105.2057,
   "lidar": "CO_DRCOG_2_2020",
-  "sentinel": { "tile": "13SDD", "date": "20240912", "scene": "S2A_13SDD_20240912_0_L2A" },
-  "core": { "half": 256, "res": 0.5 },
-  "mid": { "half": 3200, "res": 12.5, "zoom": 13 },
-  "far": { "half": 25600, "res": 100, "zoom": 11 },
-  "roof": { "near": [50, 18], "minZ": 1944.5, "overhang": 1.0 },
+  "sentinel": {
+    "scene": "sentinel-s2-l2a-cogs/13/S/DD/2024/9/S2A_13SDD_20240912_0_L2A/",
+    "date": "2024-09-12"
+  },
+  "core": {
+    "half": 256,
+    "res": 0.5
+  },
+  "mid": {
+    "half": 3200,
+    "res": 12.5,
+    "zoom": 13
+  },
+  "far": {
+    "half": 25600,
+    "res": 100,
+    "zoom": 11
+  },
+  "roof": {
+    "near": [
+      50,
+      18
+    ],
+    "minZ": 1944.5,
+    "overhang": 1.0
+  },
   "facing": 77,
-  "seating": { "focus": 60, "centreX": 0, "rowDepth": 1.215, "rows": 69, "firstRow": 3.5, "rise": 0.44, "tolerance": 0.45 },
+  "seating": {
+    "focus": 60,
+    "centreX": 0,
+    "rowDepth": 1.215,
+    "rows": 69,
+    "firstRow": 3.5,
+    "rise": 0.44,
+    "tolerance": 0.45
+  },
   "albedoGain": 2.2,
   "credits": [
-    { "what": "Ground, rocks, trees and stage roof", "src": "USGS 3D Elevation Program lidar, CO DRCOG 2020 (public domain)", "url": "https://registry.opendata.aws/usgs-lidar/" },
-    { "what": "Ground colour", "src": "Copernicus Sentinel-2 L2A, 12 Sep 2024 (contains modified Copernicus Sentinel data 2024)", "url": "https://registry.opendata.aws/sentinel-2-l2a-cogs/" },
-    { "what": "Land to the horizon", "src": "Terrain Tiles on AWS (USGS 3DEP, SRTM and others)", "url": "https://registry.opendata.aws/terrain-tiles/" }
+    {
+      "what": "Ground, rocks, trees and stage roof",
+      "src": "USGS 3D Elevation Program lidar, CO DRCOG 2020 (public domain)",
+      "url": "https://registry.opendata.aws/usgs-lidar/"
+    },
+    {
+      "what": "Ground colour",
+      "src": "Copernicus Sentinel-2 L2A, 12 Sep 2024 (contains modified Copernicus Sentinel data 2024)",
+      "url": "https://registry.opendata.aws/sentinel-2-l2a-cogs/"
+    },
+    {
+      "what": "Land to the horizon",
+      "src": "Terrain Tiles on AWS (USGS 3DEP, SRTM and others)",
+      "url": "https://registry.opendata.aws/terrain-tiles/"
+    }
   ],
   "notes": "Facing is the centre line of the seating measured from the lidar (the stage roof alone gives 78 deg). Rows: 69 rows of 1.215 m, the period found in the lidar ground returns across the bowl; heights are the lidar ground along each row."
 }

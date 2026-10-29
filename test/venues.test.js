@@ -102,7 +102,14 @@ test('venue packs exist and hold what the app reads', () => {
     for (const f of ['manifest.json', 'core-height.png', 'core-albedo.jpg', 'mid-height.png', 'mid-albedo.jpg', 'far-height.png', 'far-albedo.jpg']) assert.ok(fs.existsSync(path.join(dir, f)), `${v.pack}/${f}`);
     const m = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
     for (const k of ['core', 'mid', 'far']) assert.ok(Number.isInteger(Math.log2(m[k].size - 1)), `${k} grid must be 2^k + 1`);
-    assert.ok(m.seating.rows.length > 0 && m.seating.rows.every((r) => r.length === 6 && r[1] < r[2]));
+    if (m.seating) assert.ok(m.seating.rows.length > 0 && m.seating.rows.every((r) => r.length === 6 && r[1] < r[2]));
+    else {
+      assert.equal(m.kind, 'site');
+      assert.ok(['ground', 'roof'].includes(m.level) && m.clear.length > 0, `${v.pack}: site needs a level and a cleared venue area`);
+      assert.ok(m.buildings.every((b) => b.t > b.b && b.p.length >= 8 && b.p.length % 2 === 0), `${v.pack}: building footprints`);
+      // The pack's facing is the venue's audience facing, or the stage would sit sideways in the real site.
+      assert.equal(Math.round(m.facing), Math.round(v.audienceFacing), `${v.pack}: facing`);
+    }
     assert.ok(Array.isArray(m.trees) && m.credits.length > 0);
   }
 });
