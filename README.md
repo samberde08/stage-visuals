@@ -49,6 +49,14 @@ Anything that can be measured is measured, and the rest is labelled as estimated
 2. Photogrammetry or Gaussian splats of the rock faces, from photos taken on site (with permission), for detail the lidar is too sparse to show.
 3. Indoor venues have no lidar from the air. They need a scan from inside (iPhone LiDAR with Polycam or Scaniverse) or a model built from the venue's plans.
 
+**Photoreal 3D (Google, optional).** On a venue with a pack, Look > Photoreal 3D can stream Google's photorealistic 3D mesh of the real site (the same data Google Earth shows, and what the Blosm add-on imports into Blender) around our stage, rig and crowd. It needs your own key, and it only works in the local version (`npm start`), not the online preview.
+
+1. In the Google Cloud console, create a project, turn on billing, and enable the **Map Tiles API**.
+2. Under APIs & Services > Credentials, create an API key. Restrict it to the Map Tiles API and to the `http://localhost:8080/*` referrer.
+3. In the app, open Look, set Photoreal 3D to On, and paste the key. It is kept in that browser only, never in the repo.
+
+The mesh replaces the lidar ground, rows and trees within about 230 m of the stage, and the lidar land carries on to the horizon. Our stage replaces Google's inside its footprint. The tiles' height is matched to the measured rows automatically. Google's terms allow the tiles to be streamed for display only: they cannot be saved, cached, exported or traced into our own models. That is why the app streams them live and the repo holds none, and why the Blosm route can't be used to build packs. The terms also require Google's attribution on screen, which the app shows under the camera buttons. Google gives a monthly free allowance for the Map Tiles API and bills use beyond it to your Cloud account, so check its current pricing and set a budget alert.
+
 ### Further realism, using your Mac
 
 These need assets or hardware the cloud build can't fetch:
