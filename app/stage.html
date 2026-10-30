@@ -100,6 +100,48 @@ details .btn { margin: 0 10px 10px; }
 }
 .g3d-credit { flex: 1 0 100%; order: 1; pointer-events: none; font: 11px/1.3 var(--mono); color: #fff; text-shadow: 0 1px 4px #000; text-align: right; }
 .g3d-logo { font: 600 14px/1 Arial, Helvetica, sans-serif; letter-spacing: -.2px; }
+/* Audio reactive mixer: floats over the view like a console's effects window. */
+.mixer { position: absolute; top: 12px; right: 12px; width: min(440px, calc(100% - 24px)); max-height: calc(100% - 74px); overflow-y: auto; display: grid; gap: 10px; align-content: start; padding: 12px; background: rgba(16,17,22,.94); border: 1px solid var(--line); border-radius: 6px; backdrop-filter: blur(8px); box-shadow: 0 8px 30px rgba(0,0,0,.5); z-index: 2; }
+.mx-head { display: flex; align-items: center; gap: 10px; }
+.mx-head b { font: 600 20px/1 var(--display); letter-spacing: .02em; }
+.mx-tempo { font: 11.5px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.mx-tempo[data-lock="1"] { color: #7fd99a; }
+.mx-x { margin-left: auto; font: 18px/1 var(--body); color: var(--muted); background: none; border: 0; padding: 2px 6px; cursor: pointer; }
+.mx-x:hover { color: var(--fg); }
+#spec { display: block; width: 100%; height: 120px; background: #050608; border: 1px solid var(--line); border-radius: 4px; cursor: crosshair; touch-action: none; }
+.meters { display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); gap: 3px; }
+.meters div { display: grid; gap: 3px; justify-items: center; }
+.meters i { display: block; width: 100%; height: 34px; background: var(--rack-2); border-radius: 2px; position: relative; overflow: hidden; }
+.meters i b { position: absolute; inset: auto 0 0; height: 0; background: var(--steel); }
+.meters .hit b { background: var(--amber); }
+.meters span { font: 9px var(--mono); color: var(--muted); letter-spacing: .02em; white-space: nowrap; }
+.mx-row { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.mx-row select, .mx-row input[type="text"] { width: auto; flex: 1 1 120px; }
+.mx-row .btn { padding: 6px 9px; }
+.mx-row label { display: flex; gap: 5px; align-items: center; font-size: 12px; color: var(--muted); }
+.mx-row input[type="range"] { width: 110px; }
+.links { display: grid; gap: 6px; }
+.link { display: grid; gap: 6px; padding: 8px; background: var(--rack-2); border: 1px solid var(--line); border-radius: 4px; }
+.link[aria-current="true"] { border-color: var(--amber); }
+.link.off { opacity: .55; }
+.lk-top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr) auto; gap: 6px; align-items: center; }
+.lk-top select { padding: 4px 5px; font-size: 12px; }
+.lk-top .arrow { color: var(--muted); font: 12px var(--mono); }
+.lk-del { background: none; border: 0; color: var(--muted); font-size: 16px; cursor: pointer; padding: 0 4px; }
+.lk-del:hover { color: #ff7a7a; }
+.lk-mid { display: grid; grid-template-columns: minmax(0, 1fr) 82px 46px; gap: 8px; align-items: center; }
+.lk-mid select { padding: 4px 5px; font-size: 12px; }
+.lk-mid output { font: 11.5px var(--mono); text-align: right; }
+.lk-env { height: 4px; background: #0b0c10; border-radius: 2px; overflow: hidden; }
+.lk-env b { display: block; height: 100%; width: 0; background: var(--amber); }
+.link details { background: none; border: 0; }
+.link summary { padding: 0; font-size: 11px; }
+.lk-shape { display: grid; gap: 4px; padding-top: 6px; }
+.lk-shape .row { grid-template-columns: 70px minmax(0, 1fr) 56px; }
+.lk-shape .row > label { font-size: 11.5px; }
+.lk-band { display: flex; gap: 6px; align-items: center; font-size: 11.5px; color: var(--muted); }
+.lk-band input { width: 76px; font: 12px var(--mono); color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 3px; padding: 3px 5px; }
+@media (max-width: 760px) { .mixer { top: 8px; right: 8px; left: 8px; width: auto; max-height: calc(100% - 56px); } }
 .fallback { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--muted); }
 </style>
 
@@ -120,10 +162,36 @@ details .btn { margin: 0 10px 10px; }
       <button type="button" data-cam="drone" aria-pressed="false">Drone</button>
       <button type="button" data-cam="side" aria-pressed="false">Stage left</button>
       <button type="button" data-cam="top" aria-pressed="false">Plan</button>
+      <button type="button" id="fxToggle" aria-pressed="false" aria-controls="mixer">Audio FX</button>
       <button type="button" id="pause" aria-pressed="false">Pause</button>
       <span class="hint" id="camHint">Drag to orbit · scroll to zoom · right-drag to pan</span>
       <div class="g3d-credit" id="g3dCredit" hidden><span class="g3d-logo">Google</span> <span id="g3dCopy"></span></div>
     </div>
+    <section class="mixer" id="mixer" aria-label="Audio reactive mixer" hidden>
+      <div class="mx-head"><b>Audio reactive</b><span class="mx-tempo" id="mxTempo"></span><button type="button" class="mx-x" id="mxClose" aria-label="Close the mixer">×</button></div>
+      <canvas id="spec" width="416" height="120" aria-label="Live spectrum. Drag across it to set the selected link's frequency band."></canvas>
+      <div class="meters" id="meters"></div>
+      <div class="mx-row">
+        <select id="mxPreset" aria-label="Preset"></select>
+        <button type="button" class="btn" id="mxExport">Export</button>
+        <button type="button" class="btn" id="mxImportBtn">Import</button><input type="file" id="mxImport" accept=".json,application/json" hidden>
+      </div>
+      <div class="mx-row">
+        <input type="text" id="mxName" placeholder="Name this setup" maxlength="40" aria-label="Preset name">
+        <button type="button" class="btn" id="mxSave">Save preset</button>
+      </div>
+      <div class="mx-row">
+        <label for="mxSens">Sensitivity</label><input id="mxSens" type="range" min="0" max="2" step="0.05" value="1"><output id="mxSensOut" for="mxSens">100%</output>
+      </div>
+      <div class="mx-row">
+        <label><input type="checkbox" id="mxAgc" checked> Auto gain</label>
+        <label><input type="checkbox" id="mxFollow" checked> Follow detected tempo</label>
+        <label><input type="checkbox" id="mxAutoDrop" checked> Auto drop</label>
+      </div>
+      <p class="note" id="mxNote"></p>
+      <div class="links" id="links"></div>
+      <button type="button" class="btn" id="mxAdd">+ Add link</button>
+    </section>
   </div>
 
   <aside class="rack" aria-label="Controls">
@@ -198,7 +266,10 @@ details .btn { margin: 0 10px 10px; }
           <option value="none">Tempo only (silent)</option>
           <option value="demo">Demo beat</option>
           <option value="track">Your track</option>
+          <option value="mic">Microphone or line in (live)</option>
+          <option value="tab">Audio from another browser tab (live)</option>
         </select></div>
+      <div class="row two" id="devRow" hidden><label for="inputDev">Input</label><select id="inputDev"><option value="">Default input</option></select></div>
       <div class="row two"><label for="sound">Sound</label>
         <select id="sound">
           <option value="room">In the venue: room, distance, crowd</option>
@@ -207,6 +278,7 @@ details .btn { margin: 0 10px 10px; }
       <div class="row two" id="trackRow" hidden><label for="track">File</label><input id="track" type="file" accept="audio/*"></div>
       <div class="btns"><button type="button" class="btn" id="play">Play music</button><button type="button" class="btn drop" id="drop">Drop</button></div>
       <p class="note" id="musicNote"></p>
+      <button type="button" class="btn" id="fxOpen">Audio reactive mixer: <span id="fxSum"></span></button>
     </section>
 
     <section class="group">
@@ -293,6 +365,7 @@ details .btn { margin: 0 10px 10px; }
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
 <script src="venues.js"></script>
+<script src="audio.js"></script>
 <script>
 (() => {
 const $ = (s) => document.querySelector(s);
@@ -2687,7 +2760,8 @@ function makeLaser(spot) {
 }
 const laserCol = new THREE.Color();
 function animateLasers(beat, drop) {
-  const mode = drop === 'on' && state.lasers === 'off' ? 'fan' : state.lasers;
+  const mode = drop === 'on' && state.lasers === 'off' ? 'fan' : state.lasers, sync = beat;
+  beat = fx.laserBeat;
   laserCol.set(state.laserCol);
   lasers.forEach((L, li) => {
     const on = mode !== 'off' && drop !== 'pre';
@@ -2696,12 +2770,17 @@ function animateLasers(beat, drop) {
     let spread, tilt, sweep = 0, flick = 1;
     if (mode === 'fan') { spread = (14 + 22 * (0.5 + 0.5 * Math.sin(beat * Math.PI / 8))) * DEG; tilt = -(3 + 5 * Math.sin(beat * Math.PI / 4 + li)) * DEG; }
     else if (mode === 'sweep') { spread = 3 * DEG; sweep = 45 * DEG * Math.sin(beat * Math.PI / 4 + li * 0.9); tilt = -4 * DEG; }
-    else { spread = 32 * DEG; tilt = (1.5 + 1.5 * Math.sin(beat * Math.PI / 2 + li)) * DEG; flick = ((beat * 2) % 1) < 0.5 ? 1 : 0.15; }
+    else { spread = 32 * DEG; tilt = (1.5 + 1.5 * Math.sin(beat * Math.PI / 2 + li)) * DEG; flick = ((sync * 2) % 1) < 0.5 ? 1 : 0.15; }
+    const G = L.grp;
+    spread *= Math.max(0, 1 + mod('laser.spread', G));
+    tilt -= mod('laser.tilt', G) * 10 * DEG;
     L.tilt.rotation.x = tilt;
     const nb = L.holders.length;
     L.holders.forEach((h, b) => { h.rotation.y = sweep + (b / (nb - 1) - 0.5) * 2 * spread; });
+    const hue = mod('laser.hue', G);
     L.mat.uniforms.uColor.value.copy(laserCol);
-    L.mat.uniforms.uIntensity.value = 2.6 * (0.12 + state.haze) * flick * (drop === 'on' ? 1.3 : 1) * (1 - 0.75 * look.day);
+    if (hue) L.mat.uniforms.uColor.value.offsetHSL(hue, 0, 0);
+    L.mat.uniforms.uIntensity.value = 2.6 * (0.12 + fx.haze) * flick * (drop === 'on' ? 1.3 : 1) * (1 - 0.75 * look.day) * mod('laser.dim', G);
   });
 }
 
@@ -2736,6 +2815,10 @@ function build() {
   distribute(state.count).forEach((s, i) => fixtures.push(makeFixture(s, i)));
   if (!laserSpots.length) [-0.3, 0.3].forEach((u) => laser(u * state.W, state.H, -0.3, 0));
   lasers = laserSpots.map(makeLaser);
+  // Groups the audio mixer can target. Left and right are as the audience sees the stage.
+  const mid = state.W * 0.15;
+  fixtures.forEach((f, i) => { const x = f.pos.x; f.grp = { hang: f.flip, floor: !f.flip, odd: i % 2 === 0, even: i % 2 === 1, left: x < -mid, right: x > mid, centre: Math.abs(x) <= mid }; });
+  lasers.forEach((L) => { const x = L.root.position.x; L.grp = { left: x < -0.5, right: x > 0.5 }; });
   const mw = mainWall;
   const n = new THREE.Vector3(0, 0, 1).applyQuaternion(mw.quaternion);
   wallLight.position.copy(mw.position).addScaledVector(n, 3);
@@ -2954,6 +3037,9 @@ const ray = new THREE.Raycaster(); ray.far = 90;
 const qW = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), dir = new THREE.Vector3(), org = new THREE.Vector3(), nrm = new THREE.Vector3();
 const rimSum = new THREE.Color(), toCam = new THREE.Vector3();
 let time = 0, beatClock = 0, last = performance.now(), paused = false, frame = 0;
+// Clocks the audio mixer can speed up or slow down, so movement keeps flowing instead of jumping when the speed changes.
+const fx = { lastBeat: 0, rigBeat: 0, laserBeat: 0, wallTime: 0, haze: 0.55, shake: new THREE.Vector3() };
+const WHITE = new THREE.Color(1, 1, 1);
 
 function fixtureColor(i, n, beat, out) {
   if (state.colorMode === 'solid') return out.copy(colA);
@@ -3039,6 +3125,10 @@ function drawWall(t, beat, drop) {
       ctx.fillText('Choose an image or video in the LED wall panel', w / 2, h / 2, w * 0.9); ctx.textAlign = 'left';
     }
   }
+  const ld = mod('led.dim'), lf = Math.min(1, mod('led.flash'));
+  if (ld < 0.999) { ctx.globalAlpha = 1 - Math.max(0, ld); ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h); }
+  if (lf > 0.01) { ctx.globalAlpha = lf * 0.85; ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); }
+  ctx.globalAlpha = 1;
   if (drop === 'on') { ctx.globalAlpha = Math.exp(-(beat % 1) * 6) * 0.75; ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); ctx.globalAlpha = 1; }
   else if (drop === 'pre') { ctx.globalAlpha = 0.85; ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h); ctx.globalAlpha = 1; }
   wallTex.value.needsUpdate = true;
@@ -3054,14 +3144,20 @@ function tick(now) {
   if (!paused) { time += dt; beatClock += dt * state.bpm / 60; }
   frame++;
   if (audio.playing && audio.demo) beatClock = demoBeat();
-  else if (audio.playing && audio.el && audio.grid) { beatClock = trackBeat(); meter(); }
+  else if (audio.playing && audio.el && audio.grid) beatClock = trackBeat();
+  reactStep(dt);
   const beat = beatClock, drop = dropPhase(beat);
+  const db = Math.abs(beat - fx.lastBeat) < 1 ? beat - fx.lastBeat : 0; fx.lastBeat = beat;
+  fx.rigBeat += db * Math.max(0, 1 + 2 * mod('rig.speed'));
+  fx.laserBeat += db * Math.max(0, 1 + 2 * mod('laser.speed'));
+  if (!paused) fx.wallTime += dt * Math.max(0, 1 + 2 * mod('led.speed'));
+  fx.haze = Math.min(1, Math.max(0, state.haze + mod('haze')));
   colA.set(state.colA); colB.set(state.colB);
   const n = fixtures.length, half = state.zoom / 2 * DEG, k = Math.tan(half) / Math.tan(BASE_HALF);
-  const hz = (0.05 + Math.min(1, state.haze + (drop === 'on' ? 0.2 : 0)) * 0.55) * (1 - 0.8 * look.day);
+  const hz = (0.05 + Math.min(1, fx.haze + (drop === 'on' ? 0.2 : 0)) * 0.55) * (1 - 0.8 * look.day);
   // A real site runs hundreds of metres out, so the stage haze thins with distance there rather than hiding the rocks.
-  scene.fog.density = (0.004 + state.haze * 0.012) * (1 - 0.65 * look.day) * (camSet.pack ? 0.45 : 1);
-  shared.uTime.value = time; shared.uHaze.value = state.haze;
+  scene.fog.density = (0.004 + fx.haze * 0.012) * (1 - 0.65 * look.day) * (camSet.pack ? 0.45 : 1);
+  shared.uTime.value = time; shared.uHaze.value = fx.haze;
   rimSum.setRGB(0, 0, 0);
   const glareK = (1 - 0.75 * look.day) * (highOn() ? 1 : 0.6);
   fixtures.forEach((f, i) => {
@@ -3071,10 +3167,20 @@ function tick(now) {
       p = d.pan; tl = d.tilt; dim = d.dim; tmpC.setRGB(d.r, d.g, d.b);
       hf = d.zoom / 2 * DEG; kf = Math.tan(hf) / Math.tan(BASE_HALF);
     } else {
-      [p, tl] = motion(i, n, beat);
-      if (!f.flip) { p = Math.PI / 2; tl = (i % 2 ? 1 : -1) * (12 + 14 * Math.sin(beat * Math.PI / 4)) * DEG; if (state.program === 'pools') tl = 0; }
-      dim = drop === 'pre' ? 0 : drop === 'on' ? 0.5 + 0.5 * Math.exp(-(beat % 1) * 4) : dimmer(i, n, beat);
+      const G = f.grp, rb = fx.rigBeat;
+      [p, tl] = motion(i, n, rb);
+      if (!f.flip) { p = Math.PI / 2; tl = (i % 2 ? 1 : -1) * (12 + 14 * Math.sin(rb * Math.PI / 4)) * DEG; if (state.program === 'pools') tl = 0; }
+      const lift = mod('rig.tilt', G);
+      tl = tl * mod('rig.size', G) + (tl < 0 ? -1 : 1) * lift * 35 * DEG;
+      dim = drop === 'on' ? 0.5 + 0.5 * Math.exp(-(beat % 1) * 4) : dimmer(i, n, beat);
       fixtureColor(i, n, beat, tmpC);
+      // Audio mixer: dimmer, colour shift, white flash, strobe and beam size per group.
+      dim *= mod('rig.dim', G);
+      const hue = mod('rig.hue', G); if (hue) tmpC.offsetHSL(hue, 0, 0);
+      const wf = Math.min(1, mod('rig.white', G)); if (wf > 0) { tmpC.lerp(WHITE, wf); dim = Math.min(1, dim + wf * 0.8); }
+      const sb = mod('rig.strobe', G); if (sb > 0.15) dim *= ((time * (5 + 15 * Math.min(1, sb))) % 1) < 0.25 ? 1 : 0.03;
+      const zm = mod('rig.zoom', G); if (zm) { hf = Math.min(20 * DEG, Math.max(1.5 * DEG, half * (1 + zm))); kf = Math.tan(hf) / Math.tan(BASE_HALF); }
+      if (drop === 'pre') dim = 0;
     }
     f.pan.rotation.y = p; f.tilt.rotation.x = tl;
     f.lens.material.color.copy(tmpC).multiplyScalar(0.2 + dim * 1.4);
@@ -3099,15 +3205,15 @@ function tick(now) {
       f.pool.lookAt(org.copy(f.pool.position).add(nrm));
       const r = Math.max(0.4, L * Math.tan(hf) * 2.6);
       f.pool.scale.set(r, r, 1);
-      f.pool.material.color.copy(tmpC).multiplyScalar(dim * (0.55 - state.haze * 0.2));
+      f.pool.material.color.copy(tmpC).multiplyScalar(dim * (0.55 - fx.haze * 0.2));
     } else f.pool.visible = false;
   });
   animateLasers(beat, drop);
-  const energy = drop === 'on' ? 1.6 : drop === 'pre' ? 0.15 : audio.playing ? audio.energy : 0.5;
+  const energy = Math.max(0, (drop === 'on' ? 1.6 : drop === 'pre' ? 0.15 : rx.live ? 0.4 + 0.8 * rx.f.level : 0.5) + mod('crowd'));
   animateDJ(beat, energy, drop);
   crowdU.uBeat.value = beat; crowdU.uEnergy.value = energy; crowdU.uLift.value = Math.min(1, Math.max(0, energy - 0.35));
   glowMats.forEach((m) => m.color.copy(wallLight.color).multiplyScalar(1.3));
-  drawWall(time, beat, drop);
+  drawWall(fx.wallTime, beat, drop);
   // Rim light on the crowd from what the stage is doing: the LED wall plus the rig's average colour and level.
   const nf = Math.max(1, n), night = 1 - look.day;
   crowdU.uRim.value.copy(wallLight.color).multiplyScalar(0.3).add(rimSum.multiplyScalar(1.2 / nf)).multiplyScalar(night * (highOn() ? 1 : 0.7));
@@ -3115,6 +3221,7 @@ function tick(now) {
   crowdU.uStageDir.value.copy(toCam).transformDirection(camera.matrixWorldInverse);
   crowdU.uCam.value.set(camera.position.x, camera.position.y, camera.position.z, 1);
   if (frame % 10 === 0) $('#beatOut').textContent = `${Math.round(state.bpm)} BPM`;
+  if (!$('#mixer').hidden) drawMixer();
   $('#beatOut').dataset.on = (beat % 1) < 0.18 ? '1' : '0';
   if (tween) {
     const e = Math.min(1, (now - tween.t0) / 900), s = e < 0.5 ? 2 * e * e : 1 - Math.pow(-2 * e + 2, 2) / 2;
@@ -3133,7 +3240,11 @@ function tick(now) {
   dome.position.copy(camera.position);
   stars.position.copy(camera.position);
   g3dUpdate();
+  // Camera shake from the mixer: a small random offset for this frame only.
+  const shake = walk.on ? 0 : mod('cam.shake');
+  if (shake > 0.01) { fx.shake.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(shake * 0.35); camera.position.add(fx.shake); }
   if (highOn()) renderHigh(dt); else renderer.render(scene, camera);
+  if (shake > 0.01) camera.position.sub(fx.shake);
   requestAnimationFrame(tick);
 }
 
@@ -3239,18 +3350,19 @@ function renderTd() {
 const esc = (t) => String(t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 
 /* ---------- Music: demo beat, your track, kick detection, drop ---------- */
-const audio = { ctx: null, input: null, an: null, bins: null, mode: 'none', playing: false, demo: null, el: null, trackUrl: null, trackName: '', grid: null, energy: 0.5, noise: null };
+const audio = { ctx: null, input: null, an: null, mode: 'none', playing: false, demo: null, el: null, trackUrl: null, trackName: '', grid: null, noise: null, stream: null, listen: null };
 const dropState = { start: 0, end: 0 };
 function ensureCtx() {
   if (!audio.ctx) {
     const AC = window.AudioContext || window.webkitAudioContext;
     audio.ctx = new AC();
-    audio.an = audio.ctx.createAnalyser(); audio.an.fftSize = 1024; audio.an.smoothingTimeConstant = 0.25;
+    // Unsmoothed 2048-point FFT: the audio mixer does its own smoothing per link, and onsets need the raw frames.
+    audio.an = audio.ctx.createAnalyser(); audio.an.fftSize = 2048; audio.an.smoothingTimeConstant = 0;
+    resetAnalyzer(audio.ctx.sampleRate);
     audio.input = audio.ctx.createGain();
     // The analyser hears the music as mixed, before the room, so beat tracking is the same in every venue.
     const sink = audio.ctx.createGain(); sink.gain.value = 0;
     audio.input.connect(audio.an); audio.an.connect(sink).connect(audio.ctx.destination);
-    audio.bins = new Uint8Array(audio.an.frequencyBinCount);
     const nb = audio.ctx.createBuffer(1, audio.ctx.sampleRate, audio.ctx.sampleRate), ch = nb.getChannelData(0);
     for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
     audio.noise = nb;
@@ -3324,7 +3436,7 @@ function updateSound(drop) {
   setParam(r.level.gain, venueOn ? 0.75 + 0.25 * Math.min(1, 20 / d) : 0, t);
   r.cheer = drop === 'on' ? Math.max(r.cheer, 1) : r.cheer * 0.985;
   const crowdSize = Math.min(1, peopleCount() / 6000);
-  setParam(r.crowd.gain, venueOn && audio.playing ? (0.012 + 0.03 * crowdSize) * (1 + 3 * r.cheer) * (0.85 + 0.3 * Math.sin(time * 0.7) * Math.sin(time * 0.31)) : 0, t);
+  setParam(r.crowd.gain, venueOn && audio.playing && !audio.listen ? (0.012 + 0.03 * crowdSize) * (1 + 3 * r.cheer) * (0.85 + 0.3 * Math.sin(time * 0.7) * Math.sin(time * 0.31)) : 0, t);
   const P = r.pan, L = c.listener;
   if (P.positionX) { P.positionX.value = pa.x; P.positionY.value = state.H + 4; P.positionZ.value = Math.min(pa.z + state.D / 2, 1); } else P.setPosition(pa.x, state.H + 4, pa.z);
   camera.getWorldDirection(lisFwd); lisUp.set(0, 1, 0).applyQuaternion(camera.quaternion);
@@ -3384,7 +3496,6 @@ function startDemo() {
   audio.demo = { out, beatBase, tBase: c.currentTime + 0.1, step: beatBase * 4, timer: 0 };
   audio.demo.timer = setInterval(scheduleDemo, 25);
   scheduleDemo();
-  audio.energy = 0.9;
 }
 function startTrack() {
   const c = ensureCtx();
@@ -3395,7 +3506,42 @@ function startTrack() {
   if (audio.el.src !== audio.trackUrl) audio.el.src = audio.trackUrl;
   return audio.el.play();
 }
+// Live input: a microphone or audio interface (BlackHole on a Mac brings in DJ software or Spotify), or another tab's
+// sound. It goes to the analyser only, never to the speakers, so a mic cannot feed back.
+async function startListen() {
+  const c = ensureCtx(), md = navigator.mediaDevices;
+  if (!md) throw new Error('nomedia');
+  const stream = audio.mode === 'mic'
+    ? await md.getUserMedia({ audio: { deviceId: rx.device ? { exact: rx.device } : undefined, echoCancellation: false, noiseSuppression: false, autoGainControl: false } })
+    : await md.getDisplayMedia({ video: true, audio: true });
+  if (!stream.getAudioTracks().length) { stream.getTracks().forEach((t) => t.stop()); throw new Error('notab'); }
+  audio.stream = stream;
+  audio.listen = c.createMediaStreamSource(stream); audio.listen.connect(audio.an);
+  stream.getAudioTracks()[0].addEventListener('ended', () => { stopMusic(); renderMusic(); });
+  audio.playing = true;
+  if (audio.mode === 'mic') listDevices();
+}
+function listenError(err) {
+  const name = err && (err.name || err.message);
+  if (name === 'notab') return 'No sound came with that share. In Chrome, pick a tab and turn on "Also share tab audio".';
+  if (name === 'NotAllowedError' || name === 'SecurityError') return 'The browser, or this page, did not allow the input. Allow it in the address bar, or run the app locally with npm start.';
+  if (name === 'NotFoundError' || name === 'OverconstrainedError') return 'That input is not connected. Pick another under Input.';
+  return 'This browser cannot open audio inputs here. Try Chrome, or run the app locally with npm start.';
+}
+function listDevices() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+  navigator.mediaDevices.enumerateDevices().then((ds) => {
+    const ins = ds.filter((d) => d.kind === 'audioinput' && d.deviceId);
+    $('#inputDev').innerHTML = '<option value="">Default input</option>' + ins.map((d, i) => `<option value="${esc(d.deviceId)}">${esc(d.label || `Input ${i + 1}`)}</option>`).join('');
+    $('#inputDev').value = ins.some((d) => d.deviceId === rx.device) ? rx.device : '';
+  }).catch(() => {});
+}
 function startMusic() {
+  if (audio.mode === 'mic' || audio.mode === 'tab') {
+    renderMusic(audio.mode === 'mic' ? 'Asking for the input…' : 'Pick a tab to listen to…');
+    startListen().then(() => renderMusic(), (err) => { stopMusic(); renderMusic(listenError(err)); });
+    return 'asking';
+  }
   try {
     if (audio.mode === 'demo') startDemo();
     else if (audio.mode === 'track' && audio.trackUrl) startTrack().catch(() => { audio.playing = false; renderMusic('The browser blocked playback. Press Play music again.'); });
@@ -3406,7 +3552,9 @@ function startMusic() {
 function stopMusic() {
   if (audio.demo) { clearInterval(audio.demo.timer); audio.demo.out.disconnect(); audio.demo = null; }
   if (audio.el) audio.el.pause();
-  audio.playing = false; audio.energy = 0.5;
+  if (audio.listen) { audio.listen.disconnect(); audio.listen = null; }
+  if (audio.stream) { audio.stream.getTracks().forEach((t) => t.stop()); audio.stream = null; }
+  audio.playing = false;
 }
 // Beat grid for your own track, worked out once when the file loads: a kick-band onset envelope,
 // autocorrelation for the tempo (85-175 BPM), then the phase whose beats land on the most onsets.
@@ -3447,11 +3595,6 @@ function analyzeTrack(buf) {
   return { bpm: Math.round(bpm * 10) / 10, offset: bestPh / fps };
 }
 function trackBeat() { const g = audio.grid; return (audio.el.currentTime - g.offset) * g.bpm / 60; }
-function meter() {
-  const b = audio.bins; audio.an.getByteFrequencyData(b);
-  let all = 0; for (let i = 0; i < b.length; i++) all += b[i];
-  audio.energy += (Math.min(1.4, all / (b.length * 255) * 3) - audio.energy) * 0.08;
-}
 function dropPhase(beat) {
   if (!dropState.end || beat >= dropState.end) return null;
   return beat < dropState.start ? 'pre' : 'on';
@@ -3467,13 +3610,16 @@ function triggerDrop() {
   setTimeout(() => btn.setAttribute('aria-pressed', 'false'), (dropState.end - beatClock) * 60000 / state.bpm);
 }
 function renderMusic(msg) {
-  const play = $('#play');
-  play.textContent = audio.playing ? 'Stop music' : 'Play music';
+  const play = $('#play'), listening = audio.mode === 'mic' || audio.mode === 'tab';
+  play.textContent = listening ? (audio.playing ? 'Stop listening' : 'Start listening') : audio.playing ? 'Stop music' : 'Play music';
   play.disabled = audio.mode === 'none' || (audio.mode === 'track' && !audio.trackUrl);
   $('#trackRow').hidden = audio.mode !== 'track';
+  $('#devRow').hidden = audio.mode !== 'mic';
   let note = 'Lights, lasers and crowd follow the Tempo slider. Pick a demo beat or your own track to hear music.';
   if (audio.mode === 'demo') note = 'A synth house loop at the Tempo slider. Press Drop for a one-beat blackout, then four bars at full energy.';
   if (audio.mode === 'track') note = audio.trackUrl ? `${audio.trackName}: ${audio.grid.bpm} BPM, lights locked to its kick.` : 'Choose an MP3, WAV or M4A file.';
+  if (audio.mode === 'mic') note = audio.playing ? 'Listening. The show follows the tempo it hears; the Audio FX mixer shows what it detects.' : 'A microphone or audio interface. On a Mac, the free BlackHole driver brings Rekordbox, Serato or Spotify straight in: pick BlackHole under Input. Sound is analysed in the page only, never recorded or sent.';
+  if (audio.mode === 'tab') note = audio.playing ? 'Listening to the shared tab.' : 'Reacts to sound playing in another Chrome or Edge tab, such as YouTube, SoundCloud or a DJ stream. Pick the tab and turn on tab audio.';
   $('#musicNote').textContent = msg || note;
 }
 $('#music').addEventListener('change', (e) => { stopMusic(); audio.mode = e.target.value; renderMusic(); });
@@ -3492,8 +3638,262 @@ $('#track').addEventListener('change', (e) => {
   }).catch(() => renderMusic(`Could not read a steady beat from ${f.name}. Try an MP3 or WAV with a clear kick.`));
 });
 $('#sound').addEventListener('change', (e) => { state.sound = e.target.value; });
-$('#play').addEventListener('click', () => { if (audio.playing) stopMusic(); else startMusic(); renderMusic(); });
+$('#play').addEventListener('click', () => {
+  if (audio.playing) stopMusic();
+  else if (startMusic() === 'asking') return;
+  renderMusic();
+});
 $('#drop').addEventListener('click', triggerDrop);
+$('#inputDev').addEventListener('change', (e) => { rx.device = e.target.value; saveReact(); if (audio.playing && audio.mode === 'mic') { stopMusic(); startMusic(); } });
+
+/* ---------- Audio reactive mixer ---------- */
+// app/audio.js does the listening (bands, hits, tempo, builds and drops) and runs the links; this part feeds it
+// the analyser's spectrum each frame and draws the mixer. With no music playing it hears a built-in beat at the Tempo slider.
+const SA = window.StageAudio;
+const rx = { an: SA.createAnalyzer(), mx: SA.createMatrix(), mags: new Float32Array(1024), fbuf: null, f: SA.createAnalyzer().features, live: false, agc: true, follow: true, autoDrop: true, preset: 'Festival main stage', sel: null, device: '', specPeak: -30, rows: new Map() };
+function resetAnalyzer(sr) { rx.an = SA.createAnalyzer({ sampleRate: sr, fftSize: 2048, agc: rx.agc }); rx.f = rx.an.features; }
+function mod(dst, G) { return SA.modValue(rx.mx, dst, G ? (g) => !!G[g] : null); }
+const listeningMode = () => audio.mode === 'mic' || audio.mode === 'tab';
+function reactStep(dt) {
+  rx.live = !!(audio.playing && audio.an);
+  if (rx.live) {
+    const n = audio.an.frequencyBinCount;
+    if (!rx.fbuf || rx.fbuf.length !== n) { rx.fbuf = new Float32Array(n); rx.mags = new Float32Array(n); }
+    audio.an.getFloatFrequencyData(rx.fbuf);
+    for (let i = 0; i < n; i++) rx.mags[i] = rx.fbuf[i] > -200 ? Math.pow(10, rx.fbuf[i] / 20) : 0;
+  } else SA.synthSpectrum(rx.mags, rx.an.binHz, beatClock);
+  const f = rx.f = SA.analyze(rx.an, rx.mags, dt), T = rx.an.tempo, ears = rx.live && listeningMode();
+  if (ears && rx.follow && T.locked) {
+    // Take the tracker's phase but keep the show's own whole-beat count, so effects do not jump when it locks.
+    beatClock = T.beat + Math.round(beatClock - T.beat);
+    state.bpm = T.bpm;
+    if (frame % 30 === 0) { $('#bpm').value = Math.round(T.bpm); $('#bpm').nextElementSibling.textContent = String(Math.round(T.bpm)); }
+  }
+  // The demo, your track and the Tempo slider know the beat exactly, so beat features come from the show clock there.
+  if (!ears) SA.beatFeatures(f, beatClock);
+  if (dropState.end && beatClock >= dropState.start && beatClock < dropState.end) f.drop = Math.max(f.drop, Math.exp(-(beatClock - dropState.start) / 3));
+  if (ears && rx.autoDrop && rx.an.dropNow) { dropState.start = beatClock; dropState.end = Math.ceil(beatClock) + 16; }
+  SA.updateMatrix(rx.mx, rx.an, f, dt);
+}
+
+// Saved setup: the links, the knobs and the chosen input. User presets live next to it.
+const RX_KEY = 'stageReactive', RX_PRESETS = 'stageReactivePresets';
+function readStore(k, d) { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (_) { return d; } }
+function writeStore(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) { /* private window: kept for this visit */ } }
+function saveReact() { writeStore(RX_KEY, { preset: rx.preset, links: SA.saveMappings(rx.mx.mappings), sensitivity: rx.mx.sensitivity, agc: rx.agc, follow: rx.follow, autoDrop: rx.autoDrop, device: rx.device }); }
+function userPresets() { const p = readStore(RX_PRESETS, {}); return p && typeof p === 'object' && !Array.isArray(p) ? p : {}; }
+function loadReact() {
+  const s = readStore(RX_KEY, null);
+  if (s && Array.isArray(s.links)) {
+    rx.mx.mappings = SA.loadMappings(s.links); rx.preset = typeof s.preset === 'string' ? s.preset : '';
+    rx.mx.sensitivity = SA.clamp(Number(s.sensitivity) || 1, 0, 2); rx.agc = s.agc !== false; rx.follow = s.follow !== false; rx.autoDrop = s.autoDrop !== false; rx.device = typeof s.device === 'string' ? s.device : '';
+  } else rx.mx.mappings = SA.presetMappings(rx.preset);
+  rx.an.agc = rx.agc;
+}
+
+const METERS = [['level', 'Lvl'], ['sub', 'Sub'], ['bass', 'Bass'], ['lowmid', 'LoMid'], ['mid', 'Mid'], ['highmid', 'HiMid'], ['high', 'High'], ['kick', 'Kick', 1], ['snare', 'Snare', 1], ['hat', 'Hat', 1], ['beat', 'Beat', 1], ['build', 'Build'], ['drop', 'Drop', 1]];
+const SRC_LABEL = Object.fromEntries(SA.SOURCES.map((x) => [x.id, x.label]));
+$('#meters').innerHTML = METERS.map(([k, l, hit]) => `<div${hit ? ' class="hit"' : ''} title="${esc(SRC_LABEL[k])}"><i><b data-m="${k}"></b></i><span>${l}</span></div>`).join('');
+const meterEls = [...document.querySelectorAll('#meters b')].map((el) => [el, el.dataset.m]);
+const GROUP_LABEL = { all: 'All', hang: 'Overhead', floor: 'Floor', odd: 'Odd', even: 'Even', left: 'Left', right: 'Right', centre: 'Centre' };
+const SRC_OPTS = SA.SOURCES.map((x) => `<option value="${x.id}">${esc(x.label)}</option>`).join('');
+const DST_SETS = [['Lights', 'rig.'], ['Lasers', 'laser.'], ['LED wall', 'led.'], ['Atmosphere and camera', '']];
+const DST_OPTS = DST_SETS.map(([label, pre]) => `<optgroup label="${label}">${SA.DESTS.filter((d) => (pre ? d.id.startsWith(pre) : !/^(rig|laser|led)\./.test(d.id))).map((d) => `<option value="${d.id}">${esc(d.label)}</option>`).join('')}</optgroup>`).join('');
+const SHAPE = [
+  ['gain', 'Gain', 0, 4, 0.05, (v) => `×${v.toFixed(2)}`],
+  ['gate', 'Gate', 0, 0.95, 0.01, (v) => `${Math.round(v * 100)}%`],
+  ['attack', 'Attack', 0, 2000, 5, (v) => `${Math.round(v)} ms`],
+  ['release', 'Release', 0, 4000, 10, (v) => `${Math.round(v)} ms`],
+  ['curve', 'Curve', 0.25, 4, 0.05, (v) => v.toFixed(2)],
+];
+const pct = (v) => `${v > 0 ? '+' : ''}${Math.round(v * 100)}%`;
+const shapeSum = (m) => `Response · attack ${Math.round(m.attack)} ms · release ${Math.round(m.release)} ms${m.gate ? ` · gate ${Math.round(m.gate * 100)}%` : ''}`;
+const groupOpts = (m) => SA.DEST_BY_ID[m.dst].groups.map((g) => `<option value="${g}">${GROUP_LABEL[g]}</option>`).join('');
+function linkRow(m) {
+  return `<div class="link${m.on ? '' : ' off'}" data-id="${m.id}" aria-current="${rx.sel === m.id}">
+  <div class="lk-top"><input type="checkbox" data-k="on"${m.on ? ' checked' : ''} aria-label="Link on"><select data-k="src" aria-label="Listen to">${SRC_OPTS}</select><span class="arrow">→</span><select data-k="dst" aria-label="Drive">${DST_OPTS}</select><button type="button" class="lk-del" data-act="del" aria-label="Remove link">×</button></div>
+  <div class="lk-mid"><input type="range" data-k="amount" min="-1" max="1" step="0.05" value="${m.amount}" aria-label="Amount"><select data-k="group" aria-label="Which fixtures">${groupOpts(m)}</select><output data-o="amount">${pct(m.amount)}</output></div>
+  <div class="lk-env"><b></b></div>
+  <details><summary>${shapeSum(m)}</summary><div class="lk-shape">
+  ${SHAPE.map(([k, l, lo, hi, st, f]) => `<div class="row"><label>${l}</label><input type="range" data-k="${k}" min="${lo}" max="${hi}" step="${st}" value="${m[k]}" aria-label="${l}"><output data-o="${k}">${f(m[k])}</output></div>`).join('')}
+  <label class="lk-band"><input type="checkbox" data-k="invert"${m.invert ? ' checked' : ''}> Invert (react to silence instead)</label>
+  <div class="lk-band" data-band${m.src === 'band' ? '' : ' hidden'}>Band <input type="number" data-k="lo" min="20" max="20000" value="${Math.round(m.lo)}" aria-label="Band low Hz"> to <input type="number" data-k="hi" min="20" max="20000" value="${Math.round(m.hi)}" aria-label="Band high Hz"> Hz</div>
+  </div></details></div>`;
+}
+function renderLinks() {
+  const box = $('#links');
+  box.innerHTML = rx.mx.mappings.map(linkRow).join('') || '<p class="note">No links: nothing reacts to the music. Add one, or pick a preset.</p>';
+  rx.rows.clear();
+  box.querySelectorAll('.link').forEach((row) => {
+    const m = rx.mx.mappings.find((x) => x.id === row.dataset.id);
+    row.querySelector('[data-k="src"]').value = m.src; row.querySelector('[data-k="dst"]').value = m.dst; row.querySelector('[data-k="group"]').value = m.group;
+    rx.rows.set(m.id, { row, env: row.querySelector('.lk-env b') });
+  });
+  renderPresetPick();
+}
+function renderPresetPick() {
+  const u = Object.keys(userPresets());
+  const known = rx.preset && (SA.PRESETS[rx.preset] || u.includes(rx.preset.slice(5)));
+  $('#mxPreset').innerHTML = (known ? '' : '<option value="">Custom (not saved)</option>')
+    + `<optgroup label="Built in">${Object.keys(SA.PRESETS).map((k) => `<option value="${esc(k)}">${esc(k)}</option>`).join('')}</optgroup>`
+    + (u.length ? `<optgroup label="Yours">${u.map((k) => `<option value="user:${esc(k)}">${esc(k)}</option>`).join('')}</optgroup>` : '');
+  $('#mxPreset').value = known ? rx.preset : '';
+  $('#fxSum').textContent = `${known ? rx.preset.replace(/^user:/, '') : 'custom'} · ${rx.mx.mappings.filter((m) => m.on).length} links`;
+}
+function edited() { if (rx.preset) { rx.preset = ''; renderPresetPick(); } saveReact(); }
+function selectLink(id) {
+  rx.sel = id;
+  rx.rows.forEach((r, k) => r.row.setAttribute('aria-current', String(k === id)));
+}
+const linkOf = (el) => { const row = el.closest('.link'); return row && rx.mx.mappings.find((m) => m.id === row.dataset.id); };
+function onLinkInput(e) {
+  const m = linkOf(e.target), k = e.target.dataset.k; if (!m || !k) return;
+  const row = e.target.closest('.link');
+  if (k === 'on' || k === 'invert') m[k] = e.target.checked;
+  else if (k === 'src' || k === 'dst' || k === 'group') m[k] = e.target.value;
+  else { const v = parseFloat(e.target.value); if (!Number.isFinite(v)) return; m[k] = v; }
+  if (k === 'on') row.classList.toggle('off', !m.on);
+  if (k === 'dst') { const g = row.querySelector('[data-k="group"]'); g.innerHTML = groupOpts(m); if (!SA.DEST_BY_ID[m.dst].groups.includes(m.group)) m.group = 'all'; g.value = m.group; }
+  if (k === 'src') row.querySelector('[data-band]').hidden = m.src !== 'band';
+  if ((k === 'lo' || k === 'hi') && e.type === 'change') { m.lo = SA.clamp(Math.min(m.lo, m.hi), 20, 20000); m.hi = SA.clamp(Math.max(m.lo, m.hi), 20, 20000); }
+  const o = row.querySelector(`[data-o="${k}"]`);
+  if (o) { const sh = SHAPE.find((x) => x[0] === k); o.textContent = sh ? sh[5](m[k]) : pct(m[k]); }
+  row.querySelector('summary').textContent = shapeSum(m);
+  selectLink(m.id);
+  edited();
+}
+$('#links').addEventListener('input', onLinkInput);
+$('#links').addEventListener('change', (e) => { if (e.target.matches('select, [type="checkbox"], [type="number"]')) onLinkInput(e); });
+$('#links').addEventListener('pointerdown', (e) => { const m = linkOf(e.target); if (m) selectLink(m.id); });
+$('#links').addEventListener('focusin', (e) => { const m = linkOf(e.target); if (m) selectLink(m.id); });
+$('#links').addEventListener('click', (e) => {
+  if (e.target.dataset.act !== 'del') return;
+  const m = linkOf(e.target); if (!m) return;
+  rx.mx.mappings = rx.mx.mappings.filter((x) => x !== m);
+  if (rx.sel === m.id) rx.sel = null;
+  renderLinks(); edited();
+});
+$('#mxAdd').addEventListener('click', () => {
+  const m = SA.makeMapping({ src: 'kick', dst: 'rig.dim', amount: 0.6 });
+  rx.mx.mappings.push(m); rx.sel = m.id; renderLinks(); edited();
+  rx.rows.get(m.id).row.scrollIntoView({ block: 'nearest' });
+});
+$('#mxPreset').addEventListener('change', (e) => {
+  const v = e.target.value; if (!v) return;
+  const list = v.startsWith('user:') ? SA.loadMappings(userPresets()[v.slice(5)]) : SA.presetMappings(v);
+  rx.mx.mappings = list; rx.preset = v; rx.sel = list[0] ? list[0].id : null;
+  renderLinks(); saveReact();
+});
+$('#mxSave').addEventListener('click', () => {
+  const name = $('#mxName').value.trim().slice(0, 40);
+  if (!name) { $('#mxName').focus(); setNote('Type a name for this setup first.'); return; }
+  const u = userPresets(); u[name] = SA.saveMappings(rx.mx.mappings); writeStore(RX_PRESETS, u);
+  rx.preset = `user:${name}`; $('#mxName').value = ''; renderPresetPick(); saveReact();
+  setNote(`Saved "${name}" in this browser. Export it to keep a file or move it to another computer.`);
+});
+$('#mxExport').addEventListener('click', () => {
+  const data = { app: 'stage-visuals', kind: 'audio-reactive', version: 1, name: ($('#mxPreset').selectedOptions[0] || {}).textContent || 'Custom', sensitivity: rx.mx.sensitivity, links: SA.saveMappings(rx.mx.mappings) };
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+  a.download = `${data.name.replace(/[^\w-]+/g, '-').toLowerCase() || 'audio-reactive'}.json`;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+$('#mxImportBtn').addEventListener('click', () => $('#mxImport').click());
+$('#mxImport').addEventListener('change', (e) => {
+  const f = e.target.files && e.target.files[0]; if (!f) return;
+  f.text().then((t) => {
+    const d = JSON.parse(t), list = Array.isArray(d) ? d : d && d.links;
+    if (!Array.isArray(list)) throw new Error('shape');
+    rx.mx.mappings = SA.loadMappings(list);
+    if (d.sensitivity) { rx.mx.sensitivity = SA.clamp(Number(d.sensitivity) || 1, 0, 2); syncKnobs(); }
+    rx.preset = ''; renderLinks(); saveReact();
+    setNote(`Loaded ${rx.mx.mappings.length} links from ${f.name}.`);
+  }).catch(() => setNote(`${f.name} is not an audio reactive setup exported from this app.`)).finally(() => { e.target.value = ''; });
+});
+$('#mxSens').addEventListener('input', (e) => { rx.mx.sensitivity = parseFloat(e.target.value); $('#mxSensOut').textContent = `${Math.round(rx.mx.sensitivity * 100)}%`; saveReact(); });
+$('#mxAgc').addEventListener('change', (e) => { rx.agc = rx.an.agc = e.target.checked; saveReact(); });
+$('#mxFollow').addEventListener('change', (e) => { rx.follow = e.target.checked; saveReact(); });
+$('#mxAutoDrop').addEventListener('change', (e) => { rx.autoDrop = e.target.checked; saveReact(); });
+function syncKnobs() {
+  $('#mxSens').value = rx.mx.sensitivity; $('#mxSensOut').textContent = `${Math.round(rx.mx.sensitivity * 100)}%`;
+  $('#mxAgc').checked = rx.agc; $('#mxFollow').checked = rx.follow; $('#mxAutoDrop').checked = rx.autoDrop;
+}
+let noteTimer = 0;
+function setNote(msg) { rx.noteMsg = msg; clearTimeout(noteTimer); noteTimer = setTimeout(() => { rx.noteMsg = ''; }, 6000); }
+function mixerNote() {
+  if (rx.noteMsg) return rx.noteMsg;
+  const dmx = state.control === 'live' ? ' The console is driving the lights, so only lasers, LED wall, haze, crowd and camera links act.' : '';
+  if (!rx.live) return `No music playing, so the links react to a built-in beat at the Tempo slider. Choose a source under Music to react to real sound.${dmx}`;
+  if (listeningMode()) return `Listening live.${rx.follow ? ' The show follows the tempo it hears.' : ''}${rx.autoDrop ? ' Drops are spotted when the bass returns after a breakdown.' : ''}${dmx}`;
+  return `Reacting to the ${audio.mode === 'demo' ? 'demo beat' : 'track'}.${dmx}`;
+}
+function openMixer(on) {
+  $('#mixer').hidden = !on; $('#fxToggle').setAttribute('aria-pressed', String(on));
+  if (on && !rx.sel && rx.mx.mappings[0]) selectLink(rx.mx.mappings[0].id);
+}
+$('#fxToggle').addEventListener('click', () => openMixer($('#mixer').hidden));
+$('#fxOpen').addEventListener('click', () => openMixer(true));
+$('#mxClose').addEventListener('click', () => openMixer(false));
+
+// Spectrum: 20 Hz to 16 kHz on a log scale, 60 dB tall under the recent peak, with the selected link's band shaded.
+const SPEC_LO = 20, SPEC_SPAN = Math.log(16000 / 20);
+const specX = (hz, w) => Math.log(hz / SPEC_LO) / SPEC_SPAN * w;
+const specHz = (x, w) => SPEC_LO * Math.exp(SA.clamp(x / w) * SPEC_SPAN);
+function drawMixer() {
+  const cv = $('#spec'), dpr = Math.min(2, window.devicePixelRatio || 1), cw = Math.round(cv.clientWidth * dpr), ch = Math.round(cv.clientHeight * dpr);
+  if (cw && (cv.width !== cw || cv.height !== ch)) { cv.width = cw; cv.height = ch; }
+  const c = cv.getContext('2d'), w = cv.width, h = cv.height, mags = rx.mags, bin = rx.an.binHz;
+  c.fillStyle = '#050608'; c.fillRect(0, 0, w, h);
+  const sel = rx.mx.mappings.find((m) => m.id === rx.sel);
+  if (sel) {
+    const ranges = sel.src === 'band' ? [[sel.lo, sel.hi]] : SA.BANDS[sel.src] ? [SA.BANDS[sel.src]] : SA.ONSETS[sel.src] ? SA.ONSETS[sel.src].ranges : [];
+    c.fillStyle = sel.src === 'band' ? 'rgba(240,162,74,.22)' : 'rgba(127,176,234,.16)';
+    ranges.forEach(([lo, hi]) => { const x0 = specX(lo, w), x1 = specX(hi, w); c.fillRect(x0, 0, Math.max(2, x1 - x0), h); });
+  }
+  c.fillStyle = 'rgba(154,156,166,.5)'; c.font = `${10 * dpr}px "IBM Plex Mono", monospace`;
+  [50, 100, 200, 500, 1000, 2000, 5000, 10000].forEach((hz) => { const x = specX(hz, w); c.fillRect(x, 0, 1, h); c.fillText(hz >= 1000 ? `${hz / 1000}k` : String(hz), x + 3, h - 4 * dpr); });
+  let top = -200;
+  const step = 2 * dpr, grad = c.createLinearGradient(0, h, 0, 0); grad.addColorStop(0, '#2f6bff'); grad.addColorStop(0.6, '#7fb0ea'); grad.addColorStop(1, '#f0a24a');
+  c.fillStyle = grad;
+  for (let x = 0; x < w; x += step) {
+    const i0 = Math.max(1, Math.floor(specHz(x, w) / bin)), i1 = Math.max(i0, Math.floor(specHz(x + step, w) / bin));
+    let m = 0; for (let i = i0; i <= i1 && i < mags.length; i++) if (mags[i] > m) m = mags[i];
+    const db = 20 * Math.log10(m + 1e-9); if (db > top) top = db;
+    const v = SA.clamp((db - (rx.specPeak - 60)) / 60);
+    c.fillRect(x, h * (1 - v), step - 1, h * v);
+  }
+  rx.specPeak = Math.max(top, rx.specPeak - 0.25);
+  for (const [el, k] of meterEls) el.style.height = `${Math.round(SA.clamp(rx.f[k] || 0) * 100)}%`;
+  rx.rows.forEach((r, id) => { const m = rx.mx.mappings.find((x) => x.id === id); if (m) r.env.style.width = `${Math.round(SA.clamp(m.env) * 100)}%`; });
+  if (frame % 6 === 0) {
+    const T = rx.an.tempo, out = $('#mxTempo'), ears = rx.live && listeningMode();
+    out.textContent = ears ? (T.bpm ? `${T.bpm.toFixed(1)} BPM · ${T.locked ? 'locked' : 'finding the beat'}` : 'finding the beat') : `${Math.round(state.bpm)} BPM · ${rx.live ? 'from the music' : 'Tempo slider'}`;
+    out.dataset.lock = ears && T.locked ? '1' : '0';
+    const note = mixerNote(); if ($('#mxNote').textContent !== note) $('#mxNote').textContent = note;
+  }
+}
+// Drag across the spectrum to give the selected link its own band.
+const specDrag = { on: false, a: 0 };
+$('#spec').addEventListener('pointerdown', (e) => {
+  const m = rx.mx.mappings.find((x) => x.id === rx.sel);
+  if (!m) { setNote('Select a link below, then drag across the spectrum to give it a band.'); return; }
+  const r = e.target.getBoundingClientRect();
+  specDrag.on = true; specDrag.a = specHz(e.clientX - r.left, r.width); e.target.setPointerCapture(e.pointerId);
+});
+$('#spec').addEventListener('pointermove', (e) => {
+  if (!specDrag.on) return;
+  const m = rx.mx.mappings.find((x) => x.id === rx.sel); if (!m) return;
+  const r = e.target.getBoundingClientRect(), b = specHz(e.clientX - r.left, r.width);
+  m.src = 'band'; m.lo = Math.round(Math.min(specDrag.a, b)); m.hi = Math.round(Math.max(specDrag.a, b, m.lo * 1.15));
+  const row = rx.rows.get(m.id).row;
+  row.querySelector('[data-k="src"]').value = 'band'; row.querySelector('[data-band]').hidden = false;
+  row.querySelector('[data-k="lo"]').value = m.lo; row.querySelector('[data-k="hi"]').value = m.hi;
+});
+$('#spec').addEventListener('pointerup', () => { if (specDrag.on) { specDrag.on = false; edited(); } });
+loadReact();
+syncKnobs();
+renderLinks();
+if (window.stageDebug) Object.assign(window.stageDebug, { rx, audio });
 
 /* ---------- Readouts, patch, scene data ---------- */
 function updateReadouts() {

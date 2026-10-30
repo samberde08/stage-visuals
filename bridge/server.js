@@ -40,7 +40,7 @@ function parseRange(s) {
 }
 
 const PAGE = path.join(__dirname, '..', 'app', 'stage.html');
-const VENUES = path.join(__dirname, '..', 'app', 'venues.js');
+const APP_DIR = path.join(__dirname, '..', 'app');
 const HDRI_DIR = path.join(__dirname, '..', 'app', 'hdri');
 const PACK_DIR = path.join(__dirname, '..', 'app', 'venues3d');
 const PACK_TYPES = { json: 'application/json', png: 'image/png', jpg: 'image/jpeg' };
@@ -101,9 +101,10 @@ function start(opts) {
     if (url === '/' || url === '/index.html') {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
       res.end(renderPage());
-    } else if (url === '/venues.js') {
+    } else if (/^\/[\w-]+\.js$/.test(url) && fs.existsSync(path.join(APP_DIR, url.slice(1)))) {
+      // The page's own scripts: venues.js, audio.js and the other modules next to stage.html.
       res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' });
-      res.end(fs.readFileSync(VENUES, 'utf8'));
+      res.end(fs.readFileSync(path.join(APP_DIR, url.slice(1)), 'utf8'));
     } else if (/^\/hdri\/[\w-]+\.hdr$/.test(url) && fs.existsSync(path.join(HDRI_DIR, path.basename(url)))) {
       res.writeHead(200, { 'content-type': 'image/vnd.radiance', 'cache-control': 'max-age=86400' });
       fs.createReadStream(path.join(HDRI_DIR, path.basename(url))).pipe(res);

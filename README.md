@@ -14,6 +14,20 @@ Nothing is copied from venue drawings, and festival stages are proportions for t
 
 **Music:** play the built-in demo beat or load your own track. A track's tempo and beat phase are worked out from its kick drum when it loads, and lights, lasers, LED content and crowd lock to it. **Drop** gives a one-beat blackout, then four bars at full energy.
 
+**Audio reactive mixer:** **Audio FX** (or the button under Music) opens a mixer that decides how the show reacts to sound. Sources are the built-in demo, your own track, a **microphone or line in**, or **another browser tab's audio** (YouTube, SoundCloud, a DJ stream). On a Mac, the free [BlackHole](https://existential.audio/blackhole/) driver lets Rekordbox, Serato, Traktor or Spotify feed straight in as an input. The mixer shows:
+
+- A live spectrum, plus meters for what it hears: level, six frequency bands, kick, snare and hi-hat hits, the beat, build-up tension and drops.
+- The tempo it detects from live input. The show locks to that tempo, and **Auto drop** fires the Drop when the bass comes back after a breakdown.
+- **Links**, each connecting one thing it hears to one thing on stage. Lights take dimmer, strobe, white flash, colour shift, beam size, movement size, movement speed and tilt. Lasers take intensity, spread, speed, height and colour. The LED wall takes brightness, flash and motion speed. Haze, crowd jumping and camera shake can be linked too.
+  - Each link can target a group of fixtures: overhead, floor, odd, even, left, right or centre.
+  - Each link has an amount (negative inverts the effect), plus gain, gate, attack, release and curve under **Response**.
+  - Dragging across the spectrum gives the selected link its own frequency band.
+- Presets: four built-in setups (Punchy club, Festival main stage, Techno strobe, Chill wash). You can save your own in the browser and export or import them as JSON files.
+
+With no music playing, the links react to a built-in beat at the Tempo slider, so the show is never static. Audio is analysed in the page only: nothing is recorded or sent anywhere. Microphone and tab capture need the local version (`npm start`), because the online preview cannot ask for inputs.
+
+The analysis lives in `app/audio.js`, which has no browser dependencies and is covered by `test/audio.test.js`. Kicks, snares and hats are found by spectral flux against an adaptive threshold. Tempo is a comb over kick intervals with a phase-locked beat counter, and breakdowns are spotted when the bass falls 10 dB below its recent level.
+
 **Look:** High quality adds bloom, filmic colour and sun shadows; Fast drops them for laptops and phones. Outdoor venues (arch tent, festival, stadium) get a sky, a sun placed from the time of day for midsummer, and stars after dark, and beams wash out in full sun as they do on site. The crowd is made of people with arms, phones held up to film and mixed clothing, facing the stage, and the Crowd slider thins it out.
 
 **Surroundings:** outdoor venues sit inside a real sky and their real surroundings. The sky is a Poly Haven HDRI (CC0, in `app/hdri/`, credits in its README): a midday image, a golden-hour image and, for wooded sites, a night image, crossfaded by sun height and turned so the image's sun lines up with the computed sun. The scenery is built from each venue's `scenery` list in `app/venues.js`, placed by compass bearing from the stage: city skylines with the real heights of their tallest towers (Manhattan from Brooklyn Mirage, the Loop from Grant Park, downtown Miami from Bayfront Park, the Renaissance Center from Hart Plaza, Denver from Red Rocks, the Strip from the speedway), mountain ranges at their real relief and distance, bays, rivers and lakes, pine, hardwood and palm trees, Sherwood Forest's lit trees, grandstands, and the orange glow of city light at night. Distant features are drawn at a fixed radius and scaled to keep their real angular size. Lit windows and aircraft warning lights come on after dark. The HDRIs are generic skies matched to each site's landscape, not photos of the venues, and stage orientation is estimated for most festival sites. **Surroundings** in the Look panel turns it off.
@@ -130,6 +144,7 @@ With the bridge running, TouchDesigner can send its output straight onto the LED
 ```
 app/stage.html       visualizer (three.js). A body fragment so the same file can be published as an artifact;
                      the bridge wraps it in a document and turns on live DMX.
+app/audio.js         audio analysis (bands, hits, tempo, builds and drops) and the audio reactive link matrix
 bridge/server.js     HTTP page + WebSocket /dmx + UDP receivers, merges sources, pushes at ~44 Hz
 bridge/dmx.js        sACN and Art-Net parsers and builders, source merge
 bridge/ws.js         minimal WebSocket server
@@ -141,6 +156,8 @@ test/                node --test suite (npm test)
 ```
 
 ## Roadmap
+
+Builder phases in progress: audio reactive mixer (done), then custom stage import (GLB, glTF, OBJ, MVR) placed at any venue, a rig builder (place fixtures on truss or any surface, arrays, groups, auto patch, GDTF import, save and load), and a laser designer.
 
 1. MVR import and export, so rigs from Capture, Vectorworks or grandMA3 load directly.
 2. GDTF fixture types in place of the generic spot, including real beam angles and DMX modes.
