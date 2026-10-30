@@ -142,6 +142,22 @@ details .btn { margin: 0 10px 10px; }
 .lk-band { display: flex; gap: 6px; align-items: center; font-size: 11.5px; color: var(--muted); }
 .lk-band input { width: 76px; font: 12px var(--mono); color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 3px; padding: 3px 5px; }
 @media (max-width: 760px) { .mixer { top: 8px; right: 8px; left: 8px; width: auto; max-height: calc(100% - 56px); } }
+/* Custom stage import */
+.imports { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.imports li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 6px 8px; background: var(--rack-2); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
+.imports li[aria-current="true"] { border-color: var(--amber); }
+.imports li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+.imports li small { font: 10.5px var(--mono); color: var(--muted); }
+.imports button { background: none; border: 0; color: var(--muted); font-size: 16px; cursor: pointer; padding: 0 4px; }
+.imports button:hover { color: #ff7a7a; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.seg .btn { padding: 6px 4px; }
+.seg .btn[aria-pressed="true"] { background: var(--amber); color: var(--amber-ink); border-color: var(--amber); }
+.num3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.num3 label { display: grid; gap: 2px; min-width: 0; font-size: 11px; color: var(--muted); }
+.num3 input { width: 100%; min-width: 0; font: 12px var(--mono); color: var(--fg); background: var(--rack-2); border: 1px solid var(--line); border-radius: 4px; padding: 5px 6px; }
+.check { display: flex; gap: 8px; align-items: center; font-size: 12.5px; color: var(--muted); }
+.view.dropping::after { content: "Drop a GLB, glTF, OBJ or MVR file to add it to the stage"; position: absolute; inset: 12px; display: grid; place-items: center; border: 2px dashed var(--amber); border-radius: 8px; background: rgba(7,8,11,.6); font: 600 22px var(--display); color: var(--amber); pointer-events: none; }
 .fallback { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--muted); }
 </style>
 
@@ -205,6 +221,26 @@ details .btn { margin: 0 10px 10px; }
       <div class="note venue-note" id="venueNote" hidden></div>
       <p class="note" id="packNote" role="status" hidden></p>
       <div class="chips" id="templates"></div>
+    </section>
+
+    <section class="group" id="customSec">
+      <div class="eyebrow"><span>Custom stage</span><span id="customSum">none</span></div>
+      <button type="button" class="btn" id="impBtn">Import a 3D stage or set…</button>
+      <input type="file" id="impFile" accept=".glb,.gltf,.obj,.mvr" multiple hidden>
+      <p class="note">GLB, glTF, OBJ or MVR, or drop files on the view. It stays where you put it when you change venue, so any stage can go at any location. Surfaces named LED or screen play the wall content.</p>
+      <ul class="imports" id="impList"></ul>
+      <div id="impEdit" hidden>
+        <div class="seg" role="group" aria-label="Handle mode"><button type="button" class="btn" data-tmode="translate" aria-pressed="true">Move</button><button type="button" class="btn" data-tmode="rotate" aria-pressed="false">Rotate</button><button type="button" class="btn" data-tmode="scale" aria-pressed="false">Scale</button></div>
+        <div class="num3" style="margin-top:8px"><label>Across (m)<input type="number" id="impX" step="0.1"></label><label>Height (m)<input type="number" id="impY" step="0.1"></label><label>Depth (m)<input type="number" id="impZ" step="0.1"></label></div>
+        <div class="row" style="margin-top:8px"><label for="impRot">Turn</label><input id="impRot" type="range" min="-180" max="180" step="1"><output for="impRot"></output></div>
+        <div class="row"><label for="impScale">Scale</label><input id="impScale" type="range" min="0.1" max="4" step="0.01"><output for="impScale"></output></div>
+        <div class="row two" id="impUnitsRow"><label for="impUnits">File units</label><select id="impUnits"><option value="m">Metres</option><option value="cm">Centimetres</option><option value="mm">Millimetres</option><option value="in">Inches</option><option value="ft">Feet</option></select></div>
+        <label class="check"><input type="checkbox" id="impLed"> Play the LED wall content on its screens</label>
+        <div class="btns" style="margin-top:6px"><button type="button" class="btn" id="impGround">Put on the ground</button><button type="button" class="btn" id="impCentre">Centre on stage</button></div>
+      </div>
+      <div class="row two"><label for="tplShow">Built-in stage</label><select id="tplShow"><option value="all">Show stage and rig</option><option value="rig">Hide stage, keep rig and lasers</option><option value="none">Hide stage, rig and lasers</option></select></div>
+      <label class="check" id="mvrRigRow" hidden><input type="checkbox" id="mvrRig" checked> Use the MVR file's fixtures as the rig</label>
+      <p class="note" id="impNote" role="status"></p>
     </section>
 
     <section class="group">
@@ -364,8 +400,13 @@ details .btn { margin: 0 10px 10px; }
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/RGBELoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/TDSLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"></script>
 <script src="venues.js"></script>
 <script src="audio.js"></script>
+<script src="importer.js"></script>
 <script>
 (() => {
 const $ = (s) => document.querySelector(s);
@@ -2812,9 +2853,11 @@ function build() {
   finishCrowds(camSet.target);
   djRig = null;
   djBooth(camSet.djAt || V(0, state.H, -state.D * 0.38), camSet.djYaw || 0, state.W >= 14);
-  distribute(state.count).forEach((s, i) => fixtures.push(makeFixture(s, i)));
+  hideTemplate();
+  (customRig() || (custom.tplShow === 'none' ? [] : distribute(state.count))).forEach((s, i) => fixtures.push(makeFixture(s, i)));
   if (!laserSpots.length) [-0.3, 0.3].forEach((u) => laser(u * state.W, state.H, -0.3, 0));
-  lasers = laserSpots.map(makeLaser);
+  lasers = custom.tplShow === 'none' ? [] : laserSpots.map(makeLaser);
+  custom.items.forEach((it) => { if (it.root.visible) receivers.push(...it.meshes); });
   // Groups the audio mixer can target. Left and right are as the audience sees the stage.
   const mid = state.W * 0.15;
   fixtures.forEach((f, i) => { const x = f.pos.x; f.grp = { hang: f.flip, floor: !f.flip, odd: i % 2 === 0, even: i % 2 === 1, left: x < -mid, right: x > mid, centre: Math.abs(x) <= mid }; });
@@ -3646,6 +3689,306 @@ $('#play').addEventListener('click', () => {
 $('#drop').addEventListener('click', triggerDrop);
 $('#inputDev').addEventListener('change', (e) => { rx.device = e.target.value; saveReact(); if (audio.playing && audio.mode === 'mic') { stopMusic(); startMusic(); } });
 
+/* ---------- Custom stage import ---------- */
+// Your own stage, set or truss build from a 3D file, placed with handles. It lives outside the venue, so it stays put
+// when you change venue: any stage at any location. MVR files (app/importer.js) also bring their fixtures, which can
+// replace the generic rig. Imports are kept in this browser (IndexedDB) and come back on the next visit.
+const SI = window.StageImport;
+const custom = { items: [], sel: null, group: new THREE.Group(), tplShow: 'all', mvrRig: true, gizmo: null, mode: 'translate', nextId: 1 };
+custom.group.name = 'Custom stage';
+scene.add(custom.group);
+try { const t = JSON.parse(localStorage.getItem('stageCustom') || '{}'); if (t.tplShow) custom.tplShow = t.tplShow; if (t.mvrRig === false) custom.mvrRig = false; } catch (_) { /* defaults */ }
+const saveCustomPrefs = () => { try { localStorage.setItem('stageCustom', JSON.stringify({ tplShow: custom.tplShow, mvrRig: custom.mvrRig })); } catch (_) { /* this visit only */ } };
+
+// The built-in deck, truss, screens, PA and DJ booth: anything that sits wholly in the stage zone. Room walls,
+// ceilings, crowds and the ground reach past it, so they stay.
+function hideTemplate() {
+  if (custom.tplShow === 'all') return;
+  const { W, D } = state, zone = new THREE.Box3(V(-W / 2 - 6, -0.5, -D - 8), V(W / 2 + 6, 80, 3)), b = new THREE.Box3();
+  const hidden = new Set();
+  venue.children.forEach((o) => {
+    if (o.isInstancedMesh || o.name === 'Scenery') return;
+    b.setFromObject(o);
+    if (b.isEmpty() || !zone.containsBox(b) || b.max.y < 0.05) return;
+    o.visible = false; hidden.add(o);
+  });
+  if (djRig) { djRig.group.visible = false; hidden.add(djRig.group); }
+  receivers = receivers.filter((r) => { for (let p = r; p; p = p.parent) if (hidden.has(p)) return false; return true; });
+}
+// Fixture positions from visible MVR imports, moved with their import.
+const fxM = new THREE.Matrix4();
+function customRig() {
+  if (!custom.mvrRig) return null;
+  const specs = [];
+  custom.items.forEach((it) => {
+    if (!it.root.visible || !it.fixtures || !it.fixtures.length) return;
+    it.root.updateMatrixWorld(true);
+    it.fixtures.forEach((f) => {
+      fxM.fromArray(f.matrix).premultiply(it.root.matrixWorld);
+      const p = SI.fixturePose(fxM.elements);
+      specs.push({ pos: V(...p.pos), flip: p.flip, yaw: p.yaw, truss: f.name, gdtf: f.gdtf, mvrAddress: f.address });
+    });
+  });
+  return specs.length ? specs : null;
+}
+
+function impNote(t) { $('#impNote').textContent = t || ''; }
+function g3dParse(buf) { return new Promise((res, rej) => g3dLoader().parse(buf, '', (g) => res(g.scene), rej)); }
+// One model file to an Object3D, by extension.
+function parseModel(name, buf) {
+  if (/\.(glb|gltf)$/i.test(name)) return g3dParse(buf);
+  if (/\.obj$/i.test(name)) return Promise.resolve(new THREE.OBJLoader().parse(new TextDecoder().decode(buf)));
+  if (/\.3ds$/i.test(name)) return Promise.resolve(new THREE.TDSLoader().parse(buf instanceof ArrayBuffer ? buf : buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength), ''));
+  return Promise.reject(new Error(`unsupported ${name}`));
+}
+// MVR: a zip with GeneralSceneDescription.xml, the geometry files it names, and GDTF fixture files.
+async function parseMvr(buf) {
+  if (!window.fflate) throw new Error('The zip reader did not load.');
+  const files = window.fflate.unzipSync(new Uint8Array(buf));
+  const byName = {};
+  Object.keys(files).forEach((k) => { byName[k.toLowerCase()] = files[k]; byName[k.split('/').pop().toLowerCase()] = files[k]; });
+  const xml = byName['generalscenedescription.xml'];
+  if (!xml) throw new Error('No GeneralSceneDescription.xml in this MVR.');
+  const sceneInfo = SI.readMvrScene(new TextDecoder().decode(xml));
+  const content = new THREE.Group(), cache = {};
+  let missing = 0;
+  for (const m of sceneInfo.meshes) {
+    const data = byName[m.file.toLowerCase()];
+    if (!data) { missing++; continue; }
+    if (!cache[m.file]) cache[m.file] = await parseModel(m.file, data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)).catch(() => null);
+    if (!cache[m.file]) { missing++; continue; }
+    const holder = new THREE.Group(); holder.name = m.owner;
+    holder.matrixAutoUpdate = false; holder.matrix.fromArray(m.matrix);
+    holder.add(cache[m.file].clone());
+    content.add(holder);
+  }
+  return { content, fixtures: sceneInfo.fixtures, info: `MVR ${sceneInfo.version}: ${sceneInfo.layers.length} layer${sceneInfo.layers.length === 1 ? '' : 's'}, ${content.children.length} objects, ${sceneInfo.fixtures.length} fixtures${missing ? `, ${missing} geometry files missing or unreadable` : ''}` };
+}
+
+// Prepare an import's meshes: shadows, beams stop on it, LED surfaces get the wall material.
+function prepItem(it) {
+  it.meshes = []; it.leds = [];
+  it.content.traverse((o) => {
+    if (!o.isMesh) return;
+    o.castShadow = o.receiveShadow = true;
+    it.meshes.push(o);
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    if (SI.isLedName(o.name) || mats.some((m) => m && SI.isLedName(m.name))) { o.userData.origMat = o.material; it.leds.push(o); }
+  });
+  setLed(it, it.led);
+}
+const ledBox = new THREE.Box3(), ledSize = new THREE.Vector3();
+function setLed(it, on) {
+  it.led = on;
+  it.root.updateMatrixWorld(true);
+  it.leds.forEach((o) => {
+    if (!on) { o.material = o.userData.origMat; return; }
+    ledBox.setFromObject(o).getSize(ledSize);
+    const dims = [ledSize.x, ledSize.y, ledSize.z].sort((a, b) => b - a);
+    o.material = wallMaterial(Math.max(0.5, dims[0]), Math.max(0.5, dims[1]));
+  });
+}
+
+function addItem(it) {
+  it.root = new THREE.Group(); it.root.name = it.name; it.root.add(it.content);
+  custom.group.add(it.root);
+  custom.items.push(it);
+  prepItem(it);
+}
+const IMPORT_RE = /\.(glb|gltf|obj|mvr)$/i;
+async function importFile(file, saved) {
+  if (!IMPORT_RE.test(file.name)) { impNote(`${file.name}: use a GLB, glTF, OBJ or MVR file.`); return null; }
+  impNote(`Loading ${file.name}…`);
+  try {
+    const buf = await file.arrayBuffer(), kind = file.name.split('.').pop().toLowerCase();
+    const it = { id: saved ? saved.id : `i${Date.now().toString(36)}${custom.nextId++}`, name: file.name, kind, file, units: 'm', led: true, info: '' };
+    if (kind === 'mvr') {
+      const r = await parseMvr(buf); it.content = r.content; it.fixtures = r.fixtures; it.info = r.info;
+    } else {
+      // Plain models: sit them on the floor, centred, and guess their units from their size.
+      const model = await parseModel(file.name, buf), wrap = new THREE.Group();
+      wrap.add(model);
+      const bb = new THREE.Box3().setFromObject(model), c = bb.getCenter(new THREE.Vector3()), sz = bb.getSize(new THREE.Vector3());
+      model.position.set(-c.x, -bb.min.y, -c.z);
+      it.units = saved ? saved.units : SI.guessUnits(Math.max(sz.x, sz.y, sz.z));
+      wrap.scale.setScalar(SI.UNITS[it.units]);
+      it.content = wrap; it.rawSize = sz;
+    }
+    if (it.content.children.length === 0) throw new Error('nothing to show');
+    if (saved) it.led = saved.led !== false;
+    addItem(it);
+    if (saved) {
+      it.root.position.fromArray(saved.pos); it.root.quaternion.fromArray(saved.quat); it.root.scale.fromArray(saved.scale); it.root.visible = saved.visible !== false;
+    } else if (kind !== 'mvr') placeOnStage(it);
+    setLed(it, it.led);
+    if (!saved) { storeItem(it); selectItem(it.id); }
+    const s = new THREE.Box3().setFromObject(it.root).getSize(new THREE.Vector3());
+    impNote(it.info || `${file.name}: ${s.x.toFixed(1)} × ${s.z.toFixed(1)} m, ${s.y.toFixed(1)} m high${it.leds.length ? `, ${it.leds.length} LED surface${it.leds.length === 1 ? '' : 's'}` : ''}. Read as ${({ m: 'metres', cm: 'centimetres', mm: 'millimetres', in: 'inches', ft: 'feet' })[it.units]}; change File units if the size looks wrong.`);
+    renderImports();
+    scheduleBuild(false);
+    return it;
+  } catch (err) {
+    console.error(err);
+    impNote(`Could not read ${file.name}${err && err.message ? `: ${err.message}` : ''}. glTF files must be self-contained (embedded buffers), or use GLB.`);
+    return null;
+  }
+}
+function placeOnStage(it) {
+  it.root.position.set(0, 0, -state.D / 2);
+  putOnGround(it);
+}
+const gBox = new THREE.Box3(), gC = new THREE.Vector3();
+// The real ground: the venue pack's lidar where there is one, otherwise the floor. The built-in deck does not count,
+// so a full stage build lands on the ground rather than on top of the template stage.
+function putOnGround(it) {
+  it.root.updateMatrixWorld(true);
+  gBox.setFromObject(it.content); gBox.getCenter(gC);
+  const g = camSet.pack ? packGroundY(camSet.pack, gC.x, gC.z) : null;
+  it.root.position.y += (g ?? 0) - gBox.min.y;
+}
+
+/* Selection, handles and the numbers */
+function selectItem(id) {
+  custom.sel = id;
+  const it = curItem();
+  $('#impEdit').hidden = !it;
+  if (custom.gizmo) { if (it && it.root.visible) custom.gizmo.attach(it.root); else custom.gizmo.detach(); }
+  syncItemInputs(); renderImports();
+}
+const curItem = () => custom.items.find((x) => x.id === custom.sel) || null;
+function syncItemInputs() {
+  const it = curItem(); if (!it) return;
+  const r = it.root, rot = Math.round(THREE.MathUtils.radToDeg(new THREE.Euler().setFromQuaternion(r.quaternion, 'YXZ').y));
+  $('#impX').value = r.position.x.toFixed(2); $('#impY').value = r.position.y.toFixed(2); $('#impZ').value = (-r.position.z).toFixed(2);
+  $('#impRot').value = rot; $('#impRot').nextElementSibling.textContent = `${rot}°`;
+  $('#impScale').value = r.scale.x; $('#impScale').nextElementSibling.textContent = `×${r.scale.x.toFixed(2)}`;
+  $('#impUnitsRow').hidden = it.kind === 'mvr'; $('#impUnits').value = it.units;
+  $('#impLed').checked = it.led; $('#impLed').disabled = !it.leds.length;
+  $('#impLed').parentElement.title = it.leds.length ? '' : 'No surfaces in this file are named LED or screen.';
+}
+function renderImports() {
+  $('#impList').innerHTML = custom.items.map((it) => `<li data-id="${it.id}" aria-current="${it.id === custom.sel}"><input type="checkbox" data-act="vis"${it.root.visible ? ' checked' : ''} aria-label="Show ${esc(it.name)}"><span title="${esc(it.name)}">${esc(it.name)}</span><small>${it.kind.toUpperCase()}${it.fixtures && it.fixtures.length ? ` · ${it.fixtures.length} fx` : ''}</small><button type="button" data-act="del" aria-label="Remove ${esc(it.name)}">×</button></li>`).join('');
+  $('#customSum').textContent = custom.items.length ? `${custom.items.length} import${custom.items.length === 1 ? '' : 's'}` : 'none';
+  $('#mvrRigRow').hidden = !custom.items.some((it) => it.fixtures && it.fixtures.length);
+  $('#tplShow').value = custom.tplShow; $('#mvrRig').checked = custom.mvrRig;
+}
+// After a move: save it, and rebuild the rig when the import carries fixtures.
+function committed(it) { storeItem(it); syncItemInputs(); if (it.fixtures && it.fixtures.length) scheduleBuild(false); }
+function initGizmo() {
+  if (custom.gizmo || !THREE.TransformControls) return;
+  const g = custom.gizmo = new THREE.TransformControls(camera, canvas);
+  g.setSize(0.9);
+  g.addEventListener('dragging-changed', (e) => { controls.enabled = !e.value; if (!e.value) { const it = curItem(); if (it) committed(it); } });
+  g.addEventListener('objectChange', () => {
+    const it = curItem(); if (!it) return;
+    // Keep scaling uniform so a stage never stretches.
+    if (custom.mode === 'scale') { const s = it.root.scale, k = s.x !== s.y ? s.x : s.y !== s.z ? s.y : s.z; it.root.scale.setScalar(Math.max(0.05, k)); }
+    syncItemInputs();
+  });
+  scene.add(g);
+}
+initGizmo();
+function setMode(m) {
+  custom.mode = m; if (custom.gizmo) custom.gizmo.setMode(m);
+  if (custom.gizmo) { custom.gizmo.showX = custom.gizmo.showZ = true; custom.gizmo.showY = true; if (m === 'rotate') custom.gizmo.showX = custom.gizmo.showZ = false; }
+  document.querySelectorAll('[data-tmode]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tmode === m)));
+}
+document.querySelectorAll('[data-tmode]').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.tmode)));
+setMode('translate');
+['impX', 'impY', 'impZ'].forEach((id, k) => $('#' + id).addEventListener('change', (e) => {
+  const it = curItem(), v = parseFloat(e.target.value); if (!it || !Number.isFinite(v)) return;
+  if (k === 0) it.root.position.x = v; else if (k === 1) it.root.position.y = v; else it.root.position.z = -v;
+  committed(it);
+}));
+$('#impRot').addEventListener('input', (e) => {
+  const it = curItem(); if (!it) return;
+  it.root.quaternion.setFromEuler(new THREE.Euler(0, THREE.MathUtils.degToRad(parseFloat(e.target.value)), 0, 'YXZ'));
+  e.target.nextElementSibling.textContent = `${e.target.value}°`;
+});
+$('#impRot').addEventListener('change', () => { const it = curItem(); if (it) committed(it); });
+$('#impScale').addEventListener('input', (e) => { const it = curItem(); if (!it) return; it.root.scale.setScalar(parseFloat(e.target.value)); e.target.nextElementSibling.textContent = `×${parseFloat(e.target.value).toFixed(2)}`; });
+$('#impScale').addEventListener('change', () => { const it = curItem(); if (it) committed(it); });
+$('#impUnits').addEventListener('change', (e) => { const it = curItem(); if (!it || it.kind === 'mvr') return; it.units = e.target.value; it.content.scale.setScalar(SI.UNITS[it.units]); putOnGround(it); setLed(it, it.led); committed(it); });
+$('#impLed').addEventListener('change', (e) => { const it = curItem(); if (it) { setLed(it, e.target.checked); storeItem(it); } });
+$('#impGround').addEventListener('click', () => { const it = curItem(); if (it) { putOnGround(it); committed(it); } });
+$('#impCentre').addEventListener('click', () => { const it = curItem(); if (it) { it.root.position.x = 0; it.root.position.z = -state.D / 2; putOnGround(it); committed(it); } });
+$('#impBtn').addEventListener('click', () => $('#impFile').click());
+$('#impFile').addEventListener('change', async (e) => { for (const f of [...(e.target.files || [])]) await importFile(f); e.target.value = ''; });
+$('#impList').addEventListener('click', (e) => {
+  const li = e.target.closest('li'); if (!li) return;
+  const it = custom.items.find((x) => x.id === li.dataset.id); if (!it) return;
+  if (e.target.dataset.act === 'del') {
+    custom.group.remove(it.root); custom.items = custom.items.filter((x) => x !== it); dropItem(it.id);
+    if (custom.sel === it.id) selectItem(null);
+    renderImports(); scheduleBuild(false); return;
+  }
+  if (e.target.dataset.act === 'vis') { it.root.visible = e.target.checked; storeItem(it); scheduleBuild(false); }
+  selectItem(it.id);
+});
+$('#tplShow').addEventListener('change', (e) => { custom.tplShow = e.target.value; saveCustomPrefs(); scheduleBuild(false); });
+$('#mvrRig').addEventListener('change', (e) => { custom.mvrRig = e.target.checked; saveCustomPrefs(); scheduleBuild(false); });
+// Click an import in the view to select it.
+const pickRay = new THREE.Raycaster(), pickNdc = new THREE.Vector2(), pickDown = { x: 0, y: 0 };
+canvas.addEventListener('pointerdown', (e) => { pickDown.x = e.clientX; pickDown.y = e.clientY; });
+canvas.addEventListener('pointerup', (e) => {
+  if (!custom.items.length || walk.on || Math.hypot(e.clientX - pickDown.x, e.clientY - pickDown.y) > 4 || (custom.gizmo && custom.gizmo.dragging)) return;
+  const r = canvas.getBoundingClientRect();
+  pickNdc.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1);
+  pickRay.setFromCamera(pickNdc, camera);
+  const hit = pickRay.intersectObjects(custom.items.filter((it) => it.root.visible).flatMap((it) => it.meshes), false)[0];
+  if (!hit) return;
+  const it = custom.items.find((x) => x.meshes.includes(hit.object));
+  if (it && it.id !== custom.sel) selectItem(it.id);
+});
+// Drop files on the view.
+const viewEl = $('#view');
+viewEl.addEventListener('dragover', (e) => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) { e.preventDefault(); viewEl.classList.add('dropping'); } });
+viewEl.addEventListener('dragleave', (e) => { if (e.target === viewEl || !viewEl.contains(e.relatedTarget)) viewEl.classList.remove('dropping'); });
+viewEl.addEventListener('drop', async (e) => {
+  e.preventDefault(); viewEl.classList.remove('dropping');
+  for (const f of [...(e.dataTransfer.files || [])]) await importFile(f);
+});
+addEventListener('keydown', (e) => {
+  if (typing(document.activeElement) || walk.on || !curItem()) return;
+  if (e.key === 'Escape') selectItem(null);
+  else if (e.key === 'g' || e.key === 'G') setMode('translate');
+  else if (e.key === 'r' || e.key === 'R') setMode('rotate');
+  else if (e.key === 's' || e.key === 'S') setMode('scale');
+});
+
+/* Keeping imports between visits */
+let idb = null;
+function openDb() {
+  if (idb) return idb;
+  idb = new Promise((res, rej) => {
+    if (!window.indexedDB) { rej(new Error('no IndexedDB')); return; }
+    const q = indexedDB.open('stageVisuals', 1);
+    q.onupgradeneeded = () => q.result.createObjectStore('imports', { keyPath: 'id' });
+    q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error);
+  });
+  idb.catch(() => {});
+  return idb;
+}
+function dbDo(mode, fn) {
+  return openDb().then((db) => new Promise((res, rej) => { const tx = db.transaction('imports', mode), st = tx.objectStore('imports'), r = fn(st); tx.oncomplete = () => res(r && r.result); tx.onerror = () => rej(tx.error); }));
+}
+function storeItem(it) {
+  const rec = { id: it.id, name: it.name, file: it.file, units: it.units, led: it.led, visible: it.root.visible, pos: it.root.position.toArray(), quat: it.root.quaternion.toArray(), scale: it.root.scale.toArray(), order: custom.items.indexOf(it) };
+  dbDo('readwrite', (st) => st.put(rec)).catch(() => impNote('This browser will not keep imports, so they last for this visit only.'));
+}
+function dropItem(id) { dbDo('readwrite', (st) => st.delete(id)).catch(() => {}); }
+function restoreImports() {
+  dbDo('readonly', (st) => st.getAll()).then(async (recs) => {
+    for (const rec of (recs || []).sort((a, b) => (a.order || 0) - (b.order || 0))) {
+      if (!(rec.file instanceof Blob)) continue;
+      const file = rec.file instanceof File ? rec.file : new File([rec.file], rec.name);
+      await importFile(file, rec);
+    }
+    if (recs && recs.length) impNote(`Restored ${recs.length} import${recs.length === 1 ? '' : 's'} from your last visit.`);
+  }).catch(() => {});
+}
+renderImports();
+
 /* ---------- Audio reactive mixer ---------- */
 // app/audio.js does the listening (bands, hits, tempo, builds and drops) and runs the links; this part feeds it
 // the analyser's spectrum each frame and draws the mixer. With no music playing it hears a built-in beat at the Tempo slider.
@@ -3893,7 +4236,7 @@ $('#spec').addEventListener('pointerup', () => { if (specDrag.on) { specDrag.on 
 loadReact();
 syncKnobs();
 renderLinks();
-if (window.stageDebug) Object.assign(window.stageDebug, { rx, audio });
+if (window.stageDebug) Object.assign(window.stageDebug, { rx, audio, custom, importFile });
 
 /* ---------- Readouts, patch, scene data ---------- */
 function updateReadouts() {
@@ -3907,7 +4250,7 @@ function updateReadouts() {
 }
 function addr(i) { const a = i * 16; return { u: Math.floor(a / 512) + 1, a: (a % 512) + 1 }; }
 function renderPatch() {
-  const rows = fixtures.map((f, i) => { const { u, a } = addr(i); return `<tr><td>${f.id}</td><td>${f.truss}${f.flip ? '' : ' (floor)'}</td><td>${u}.${String(a).padStart(3, '0')}</td><td>Spot 16ch</td></tr>`; });
+  const rows = fixtures.map((f, i) => { const { u, a } = addr(i); return `<tr><td>${f.id}</td><td>${esc(f.truss)}${f.flip ? '' : ' (floor)'}</td><td>${u}.${String(a).padStart(3, '0')}</td><td>${f.gdtf ? esc(f.gdtf.replace(/\.gdtf$/i, '')) : 'Spot 16ch'}</td></tr>`; });
   $('#patchBody').innerHTML = rows.join('');
   const last = fixtures.length ? addr(fixtures.length - 1).u : 0;
   $('#patchSum').textContent = `${fixtures.length} fixtures · ${last} universe${last === 1 ? '' : 's'}`;
@@ -4069,6 +4412,7 @@ build();
 setQuality(state.quality);
 goCam('foh', true);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => {});
+restoreImports();
 requestAnimationFrame(tick);
 })();
 </script>
