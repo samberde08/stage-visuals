@@ -34,10 +34,22 @@ The analysis lives in `app/audio.js`, which has no browser dependencies and is c
 - **Units:** they are guessed from the model's size, and **File units** fixes a model exported in centimetres, millimetres, inches or feet.
 - **LED and screen surfaces:** meshes or materials named LED, screen, video or display play the LED wall content, including TouchDesigner video and the audio mixer's flashes, unless you turn that off.
 - **Built-in stage:** shown by default. It can be hidden while keeping the rig and lasers, or hidden along with them, so your build stands alone.
-- **MVR:** files from Vectorworks Spotlight, Capture, grandMA3, Depence or BlenderDMX bring their set geometry (3DS and glTF, symbols and nested groups) at the right place and scale. Their fixtures can replace the generic rig: each one is hung or floor-standing as the file says, and named in the Patch panel with its GDTF type. The fixtures still use the generic 16-channel spot until GDTF import lands, and live DMX still patches them consecutively.
+- **MVR:** files from Vectorworks Spotlight, Capture, grandMA3, Depence or BlenderDMX bring their set geometry (3DS and glTF, symbols and nested groups) at the right place and scale. Their fixtures can replace the generic rig: each one is hung or floor-standing as the file says, and named in the Patch panel with its GDTF type. Live DMX follows each fixture's address from the file. They draw as generic spots; to give them a real type, add its GDTF in the rig builder and place them there.
 - Imports are kept in your browser (IndexedDB) and come back next time.
 
 The MVR reader is `app/importer.js`, covered by `test/importer.test.js`. MVR is Z-up in millimetres and the app is Y-up in metres; its matrices are converted once, there.
+
+**Rig builder:** build your own lighting rig in the Rig builder panel, on the built-in stage, a venue pack or your imported set. Switch **Rig** to **My rig** to use it (the built-in rig is one click away), or **Copy built-in** to start from the venue's rig.
+
+- **Fixtures:** spot, beam and wash moving heads (generic 16 channel), blinders, strobes, LED bars and pars. **Add a fixture type from a GDTF file** (from the GDTF Share library or the maker's site) and every DMX mode in it becomes a fixture type, with its beam angle, pan and tilt range, zoom range and channel layout.
+- **Place:** click a truss, deck, floor, roof or your own stage to add one. Under truss and ceilings it hangs, on decks it stands (or set **Mount**).
+- **Line:** click a start and an end to run a row of 2 to 40 fixtures between them; **Curve** bows it into an arc.
+- **Select:** click a fixture (or its row in the list) to move it with the handle; R turns it, G moves it, Delete removes it. Static fixtures have an **Aim** angle; moving heads follow the movement programs and the console.
+- **Groups:** give fixtures a group name. The Audio FX mixer can then send a link to one group (say, "Beams" on the hats and "Front wash" on the bass) or to every fixture of a type.
+- **Patch:** new fixtures take the next free addresses, **Patch** re-addresses the whole rig from 1.001 without splitting a fixture across universes, and overlapping addresses show in red. Live sACN or Art-Net drives each fixture from its own address and channel layout.
+- **Save rig** and **Load rig** write and read a rig file (GDTF types included); **Export MVR** writes positions, hanging, GDTF names and addresses for Vectorworks, Capture, grandMA3 or Depence. Your rig is also kept in the browser between visits.
+
+The rig model (types, GDTF channel layouts, DMX decode, arrays, patching, save and MVR export) is `app/rig.js`, covered by `test/rig.test.js`.
 
 **Look:** High quality adds bloom, filmic colour and sun shadows; Fast drops them for laptops and phones. Outdoor venues (arch tent, festival, stadium) get a sky, a sun placed from the time of day for midsummer, and stars after dark, and beams wash out in full sun as they do on site. The crowd is made of people with arms, phones held up to film and mixed clothing, facing the stage, and the Crowd slider thins it out.
 
@@ -156,7 +168,8 @@ With the bridge running, TouchDesigner can send its output straight onto the LED
 app/stage.html       visualizer (three.js). A body fragment so the same file can be published as an artifact;
                      the bridge wraps it in a document and turns on live DMX.
 app/audio.js         audio analysis (bands, hits, tempo, builds and drops) and the audio reactive link matrix
-app/importer.js      MVR scene reader (XML, matrices, fixtures) for custom stage imports
+app/importer.js      MVR scene reader (XML, matrices, fixtures) and GDTF fixture reader for imports
+app/rig.js           rig builder model: fixture types, DMX decode, arrays, auto patch, save and MVR export
 bridge/server.js     HTTP page + WebSocket /dmx + UDP receivers, merges sources, pushes at ~44 Hz
 bridge/dmx.js        sACN and Art-Net parsers and builders, source merge
 bridge/ws.js         minimal WebSocket server
@@ -169,8 +182,7 @@ test/                node --test suite (npm test)
 
 ## Roadmap
 
-Builder phases in progress: audio reactive mixer and custom stage import (GLB, glTF, OBJ, MVR) at any venue are done; next are a rig builder (place fixtures on truss or any surface, arrays, groups, auto patch, GDTF import, save and load), and a laser designer.
+Builder phases in progress: the audio reactive mixer, custom stage import (GLB, glTF, OBJ, MVR) at any venue and the rig builder (fixtures on any surface, lines, groups, auto patch, GDTF types, save, load and MVR export) are done; next is a laser designer.
 
-1. MVR import and export, so rigs from Capture, Vectorworks or grandMA3 load directly.
-2. GDTF fixture types in place of the generic spot, including real beam angles and DMX modes.
+1. Draw GDTF fixtures with their own 3D models instead of a generic body.
 3. Real venue library built from published tech specs.

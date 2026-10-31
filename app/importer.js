@@ -121,6 +121,39 @@
     return { pos: [m[12], m[13], m[14]], flip: hang, yaw };
   }
 
+  /* ---------- GDTF fixture types ---------- */
+  // description.xml of a .gdtf (DIN SPEC 15800): name, maker, beam angle, and each DMX mode's channels by attribute
+  // (offsets of coarse and fine bytes), its footprint, and the pan, tilt and zoom ranges in degrees.
+  function walkAll(el, fn) { fn(el); el.children.forEach((c) => walkAll(c, fn)); }
+  function readGdtf(xml) {
+    const doc = parseXml(xml), ft = kid(kid(doc, 'GDTF'), 'FixtureType');
+    if (!ft) throw new Error('Not a GDTF fixture: no FixtureType');
+    let beamAngle = 0;
+    walkAll(kid(ft, 'Geometries') || { children: [] }, (el) => { if (el.name === 'Beam' && !beamAngle) beamAngle = Number(el.attrs.BeamAngle) || 0; });
+    let panRange = 0, tiltRange = 0, zoomRange = null;
+    const modes = kids(kid(ft, 'DMXModes'), 'DMXMode').map((m) => {
+      const attributes = {}; let footprint = 0;
+      for (const ch of kids(kid(m, 'DMXChannels'), 'DMXChannel')) {
+        if ((ch.attrs.DMXBreak || '1') !== '1') continue;
+        const offs = String(ch.attrs.Offset || '').split(',').map(Number).filter((n) => n > 0);
+        if (!offs.length) continue;
+        footprint = Math.max(footprint, ...offs);
+        const lc = kid(ch, 'LogicalChannel'), cf = kid(lc, 'ChannelFunction');
+        const attr = (lc && lc.attrs.Attribute) || (cf && cf.attrs.Attribute);
+        if (!attr || attributes[attr]) continue;
+        attributes[attr] = offs;
+        const from = Number(cf && cf.attrs.PhysicalFrom), to = Number(cf && cf.attrs.PhysicalTo);
+        if (Number.isFinite(from) && Number.isFinite(to) && to !== from) {
+          if (attr === 'Pan') panRange = Math.abs(to - from);
+          if (attr === 'Tilt') tiltRange = Math.abs(to - from);
+          if (attr === 'Zoom') zoomRange = [Math.min(from, to), Math.max(from, to)];
+        }
+      }
+      return { name: m.attrs.Name || 'Mode', footprint, attributes };
+    }).filter((m) => m.footprint > 0);
+    return { name: ft.attrs.LongName || ft.attrs.Name || 'Fixture', shortName: ft.attrs.ShortName || '', manufacturer: ft.attrs.Manufacturer || '', beamAngle, panRange, tiltRange, zoomRange, modes };
+  }
+
   /* ---------- Units for plain 3D files ---------- */
   const UNITS = { m: 1, cm: 0.01, mm: 0.001, in: 0.0254, ft: 0.3048 };
   // Guess a file's units from its size: a stage is roughly 5 to 120 m across.
@@ -134,5 +167,5 @@
   const LED_NAME = /\b(led|screen|video|display|projection|lcd|panel_?led)\b|led[_\s-]?wall|^screen/i;
   const isLedName = (s) => LED_NAME.test(String(s || '').replace(/[_.]/g, ' '));
 
-  return { parseXml, parseMatrix, mul, toApp, readMvrScene, fixturePose, UNITS, guessUnits, isLedName, IDENT };
+  return { parseXml, parseMatrix, mul, toApp, readMvrScene, readGdtf, fixturePose, UNITS, guessUnits, isLedName, IDENT };
 });

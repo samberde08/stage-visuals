@@ -122,3 +122,11 @@ test('loading rejects junk and clamps values', () => {
   assert.strictEqual(m.group, 'odd'); assert.deepStrictEqual([m.lo, m.hi], [100, 900]);
   assert.strictEqual(A.loadMappings({}).length, 0);
 });
+
+test('rig links can target a fixture type or a rig builder group', () => {
+  assert.strictEqual(A.makeMapping({ dst: 'rig.dim', group: 'g:Front wash' }).group, 'g:Front wash');
+  assert.strictEqual(A.makeMapping({ dst: 'rig.dim', group: 't:beam' }).group, 't:beam');
+  assert.strictEqual(A.makeMapping({ dst: 'laser.dim', group: 'g:Front wash' }).group, 'all');
+  assert.strictEqual(A.makeMapping({ dst: 'rig.speed', group: 't:beam' }).group, 'all');
+  assert.strictEqual(A.makeMapping({ dst: 'rig.dim', group: 'g:<bad>' }).group, 'all');
+});
