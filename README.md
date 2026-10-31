@@ -185,4 +185,4 @@ test/                node --test suite (npm test)
 Builder phases in progress: the audio reactive mixer, custom stage import (GLB, glTF, OBJ, MVR) at any venue and the rig builder (fixtures on any surface, lines, groups, auto patch, GDTF types, save, load and MVR export) are done; next is a laser designer.
 
 1. Draw GDTF fixtures with their own 3D models instead of a generic body.
-3. Real venue library built from published tech specs.
+2. Real venue library built from published tech specs.
