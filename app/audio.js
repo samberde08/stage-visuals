@@ -46,6 +46,7 @@
   // 'add' targets offset it by amount x envelope, in the units the page gives them. `groups` lists which groups make sense.
   const RIG_GROUPS = ['all', 'hang', 'floor', 'odd', 'even', 'left', 'right', 'centre'];
   const SIDE_GROUPS = ['all', 'left', 'right'];
+  const FX_GROUPS = ['all', 'left', 'right', 'centre'];
   const DESTS = [
     { id: 'rig.dim', label: 'Lights: dimmer', kind: 'scale', groups: RIG_GROUPS },
     { id: 'rig.strobe', label: 'Lights: strobe', kind: 'add', groups: RIG_GROUPS },
@@ -66,6 +67,15 @@
     { id: 'haze', label: 'Haze density', kind: 'add', groups: ['all'] },
     { id: 'crowd', label: 'Crowd jumping', kind: 'add', groups: ['all'] },
     { id: 'cam.shake', label: 'Camera shake', kind: 'add', groups: ['all'] },
+    // Effects fire while the link's value is at 0.5 or more (a cue on its rising edge for cannons and pyro).
+    { id: 'fx.flame', label: 'FX: flame jets', kind: 'add', groups: FX_GROUPS, trigger: true },
+    { id: 'fx.co2', label: 'FX: CO2 jets', kind: 'add', groups: FX_GROUPS, trigger: true },
+    { id: 'fx.spark', label: 'FX: sparkulars', kind: 'add', groups: FX_GROUPS, trigger: true },
+    { id: 'fx.confetti', label: 'FX: confetti and streamers', kind: 'add', groups: FX_GROUPS, trigger: true },
+    { id: 'fx.pyro', label: 'FX: pyro (gerbs, comets, mines, fireworks)', kind: 'add', groups: FX_GROUPS, trigger: true },
+    { id: 'fx.smoke', label: 'FX: smoke jets', kind: 'add', groups: FX_GROUPS, trigger: true },
+    { id: 'fx.fog', label: 'FX: low fog', kind: 'add', groups: ['all'], trigger: true },
+    { id: 'fx.snow', label: 'FX: snow and bubbles', kind: 'add', groups: ['all'], trigger: true },
   ];
   const DEST_BY_ID = Object.fromEntries(DESTS.map((d) => [d.id, d]));
   const SOURCE_IDS = new Set(SOURCES.map((s) => s.id));
@@ -282,8 +292,8 @@
       invert: !!o.invert, lo: num(o.lo, 60, 20, 20000), hi: num(o.hi, 250, 20, 20000), env: 0, input: 0,
     };
     if (m.hi < m.lo) [m.lo, m.hi] = [m.hi, m.lo];
-    // Rig destinations also take a fixture type (t:spot) or a rig builder group (g:Front wash).
-    const rigGroup = /^[gt]:[\w -]{1,24}$/.test(m.group) && DEST_BY_ID[m.dst].groups.length > 1 && m.dst.startsWith('rig.');
+    // Light, laser and effect destinations also take a type (t:spot) or a rig builder group (g:Front wash).
+    const rigGroup = /^[gt]:[\w -]{1,24}$/.test(m.group) && DEST_BY_ID[m.dst].groups.length > 1 && /^(rig|laser|fx)\./.test(m.dst);
     if (!DEST_BY_ID[m.dst].groups.includes(m.group) && !rigGroup) m.group = 'all';
     return m;
   }
@@ -334,6 +344,7 @@
       P('snare', 'led.flash', 0.45, { release: 120 }),
       P('kick', 'laser.dim', 0.7, { attack: 1, release: 140 }),
       P('level', 'crowd', 0.6, { attack: 80, release: 600 }),
+      P('drop', 'fx.co2', 1, { attack: 0, release: 700 }),
     ],
     'Festival main stage': [
       P('kick', 'rig.dim', 0.6, { attack: 2, release: 220 }),
@@ -346,6 +357,21 @@
       P('mid', 'led.speed', 0.5, { attack: 100, release: 600 }),
       P('kick', 'led.flash', 0.25, { release: 150 }),
       P('high', 'laser.spread', 0.5, { attack: 40, release: 400 }),
+      P('level', 'crowd', 0.9, { attack: 60, release: 500 }),
+      P('drop', 'fx.co2', 1, { attack: 0, release: 900 }),
+      P('drop', 'fx.confetti', 1, { attack: 0, release: 300 }),
+    ],
+    'Pyro show': [
+      P('kick', 'rig.dim', 0.6, { attack: 2, release: 200 }),
+      P('build', 'rig.speed', 0.9, { attack: 400, release: 300 }),
+      P('build', 'fx.spark', 1, { attack: 2500, release: 200, gate: 0.55 }),
+      P('bar', 'fx.flame', 1, { attack: 0, release: 350, gate: 0.5 }),
+      P('drop', 'fx.flame', 1, { attack: 0, release: 1200 }),
+      P('drop', 'fx.co2', 1, { attack: 0, release: 1000 }),
+      P('drop', 'fx.confetti', 1, { attack: 0, release: 300 }),
+      P('drop', 'fx.pyro', 1, { attack: 0, release: 300 }),
+      P('drop', 'rig.strobe', 1, { attack: 0, release: 1500, gate: 0.6 }),
+      P('kick', 'cam.shake', 0.2, { release: 120, gate: 0.3 }),
       P('level', 'crowd', 0.9, { attack: 60, release: 500 }),
     ],
     'Techno strobe': [

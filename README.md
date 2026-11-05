@@ -18,11 +18,11 @@ Nothing is copied from venue drawings, and festival stages are proportions for t
 
 - A live spectrum, plus meters for what it hears: level, six frequency bands, kick, snare and hi-hat hits, the beat, build-up tension and drops.
 - The tempo it detects from live input. The show locks to that tempo, and **Auto drop** fires the Drop when the bass comes back after a breakdown.
-- **Links**, each connecting one thing it hears to one thing on stage. Lights take dimmer, strobe, white flash, colour shift, beam size, movement size, movement speed and tilt. Lasers take intensity, spread, speed, height and colour. The LED wall takes brightness, flash and motion speed. Haze, crowd jumping and camera shake can be linked too.
-  - Each link can target a group of fixtures: overhead, floor, odd, even, left, right or centre.
+- **Links**, each connecting one thing it hears to one thing on stage. Lights take dimmer, strobe, white flash, colour shift, beam size, movement size, movement speed and tilt. Lasers take intensity, spread, speed, height and colour. The LED wall takes brightness, flash and motion speed. Effects fire from links too: flame jets, CO2, sparkulars, confetti and streamers, pyro, smoke, low fog, and snow and bubbles. Haze, crowd jumping and camera shake can be linked as well.
+  - Each link can target a group of fixtures: overhead, floor, odd, even, left, right or centre, or a fixture type or rig builder group. Effect links fire while the link is above half (one cue each time it gets there, for cannons and pyro).
   - Each link has an amount (negative inverts the effect), plus gain, gate, attack, release and curve under **Response**.
   - Dragging across the spectrum gives the selected link its own frequency band.
-- Presets: four built-in setups (Punchy club, Festival main stage, Techno strobe, Chill wash). You can save your own in the browser and export or import them as JSON files.
+- Presets: five built-in setups (Punchy club, Festival main stage, Pyro show, Techno strobe, Chill wash). Festival main stage blasts CO2 and confetti on drops; Pyro show adds flames every bar, sparkulars through build-ups and everything at once on the drop. You can save your own in the browser and export or import them as JSON files.
 
 With no music playing, the links react to a built-in beat at the Tempo slider, so the show is never static. Audio is analysed in the page only: nothing is recorded or sent anywhere. Microphone and tab capture need the local version (`npm start`), because the online preview cannot ask for inputs.
 
@@ -50,6 +50,25 @@ The MVR reader is `app/importer.js`, covered by `test/importer.test.js`. MVR is 
 - **Save rig** and **Load rig** write and read a rig file (GDTF types included); **Export MVR** writes positions, hanging, GDTF names and addresses for Vectorworks, Capture, grandMA3 or Depence. Your rig is also kept in the browser between visits.
 
 The rig model (types, GDTF channel layouts, DMX decode, arrays, patching, save and MVR export) is `app/rig.js`, covered by `test/rig.test.js`.
+
+**Lasers:** the Lasers panel designs the look of every laser head, built-in or placed with the rig builder.
+
+- **Pattern:** fan, sweep, crowd scan, tunnel (a turning cone), liquid sky (a rippling sheet over the crowd), wave, chase, cross and beat burst. **On a drop** can switch to another pattern for the drop.
+- **Colour:** one colour, two colours alternating by beam, by laser or on the beat, or a moving rainbow.
+- **Beams** (1 to 24), **Size**, **Speed** and **Height** shape the pattern, and the audio mixer's laser links ride on top.
+- A laser placed with the rig builder has an 8-channel DMX mode (dimmer, pattern, size, speed, tilt, red, green, blue), so a console can run it.
+
+**Performance FX:** flame jets, CO2 jets, sparkulars (cold spark fountains), confetti and streamer cannons, gerbs, comets, mines, firework airbursts, smoke jets, low fog (dry ice), snow machines and bubble machines.
+
+- Every stage comes with a built-in set: CO2 and sparkulars along the front of the deck (plus flame jets on stages 12 m and wider), confetti cannons behind them, mines on big stages, and fireworks behind open-air stages. Place your own with the rig builder (they're under *Lasers and effects*, each with its usual aim), or turn the built-in set off.
+- **Fire pad:** one button per kind of effect in the rig. Hold a button to fire jets, tap it for cannons and pyro, and click fog, snow and bubbles on or off. Keys 1 to 9 work too.
+- **Armed** guards flames, CO2, cannons and pyro, as a real show's arm switch does: disarmed, nothing fires from the pad, the mixer or the console.
+- Jets fire for a minimum burst and cut off after a safety maximum; cannons and pyro take a reload time between cues. **Fire everything on each drop** fires the lot when a drop hits.
+- **Size** scales jet heights and throws, and **Confetti** picks mixed, gold and silver, show colours or white.
+- Every effect has a DMX address (shown in the Patch panel). Flame jets take an arm and a fire channel; most others fire at 50 % on one channel; sparkulars add a height channel, and fog, snow and bubbles take an output level.
+- Flames and pyro light the stage and the crowd. Confetti lands on the deck, the floor or seating and stays a while.
+
+The patterns, firing rules, DMX layouts and particle physics are `app/fx.js`, covered by `test/fx.test.js`.
 
 **Look:** High quality adds bloom, filmic colour and sun shadows; Fast drops them for laptops and phones. Outdoor venues (arch tent, festival, stadium) get a sky, a sun placed from the time of day for midsummer, and stars after dark, and beams wash out in full sun as they do on site. The crowd is made of people with arms, phones held up to film and mixed clothing, facing the stage, and the Crowd slider thins it out.
 
@@ -170,6 +189,7 @@ app/stage.html       visualizer (three.js). A body fragment so the same file can
 app/audio.js         audio analysis (bands, hits, tempo, builds and drops) and the audio reactive link matrix
 app/importer.js      MVR scene reader (XML, matrices, fixtures) and GDTF fixture reader for imports
 app/rig.js           rig builder model: fixture types, DMX decode, arrays, auto patch, save and MVR export
+app/fx.js            laser patterns and performance effects: firing rules, DMX layouts, particles
 bridge/server.js     HTTP page + WebSocket /dmx + UDP receivers, merges sources, pushes at ~44 Hz
 bridge/dmx.js        sACN and Art-Net parsers and builders, source merge
 bridge/ws.js         minimal WebSocket server
@@ -182,7 +202,7 @@ test/                node --test suite (npm test)
 
 ## Roadmap
 
-Builder phases in progress: the audio reactive mixer, custom stage import (GLB, glTF, OBJ, MVR) at any venue and the rig builder (fixtures on any surface, lines, groups, auto patch, GDTF types, save, load and MVR export) are done; next is a laser designer.
+Builder phases in progress: the audio reactive mixer, custom stage import (GLB, glTF, OBJ, MVR) at any venue the rig builder (fixtures on any surface, lines, groups, auto patch, GDTF types, save, load and MVR export), the laser designer and performance FX (pyro, flames, CO2, confetti, fog and more) are done.
 
 1. Draw GDTF fixtures with their own 3D models instead of a generic body.
 2. Real venue library built from published tech specs.

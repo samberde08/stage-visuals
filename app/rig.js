@@ -22,6 +22,22 @@
     strobe: { label: 'Strobe', kind: 'strobe', move: false, zoom: 90, aim: 25, footprint: 5, channels: { dim: 1, shutter: 2, r: 3, g: 4, b: 5 } },
     bar: { label: 'LED bar', kind: 'bar', move: false, zoom: 25, aim: 15, footprint: 5, channels: { dim: 1, r: 2, g: 3, b: 4, shutter: 5 } },
     par: { label: 'LED par', kind: 'par', move: false, zoom: 30, aim: 35, footprint: 5, channels: { dim: 1, r: 2, g: 3, b: 4, shutter: 5 } },
+    // Lasers and effects (app/fx.js runs them). fx says which: 'laser', or the effect kind. aim tilts the nozzle toward
+    // the audience; hung units point down.
+    laser: { label: 'Laser', kind: 'laser', fx: 'laser', move: false, aim: 0, footprint: 8, channels: { dim: 1, pattern: 2, size: 3, speed: 4, tilt: 5, r: 6, g: 7, b: 8 } },
+    flame: { label: 'Flame jet', kind: 'flame', fx: 'flame', move: false, aim: 0, footprint: 2, channels: { arm: 1, fire: 2 } },
+    co2: { label: 'CO2 jet', kind: 'co2', fx: 'co2', move: false, aim: 5, footprint: 1, channels: { fire: 1 } },
+    spark: { label: 'Sparkular (cold spark)', kind: 'spark', fx: 'spark', move: false, aim: 0, footprint: 2, channels: { fire: 1, height: 2 } },
+    confetti: { label: 'Confetti cannon', kind: 'confetti', fx: 'confetti', move: false, aim: 35, footprint: 1, channels: { fire: 1 } },
+    streamer: { label: 'Streamer cannon', kind: 'streamer', fx: 'streamer', move: false, aim: 40, footprint: 1, channels: { fire: 1 } },
+    gerb: { label: 'Gerb (pyro fountain)', kind: 'gerb', fx: 'gerb', move: false, aim: 0, footprint: 1, channels: { fire: 1 } },
+    comet: { label: 'Comet', kind: 'comet', fx: 'comet', move: false, aim: 8, footprint: 1, channels: { fire: 1 } },
+    mine: { label: 'Mine', kind: 'mine', fx: 'mine', move: false, aim: 0, footprint: 1, channels: { fire: 1 } },
+    firework: { label: 'Firework airburst', kind: 'firework', fx: 'firework', move: false, aim: 0, footprint: 1, channels: { fire: 1 } },
+    smoke: { label: 'Smoke jet', kind: 'smoke', fx: 'smoke', move: false, aim: 0, footprint: 1, channels: { fire: 1 } },
+    fog: { label: 'Low fog (dry ice)', kind: 'fog', fx: 'fog', move: false, aim: 0, footprint: 1, channels: { output: 1 } },
+    snow: { label: 'Snow machine', kind: 'snow', fx: 'snow', move: false, aim: 0, footprint: 1, channels: { output: 1 } },
+    bubble: { label: 'Bubble machine', kind: 'bubble', fx: 'bubble', move: false, aim: 30, footprint: 1, channels: { output: 1 } },
   };
 
   // Turn a parsed GDTF fixture (StageImport.readGdtf) into a type. Its look comes from its beam and whether it pans.
