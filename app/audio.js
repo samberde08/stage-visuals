@@ -282,7 +282,9 @@
       invert: !!o.invert, lo: num(o.lo, 60, 20, 20000), hi: num(o.hi, 250, 20, 20000), env: 0, input: 0,
     };
     if (m.hi < m.lo) [m.lo, m.hi] = [m.hi, m.lo];
-    if (!DEST_BY_ID[m.dst].groups.includes(m.group)) m.group = 'all';
+    // Rig destinations also take a fixture type (t:spot) or a rig builder group (g:Front wash).
+    const rigGroup = /^[gt]:[\w -]{1,24}$/.test(m.group) && DEST_BY_ID[m.dst].groups.length > 1 && m.dst.startsWith('rig.');
+    if (!DEST_BY_ID[m.dst].groups.includes(m.group) && !rigGroup) m.group = 'all';
     return m;
   }
   function num(v, d, lo, hi) { v = Number(v); return Number.isFinite(v) ? clamp(v, lo, hi) : d; }

@@ -53,7 +53,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .row output { font-family: var(--mono); font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
 .row.two { grid-template-columns: 92px minmax(0, 1fr); }
 input[type="range"] { width: 100%; accent-color: var(--amber); }
-select, input[type="text"] { width: 100%; min-width: 0; font: 13px var(--body); color: var(--fg); background: var(--rack-2); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; }
+select, input[type="text"] { box-sizing: border-box; width: 100%; min-width: 0; font: 13px var(--body); color: var(--fg); background: var(--rack-2); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; }
 input[type="color"] { width: 100%; height: 30px; padding: 0 2px; background: var(--rack-2); border: 1px solid var(--line); border-radius: 4px; }
 .colors { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 input[type="file"] { font: 12px var(--body); color: var(--muted); width: 100%; }
@@ -71,7 +71,7 @@ input[type="file"] { font: 12px var(--body); color: var(--muted); width: 100%; }
 .badge { display: inline-block; font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; padding: 1px 6px; border-radius: 8px; border: 1px solid currentColor; margin-right: 6px; }
 .badge.sourced { color: #4fd18b; } .badge.partial { color: #e8b84a; } .badge.estimated { color: var(--muted); }
 .btns { display: flex; gap: 8px; }
-.btns .btn { flex: 1; padding: 9px 10px; }
+.btns .btn { flex: 1; padding: 9px 6px; }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 .btn.drop { background: var(--amber); color: var(--amber-ink); border-color: var(--amber); font-weight: 600; }
 .btn.drop[aria-pressed="true"] { background: #fff; border-color: #fff; }
@@ -156,6 +156,10 @@ details .btn { margin: 0 10px 10px; }
 .num3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .num3 label { display: grid; gap: 2px; min-width: 0; font-size: 11px; color: var(--muted); }
 .num3 input { width: 100%; min-width: 0; font: 12px var(--mono); color: var(--fg); background: var(--rack-2); border: 1px solid var(--line); border-radius: 4px; padding: 5px 6px; }
+.patch tr[aria-current="true"] td { background: #22190e; color: var(--amber); }
+.patch tr.clash td:nth-child(4) { color: #ff7a7a; }
+.patch button { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 14px; padding: 0 2px; }
+.patch tbody tr { cursor: pointer; }
 .check { display: flex; gap: 8px; align-items: center; font-size: 12.5px; color: var(--muted); }
 .view.dropping::after { content: "Drop a GLB, glTF, OBJ or MVR file to add it to the stage"; position: absolute; inset: 12px; display: grid; place-items: center; border: 2px dashed var(--amber); border-radius: 8px; background: rgba(7,8,11,.6); font: 600 22px var(--display); color: var(--amber); pointer-events: none; }
 .fallback { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--muted); }
@@ -241,6 +245,25 @@ details .btn { margin: 0 10px 10px; }
       <div class="row two"><label for="tplShow">Built-in stage</label><select id="tplShow"><option value="all">Show stage and rig</option><option value="rig">Hide stage, keep rig and lasers</option><option value="none">Hide stage, rig and lasers</option></select></div>
       <label class="check" id="mvrRigRow" hidden><input type="checkbox" id="mvrRig" checked> Use the MVR file's fixtures as the rig</label>
       <p class="note" id="impNote" role="status"></p>
+    </section>
+
+    <section class="group" id="rigSec">
+      <div class="eyebrow"><span>Rig builder</span><span id="rbSum"></span></div>
+      <div class="row two"><label for="rbUse">Rig</label><select id="rbUse"><option value="tpl">Built-in rig for this venue</option><option value="mine">My rig</option></select></div>
+      <div class="row two"><label for="rbType">Fixture</label><select id="rbType"></select></div>
+      <button type="button" class="btn" id="rbGdtfBtn">Add a fixture type from a GDTF file…</button><input type="file" id="rbGdtf" accept=".gdtf" multiple hidden>
+      <div class="seg" role="group" aria-label="Rig tool"><button type="button" class="btn" data-rtool="place" aria-pressed="false">Place</button><button type="button" class="btn" data-rtool="line" aria-pressed="false">Line</button><button type="button" class="btn" data-rtool="select" aria-pressed="false">Select</button></div>
+      <p class="note" id="rbHint">Pick a tool, then click in the view: on a truss, a deck, the floor or your imported stage.</p>
+      <div class="row two"><label for="rbMount">Mount</label><select id="rbMount"><option value="auto">Auto: hang under truss, stand on decks</option><option value="hang">Hang</option><option value="stand">Stand</option></select></div>
+      <div class="row" id="rbCountRow"><label for="rbCount">In a line</label><input id="rbCount" type="range" min="2" max="40" step="1" value="8"><output for="rbCount">8</output></div>
+      <div class="row" id="rbSagRow"><label for="rbSag">Curve</label><input id="rbSag" type="range" min="-4" max="4" step="0.1" value="0"><output for="rbSag">0.0 m</output></div>
+      <div class="row"><label for="rbAim">Aim</label><input id="rbAim" type="range" min="-90" max="90" step="1" value="40"><output for="rbAim">40°</output></div>
+      <div class="row two"><label for="rbGroup">Group</label><input id="rbGroup" type="text" maxlength="24" placeholder="e.g. Beams, Front wash"></div>
+      <div class="patch"><table><thead><tr><th>#</th><th>Type</th><th>Group</th><th>Addr</th><th></th></tr></thead><tbody id="rbList"></tbody></table></div>
+      <div class="btns"><button type="button" class="btn" id="rbCopy" title="Copy the built-in fixtures into your rig">Copy built-in</button><button type="button" class="btn" id="rbPatch">Patch</button><button type="button" class="btn" id="rbClear">Clear</button></div>
+      <div class="btns"><button type="button" class="btn" id="rbExport">Save rig</button><button type="button" class="btn" id="rbImportBtn">Load rig</button><button type="button" class="btn" id="rbMvr">Export MVR</button></div>
+      <input type="file" id="rbImport" accept=".json,application/json" hidden>
+      <p class="note" id="rbNote" role="status"></p>
     </section>
 
     <section class="group">
@@ -407,6 +430,7 @@ details .btn { margin: 0 10px 10px; }
 <script src="venues.js"></script>
 <script src="audio.js"></script>
 <script src="importer.js"></script>
+<script src="rig.js"></script>
 <script>
 (() => {
 const $ = (s) => document.querySelector(s);
@@ -2734,30 +2758,51 @@ const BUILD = {
 /* ---------- Fixtures ---------- */
 const lensGeo = new THREE.CircleGeometry(0.12, 20); lensGeo.rotateX(-Math.PI / 2);
 const headGeo = new THREE.CylinderGeometry(0.15, 0.17, 0.42, 16);
+// Bodies by kind: moving heads (spot, beam, wash) on a yoke, and static units (blinder, strobe, LED bar, par) on a
+// bracket. Everything aims along its tilt group's +y, so beams, pools and glare work the same for all of them.
+const STATIC_BODY = { blinder: [0.62, 0.3, [[-0.15, -0.075], [0.15, -0.075], [-0.15, 0.075], [0.15, 0.075]], 0.07], strobe: [0.7, 0.2, [[0, 0]], 0], bar: [1.0, 0.09, [[0, 0]], 0], par: [0.26, 0.26, [[0, 0]], 0.11] };
 function makeFixture(spec, idx) {
+  const def = spec.def || RIG.TYPES.spot, kind = def.kind;
   const root = new THREE.Group();
   root.position.copy(spec.pos);
   root.rotation.set(0, spec.yaw, spec.flip ? Math.PI : 0);
-  const base = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.12, 0.3), M.body); base.position.y = 0.06; root.add(base);
-  const pan = new THREE.Group(); pan.position.y = 0.12; root.add(pan);
-  const arm = new THREE.BoxGeometry(0.045, 0.44, 0.12);
-  [-0.2, 0.2].forEach((x) => { const a = new THREE.Mesh(arm, M.body); a.position.set(x, 0.22, 0); pan.add(a); });
-  const bar = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.04, 0.12), M.body); bar.position.y = 0.02; pan.add(bar);
-  const tilt = new THREE.Group(); tilt.position.y = 0.3; pan.add(tilt);
-  tilt.add(new THREE.Mesh(headGeo, M.body));
+  const pan = new THREE.Group(), tilt = new THREE.Group();
   const lensMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-  const lens = new THREE.Mesh(lensGeo, lensMat); lens.position.y = 0.212; tilt.add(lens);
+  let lens;
+  if (def.move) {
+    const s = kind === 'wash' ? 1.15 : kind === 'beam' ? 0.9 : 1;
+    const base = new THREE.Mesh(new THREE.BoxGeometry(0.38 * s, 0.12, 0.3 * s), M.body); base.position.y = 0.06; root.add(base);
+    pan.position.y = 0.12; root.add(pan);
+    const arm = new THREE.BoxGeometry(0.045, 0.44 * s, 0.12);
+    [-0.2 * s, 0.2 * s].forEach((x) => { const a = new THREE.Mesh(arm, M.body); a.position.set(x, 0.22 * s, 0); pan.add(a); });
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.45 * s, 0.04, 0.12), M.body); bar.position.y = 0.02; pan.add(bar);
+    tilt.position.y = 0.3 * s; pan.add(tilt);
+    const head = new THREE.Mesh(headGeo, M.body); head.scale.set(s, kind === 'beam' ? 1.15 : 1, s); tilt.add(head);
+    lens = new THREE.Mesh(lensGeo, lensMat); lens.position.y = 0.212 * (kind === 'beam' ? 1.15 : 1); lens.scale.setScalar(kind === 'wash' ? 1.3 : kind === 'beam' ? 0.7 : 1); tilt.add(lens);
+  } else {
+    // A bracket to the mount, then a flat body whose face points along +y of the tilt group.
+    const [w, h, lensXZ, lr] = STATIC_BODY[kind] || STATIC_BODY.par;
+    const yoke = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.2, 0.04), M.body); yoke.position.y = 0.1; root.add(yoke);
+    pan.position.y = 0.2; root.add(pan);
+    tilt.position.y = 0.06; pan.add(tilt);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(w, 0.14, h), M.body); tilt.add(body);
+    const lg = lr ? new THREE.CircleGeometry(lr, 16) : new THREE.PlaneGeometry(w * 0.9, h * 0.7);
+    lg.rotateX(-Math.PI / 2);
+    const lenses = new THREE.Group(); lenses.position.y = 0.072; tilt.add(lenses);
+    lensXZ.forEach(([x, z]) => { const m = new THREE.Mesh(lg, lensMat); m.position.set(x, 0, z); lenses.add(m); });
+    lens = { material: lensMat };
+  }
   const beamMat = new THREE.ShaderMaterial({
     uniforms: { uColor: { value: new THREE.Color() }, uIntensity: { value: 0 }, uLen: { value: 30 }, ...shared },
     vertexShader: beamVert, fragmentShader: beamFrag,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
   });
-  const beam = new THREE.Mesh(beamGeo, beamMat); beam.position.y = 0.21; beam.frustumCulled = false; tilt.add(beam);
+  const beam = new THREE.Mesh(beamGeo, beamMat); beam.position.y = def.move ? 0.21 : 0.075; beam.frustumCulled = false; tilt.add(beam);
   const glare = new THREE.Sprite(new THREE.SpriteMaterial({ map: glareTex, color: 0x000000, blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: false, fog: false, transparent: true }));
-  glare.position.y = 0.26; glare.visible = false; tilt.add(glare);
+  glare.position.y = def.move ? 0.26 : 0.1; glare.visible = false; tilt.add(glare);
   const pool = new THREE.Mesh(poolGeo, new THREE.MeshBasicMaterial({ map: poolTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, color: 0x000000, polygonOffset: true, polygonOffsetFactor: -2, fog: false }));
   venue.add(root); venue.add(pool);
-  return { ...spec, id: 101 + idx, root, pan, tilt, lens, beam, pool, glare };
+  return { ...spec, def, id: 101 + idx, root, pan, tilt, lens, beam, pool, glare };
 }
 
 function distribute(n) {
@@ -2854,13 +2899,24 @@ function build() {
   djRig = null;
   djBooth(camSet.djAt || V(0, state.H, -state.D * 0.38), camSet.djYaw || 0, state.W >= 14);
   hideTemplate();
-  (customRig() || (custom.tplShow === 'none' ? [] : distribute(state.count))).forEach((s, i) => fixtures.push(makeFixture(s, i)));
+  (customRig() || (rigb.use ? rigSpecs() : custom.tplShow === 'none' ? [] : distribute(state.count))).forEach((s, i) => fixtures.push(makeFixture(s, i)));
+  // Patch: your rig and MVR files carry addresses; anything without one follows on consecutively.
+  let nextAt = 0;
+  fixtures.forEach((f) => {
+    if (f.patch && f.patch.u && f.patch.a) { nextAt = Math.max(nextAt, (f.patch.u - 1) * 512 + f.patch.a - 1 + f.def.footprint); return; }
+    if (nextAt % 512 + f.def.footprint > 512) nextAt = Math.ceil(nextAt / 512) * 512;
+    f.patch = { u: Math.floor(nextAt / 512) + 1, a: (nextAt % 512) + 1 }; nextAt += f.def.footprint;
+  });
   if (!laserSpots.length) [-0.3, 0.3].forEach((u) => laser(u * state.W, state.H, -0.3, 0));
   lasers = custom.tplShow === 'none' ? [] : laserSpots.map(makeLaser);
   custom.items.forEach((it) => { if (it.root.visible) receivers.push(...it.meshes); });
   // Groups the audio mixer can target. Left and right are as the audience sees the stage.
   const mid = state.W * 0.15;
-  fixtures.forEach((f, i) => { const x = f.pos.x; f.grp = { hang: f.flip, floor: !f.flip, odd: i % 2 === 0, even: i % 2 === 1, left: x < -mid, right: x > mid, centre: Math.abs(x) <= mid }; });
+  fixtures.forEach((f, i) => {
+    const x = f.pos.x; f.grp = { hang: f.flip, floor: !f.flip, odd: i % 2 === 0, even: i % 2 === 1, left: x < -mid, right: x > mid, centre: Math.abs(x) <= mid };
+    f.grp[`t:${f.def.kind}`] = true;
+    if (f.group) f.grp[`g:${f.group}`] = true;
+  });
   lasers.forEach((L) => { const x = L.root.position.x; L.grp = { left: x < -0.5, right: x > 0.5 }; });
   const mw = mainWall;
   const n = new THREE.Vector3(0, 0, 1).applyQuaternion(mw.quaternion);
@@ -2876,6 +2932,8 @@ function build() {
   updateReadouts();
   renderPatch();
   if ($('#sceneDetails').open) $('#sceneJson').textContent = sceneJSON();
+  reattachRig();
+  if (!$('#mixer').hidden) renderLinks();
 }
 
 /* ---------- Cameras ---------- */
@@ -3205,16 +3263,22 @@ function tick(now) {
   const glareK = (1 - 0.75 * look.day) * (highOn() ? 1 : 0.6);
   fixtures.forEach((f, i) => {
     let p, tl, dim, kf = k, hf = half;
+    const def = f.def, aimed = (f.aim ?? def.aim ?? 30) * DEG;
+    // Beam angle by type: heads zoom within their range (washes run wider than the slider), static units are fixed.
+    if (Array.isArray(def.zoom)) { const z = Math.min(def.zoom[1], Math.max(def.zoom[0], state.zoom * (def.kind === 'wash' ? 2.5 : 1))); if (z !== state.zoom) { hf = z / 2 * DEG; kf = Math.tan(hf) / Math.tan(BASE_HALF); } }
+    else { hf = def.zoom / 2 * DEG; kf = Math.tan(hf) / Math.tan(BASE_HALF); }
     if (state.control === 'live') {
-      const d = liveFixture(i, now);
+      const d = liveFixture(f, now);
       p = d.pan; tl = d.tilt; dim = d.dim; tmpC.setRGB(d.r, d.g, d.b);
+      if (!def.move) { p = 0; tl = aimed; }
       hf = d.zoom / 2 * DEG; kf = Math.tan(hf) / Math.tan(BASE_HALF);
     } else {
       const G = f.grp, rb = fx.rigBeat;
       [p, tl] = motion(i, n, rb);
       if (!f.flip) { p = Math.PI / 2; tl = (i % 2 ? 1 : -1) * (12 + 14 * Math.sin(rb * Math.PI / 4)) * DEG; if (state.program === 'pools') tl = 0; }
+      if (!def.move) { p = 0; tl = aimed; }
       const lift = mod('rig.tilt', G);
-      tl = tl * mod('rig.size', G) + (tl < 0 ? -1 : 1) * lift * 35 * DEG;
+      if (def.move) tl = tl * mod('rig.size', G) + (tl < 0 ? -1 : 1) * lift * 35 * DEG;
       dim = drop === 'on' ? 0.5 + 0.5 * Math.exp(-(beat % 1) * 4) : dimmer(i, n, beat);
       fixtureColor(i, n, beat, tmpC);
       // Audio mixer: dimmer, colour shift, white flash, strobe and beam size per group.
@@ -3222,7 +3286,7 @@ function tick(now) {
       const hue = mod('rig.hue', G); if (hue) tmpC.offsetHSL(hue, 0, 0);
       const wf = Math.min(1, mod('rig.white', G)); if (wf > 0) { tmpC.lerp(WHITE, wf); dim = Math.min(1, dim + wf * 0.8); }
       const sb = mod('rig.strobe', G); if (sb > 0.15) dim *= ((time * (5 + 15 * Math.min(1, sb))) % 1) < 0.25 ? 1 : 0.03;
-      const zm = mod('rig.zoom', G); if (zm) { hf = Math.min(20 * DEG, Math.max(1.5 * DEG, half * (1 + zm))); kf = Math.tan(hf) / Math.tan(BASE_HALF); }
+      const zm = mod('rig.zoom', G); if (zm) { hf = Math.min(45 * DEG, Math.max(0.75 * DEG, hf * (1 + zm))); kf = Math.tan(hf) / Math.tan(BASE_HALF); }
       if (drop === 'pre') dim = 0;
     }
     f.pan.rotation.y = p; f.tilt.rotation.x = tl;
@@ -3319,20 +3383,13 @@ function renderHigh(dt) {
 const BRIDGE = window.STAGE_BRIDGE;
 const live = { ws: null, state: BRIDGE ? 'connecting' : 'none', unis: new Map(), sources: [], touched: false };
 const DARK = { pan: 0, tilt: 0, dim: 0, r: 0, g: 0, b: 0, zoom: 9 };
-function liveFixture(i, now) {
-  const at = i * 16, data = live.unis.get(Math.floor(at / 512) + 1);
+// Each fixture reads its own channels at its patched address, laid out by its type (app/rig.js), GDTF types included.
+function liveFixture(f, now) {
+  const data = live.unis.get(f.patch.u);
   if (!data) return DARK;
-  const o = at % 512, c = (ch) => data[o + ch - 1] || 0;
-  let dim = c(5) / 255;
-  const sh = c(6);
-  if (sh >= 32) { const hz = 1 + (sh - 32) / 223 * 19; if (((now / 1000) * hz) % 1 > 0.35) dim = 0; }
-  const w = c(10) / 255;
-  return {
-    pan: (((c(1) << 8) | c(2)) / 65535 - 0.5) * 540 * DEG,
-    tilt: (((c(3) << 8) | c(4)) / 65535 - 0.5) * 270 * DEG,
-    dim, r: Math.min(1, c(7) / 255 + w), g: Math.min(1, c(8) / 255 + w), b: Math.min(1, c(9) / 255 + w),
-    zoom: 3 + c(11) / 255 * 32,
-  };
+  const d = RIG.decode(f.def, data, f.patch.a, now);
+  d.pan *= DEG; d.tilt *= DEG;
+  return d;
 }
 function connectLive() {
   if (!BRIDGE || live.ws) return;
@@ -3726,7 +3783,7 @@ function customRig() {
     it.fixtures.forEach((f) => {
       fxM.fromArray(f.matrix).premultiply(it.root.matrixWorld);
       const p = SI.fixturePose(fxM.elements);
-      specs.push({ pos: V(...p.pos), flip: p.flip, yaw: p.yaw, truss: f.name, gdtf: f.gdtf, mvrAddress: f.address });
+      specs.push({ pos: V(...p.pos), flip: p.flip, yaw: p.yaw, truss: f.name, gdtf: f.gdtf, patch: f.address ? { u: f.address.universe, a: f.address.channel } : null });
     });
   });
   return specs.length ? specs : null;
@@ -3850,6 +3907,7 @@ function putOnGround(it) {
 /* Selection, handles and the numbers */
 function selectItem(id) {
   custom.sel = id;
+  if (id && rigb.sel) { rigb.sel = null; renderRig(); }
   const it = curItem();
   $('#impEdit').hidden = !it;
   if (custom.gizmo) { if (it && it.root.visible) custom.gizmo.attach(it.root); else custom.gizmo.detach(); }
@@ -3878,7 +3936,7 @@ function initGizmo() {
   if (custom.gizmo || !THREE.TransformControls) return;
   const g = custom.gizmo = new THREE.TransformControls(camera, canvas);
   g.setSize(0.9);
-  g.addEventListener('dragging-changed', (e) => { controls.enabled = !e.value; if (!e.value) { const it = curItem(); if (it) committed(it); } });
+  g.addEventListener('dragging-changed', (e) => { controls.enabled = !e.value; if (!e.value) { if (rigb.sel) rigCommitMove(); else { const it = curItem(); if (it) committed(it); } } });
   g.addEventListener('objectChange', () => {
     const it = curItem(); if (!it) return;
     // Keep scaling uniform so a stage never stretches.
@@ -3931,7 +3989,7 @@ $('#mvrRig').addEventListener('change', (e) => { custom.mvrRig = e.target.checke
 const pickRay = new THREE.Raycaster(), pickNdc = new THREE.Vector2(), pickDown = { x: 0, y: 0 };
 canvas.addEventListener('pointerdown', (e) => { pickDown.x = e.clientX; pickDown.y = e.clientY; });
 canvas.addEventListener('pointerup', (e) => {
-  if (!custom.items.length || walk.on || Math.hypot(e.clientX - pickDown.x, e.clientY - pickDown.y) > 4 || (custom.gizmo && custom.gizmo.dragging)) return;
+  if (rigb.tool || !custom.items.length || walk.on || Math.hypot(e.clientX - pickDown.x, e.clientY - pickDown.y) > 4 || (custom.gizmo && custom.gizmo.dragging)) return;
   const r = canvas.getBoundingClientRect();
   pickNdc.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1);
   pickRay.setFromCamera(pickNdc, camera);
@@ -3949,7 +4007,7 @@ viewEl.addEventListener('drop', async (e) => {
   for (const f of [...(e.dataTransfer.files || [])]) await importFile(f);
 });
 addEventListener('keydown', (e) => {
-  if (typing(document.activeElement) || walk.on || !curItem()) return;
+  if (typing(document.activeElement) || walk.on || !curItem() || rigb.tool) return;
   if (e.key === 'Escape') selectItem(null);
   else if (e.key === 'g' || e.key === 'G') setMode('translate');
   else if (e.key === 'r' || e.key === 'R') setMode('rotate');
@@ -3988,6 +4046,230 @@ function restoreImports() {
   }).catch(() => {});
 }
 renderImports();
+
+/* ---------- Rig builder ---------- */
+// Your own rig: click fixtures onto truss, decks, the floor or an imported stage, or run a line of them between two
+// points, then move, turn, group and patch them. Types are the built-in spot, beam, wash, blinder, strobe, LED bar
+// and par, plus any GDTF file you add, whose DMX mode then drives the fixture from a console. The model is app/rig.js.
+const RIG = window.StageRig;
+const rigb = { types: { ...RIG.TYPES }, list: [], use: false, tool: null, type: 'spot', mount: 'auto', aim: 40, group: '', count: 8, sag: 0, lineStart: null, sel: null };
+try {
+  const d = JSON.parse(localStorage.getItem('stageRig') || 'null');
+  if (d) { const r = RIG.loadRig(d.rig); rigb.types = r.types; rigb.list = r.fixtures; rigb.use = !!d.use && r.fixtures.length > 0; if (rigb.types[d.type]) rigb.type = d.type; }
+} catch (_) { /* start empty */ }
+function saveRigLocal() { try { localStorage.setItem('stageRig', JSON.stringify({ use: rigb.use, type: rigb.type, rig: RIG.saveRig(rigb.list, rigb.types) })); } catch (_) { /* this visit only */ } }
+function rigSpecs() {
+  return rigb.list.map((f) => ({ pos: V(...f.pos), flip: f.flip, yaw: f.yaw, aim: f.aim, def: rigb.types[f.type] || RIG.TYPES.spot, group: f.group, rigId: f.id,
+    truss: f.name || f.group || (rigb.types[f.type] || RIG.TYPES.spot).label, patch: f.universe && f.address ? { u: f.universe, a: f.address } : null }));
+}
+function rbNote(t) { $('#rbNote').textContent = t || ''; }
+function renderRigTypes() {
+  $('#rbType').innerHTML = `<optgroup label="Built in">${Object.entries(RIG.TYPES).map(([k, t]) => `<option value="${k}">${esc(t.label)}</option>`).join('')}</optgroup>`
+    + (Object.keys(rigb.types).some((k) => !RIG.TYPES[k]) ? `<optgroup label="GDTF">${Object.entries(rigb.types).filter(([k]) => !RIG.TYPES[k]).map(([k, t]) => `<option value="${esc(k)}">${esc(t.label)} · ${t.footprint}ch</option>`).join('')}</optgroup>` : '');
+  $('#rbType').value = rigb.type;
+}
+function renderRig() {
+  const clash = RIG.patchClashes(rigb.list, rigb.types);
+  $('#rbList').innerHTML = rigb.list.map((f, i) => {
+    const t = rigb.types[f.type] || RIG.TYPES.spot;
+    return `<tr data-id="${f.id}" aria-current="${f.id === rigb.sel}"${clash.has(f.id) ? ' class="clash" title="Overlaps another fixture\'s channels"' : ''}><td>${101 + i}</td><td title="${esc(t.label)}">${esc(t.label.replace(/ moving head| \(.*\)/g, '').slice(0, 18))}</td><td>${esc(f.group || '')}</td><td>${f.universe ? `${f.universe}.${String(f.address).padStart(3, '0')}` : '·'}</td><td><button type="button" data-act="del" aria-label="Remove fixture ${101 + i}">×</button></td></tr>`;
+  }).join('') || '<tr><td colspan="5">No fixtures yet</td></tr>';
+  $('#rbUse').value = rigb.use ? 'mine' : 'tpl';
+  $('#rbSum').textContent = rigb.list.length ? `${rigb.list.length} fixtures${clash.size ? ' · patch clash' : ''}` : 'empty';
+  $('#rbCopy').hidden = rigb.list.length > 0;
+  renderRigHint();
+}
+function renderRigHint() {
+  const t = rigb.types[rigb.type] || RIG.TYPES.spot, name = t.label.toLowerCase();
+  const hint = { place: `Click a truss, deck, the floor or your stage to add a ${name}. Esc stops.`, line: rigb.lineStart ? `Now click where the line ends: ${rigb.count} fixtures.` : `Click where a line of ${rigb.count} ${name}s starts.`, select: rigb.sel ? 'Drag the handle to move it, or press R to turn it. Delete removes it, Esc deselects.' : 'Click a fixture to move or turn it.' }[rigb.tool];
+  $('#rbHint').textContent = hint || 'Pick a tool, then click in the view: on a truss, a deck, the floor or your imported stage.';
+  document.querySelectorAll('[data-rtool]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.rtool === rigb.tool)));
+  $('#rbCountRow').hidden = $('#rbSagRow').hidden = rigb.tool !== 'line';
+  $('#rbAim').closest('.row').hidden = !!(rigb.types[rigb.type] || {}).move && !(rigb.sel && !rigFixtureDef(rigb.sel).move);
+}
+const rigFixtureDef = (id) => { const f = rigb.list.find((x) => x.id === id); return (f && rigb.types[f.type]) || RIG.TYPES.spot; };
+// Fixtures are rebuilt with the venue, so every change goes through the list and a rebuild.
+function rigChanged(rebuild = true) { saveRigLocal(); renderRig(); if (rebuild) scheduleBuild(false); }
+function useMine() { if (!rigb.use) { rigb.use = true; rbNote('Switched to your rig. Pick "Built-in rig" above to go back.'); } }
+
+// What a click in the view lands on: solid, visible surfaces of the venue and imports, truss included.
+const rbRay = new THREE.Raycaster(), rbNdc = new THREE.Vector2(), rbN = new THREE.Vector3();
+function surfaceAt(e) {
+  const r = canvas.getBoundingClientRect();
+  rbNdc.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1);
+  rbRay.setFromCamera(rbNdc, camera);
+  const hits = rbRay.intersectObjects([venue, custom.group], true);
+  for (const h of hits) {
+    const o = h.object, m = o.material;
+    if (!o.isMesh || o.isInstancedMesh || !h.face || (m && (m.isShaderMaterial || m.transparent || m.isMeshBasicMaterial)) || fixtures.some((f) => f.root === o || isChild(o, f.root))) continue;
+    let vis = true; for (let p = o; p; p = p.parent) if (p.visible === false) { vis = false; break; }
+    if (!vis) continue;
+    rbN.copy(h.face.normal).transformDirection(o.matrixWorld);
+    return { point: h.point.clone(), normal: rbN.clone(), truss: m === M.truss };
+  }
+  return null;
+}
+function isChild(o, root) { for (let p = o; p; p = p.parent) if (p === root) return true; return false; }
+// Hang under truss and ceilings, stand on decks and floors, unless Mount says otherwise.
+function mountAt(hit) {
+  const hang = rigb.mount === 'hang' || (rigb.mount === 'auto' && (hit.truss || hit.normal.y < -0.4));
+  const p = hit.point.clone();
+  if (hang && hit.truss) p.y -= 0.22;
+  return { pos: [p.x, p.y, p.z].map((v) => Math.round(v * 100) / 100), flip: hang };
+}
+function newFixture(at) {
+  const t = rigb.types[rigb.type] || RIG.TYPES.spot;
+  return RIG.makeFixture({ type: rigb.type, pos: at.pos, flip: at.flip, yaw: 0, aim: t.move ? null : rigb.aim, group: rigb.group }, rigb.types);
+}
+// New fixtures take the next free addresses after the last one.
+function patchNew(fs) {
+  const used = rigb.list.filter((f) => f.universe && !fs.includes(f));
+  let u = 1, a = 1;
+  used.forEach((f) => { const end = (f.universe - 1) * 512 + f.address - 1 + (rigb.types[f.type] || RIG.TYPES.spot).footprint; if (end >= (u - 1) * 512 + a - 1) { u = Math.floor(end / 512) + 1; a = (end % 512) + 1; } });
+  RIG.autoPatch(fs, rigb.types, u, a);
+}
+const lineMark = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 8), new THREE.MeshBasicMaterial({ color: 0xf0a24a })); lineMark.visible = false; scene.add(lineMark);
+function rigClick(e) {
+  if (rigb.tool === 'select') {
+    rbRay.setFromCamera(rbNdc.set((e.clientX - canvas.getBoundingClientRect().left) / canvas.clientWidth * 2 - 1, -(e.clientY - canvas.getBoundingClientRect().top) / canvas.clientHeight * 2 + 1), camera);
+    const hit = rbRay.intersectObjects(fixtures.map((f) => f.root), true).find((h) => h.object.isMesh && !h.object.material.isShaderMaterial);
+    const f = hit && fixtures.find((x) => isChild(hit.object, x.root));
+    if (f && !f.rigId) { rbNote('That is a built-in fixture. "Copy built-in" copies them into your rig so you can edit them.'); return; }
+    selectRig(f ? f.rigId : null);
+    return;
+  }
+  const hit = surfaceAt(e);
+  if (!hit) { rbNote('Nothing to mount on there. Click a truss, deck, floor or your stage.'); return; }
+  if (rigb.tool === 'place') {
+    useMine();
+    const f = newFixture(mountAt(hit)); rigb.list.push(f); patchNew([f]);
+    rigChanged();
+  } else if (rigb.tool === 'line') {
+    const at = mountAt(hit);
+    if (!rigb.lineStart) { rigb.lineStart = at; lineMark.position.set(...at.pos); lineMark.visible = true; renderRigHint(); return; }
+    useMine();
+    const pts = RIG.arrayPoints(rigb.lineStart.pos, at.pos, rigb.count, rigb.sag);
+    const fs = pts.map((p) => newFixture({ pos: p.map((v) => Math.round(v * 100) / 100), flip: rigb.lineStart.flip }));
+    rigb.list.push(...fs); patchNew(fs);
+    rigb.lineStart = null; lineMark.visible = false;
+    rigChanged();
+    rbNote(`Added ${fs.length} fixtures${fs[0].universe ? ` at ${fs[0].universe}.${String(fs[0].address).padStart(3, '0')} onward` : ''}.`);
+  }
+}
+function setRigTool(t) {
+  rigb.tool = rigb.tool === t ? null : t; rigb.lineStart = null; lineMark.visible = false;
+  if (rigb.tool && custom.sel) selectItem(null);
+  if (rigb.tool !== 'select') selectRig(null);
+  renderRigHint();
+}
+function selectRig(id) {
+  rigb.sel = id;
+  const f = fixtures.find((x) => x.rigId === id);
+  if (custom.gizmo) {
+    if (f) { custom.sel = null; $('#impEdit').hidden = true; custom.gizmo.attach(f.root); custom.gizmo.setMode(custom.mode === 'rotate' ? 'rotate' : 'translate'); }
+    else if (!custom.sel) custom.gizmo.detach();
+  }
+  const r = rigb.list.find((x) => x.id === id);
+  if (r) { $('#rbGroup').value = r.group; if (r.aim != null) { $('#rbAim').value = r.aim; $('#rbAim').nextElementSibling.textContent = `${r.aim}°`; } }
+  renderRig();
+}
+// After dragging the handle: read the fixture's new place and facing back into the list.
+const rbZ = new THREE.Vector3();
+function rigCommitMove() {
+  const f = fixtures.find((x) => x.rigId === rigb.sel), r = rigb.list.find((x) => x.id === rigb.sel);
+  if (!f || !r) return;
+  r.pos = f.root.position.toArray().map((v) => Math.round(v * 100) / 100);
+  rbZ.set(0, 0, 1).applyQuaternion(f.root.quaternion);
+  r.yaw = Math.atan2(rbZ.x, rbZ.z);
+  rigChanged();
+}
+// The gizmo follows the selected fixture through rebuilds.
+function reattachRig() { if (rigb.sel) { const f = fixtures.find((x) => x.rigId === rigb.sel); if (f && custom.gizmo) custom.gizmo.attach(f.root); else if (!f) rigb.sel = null; } }
+
+document.querySelectorAll('[data-rtool]').forEach((b) => b.addEventListener('click', () => setRigTool(b.dataset.rtool)));
+$('#rbUse').addEventListener('change', (e) => {
+  rigb.use = e.target.value === 'mine';
+  if (rigb.use && !rigb.list.length) rbNote('Your rig is empty: place fixtures, run a line, or start from the built-in rig.');
+  rigChanged();
+});
+$('#rbType').addEventListener('change', (e) => { rigb.type = e.target.value; saveRigLocal(); renderRigHint(); });
+$('#rbMount').addEventListener('change', (e) => { rigb.mount = e.target.value; });
+$('#rbCount').addEventListener('input', (e) => { rigb.count = parseInt(e.target.value, 10); e.target.nextElementSibling.textContent = String(rigb.count); renderRigHint(); });
+$('#rbSag').addEventListener('input', (e) => { rigb.sag = parseFloat(e.target.value); e.target.nextElementSibling.textContent = `${rigb.sag.toFixed(1)} m`; });
+$('#rbAim').addEventListener('input', (e) => {
+  rigb.aim = parseInt(e.target.value, 10); e.target.nextElementSibling.textContent = `${rigb.aim}°`;
+  const r = rigb.list.find((x) => x.id === rigb.sel); if (r && !rigFixtureDef(r.id).move) { r.aim = rigb.aim; const f = fixtures.find((x) => x.rigId === r.id); if (f) f.aim = r.aim; }
+});
+$('#rbAim').addEventListener('change', () => { if (rigb.sel) saveRigLocal(); });
+$('#rbGroup').addEventListener('change', (e) => {
+  rigb.group = e.target.value.replace(/[^\w -]/g, '').slice(0, 24); e.target.value = rigb.group;
+  const r = rigb.list.find((x) => x.id === rigb.sel); if (r) { r.group = rigb.group; rigChanged(); }
+});
+$('#rbList').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr[data-id]'); if (!tr) return;
+  if (e.target.dataset.act === 'del') { removeRig(tr.dataset.id); return; }
+  if (!rigb.use) { rigb.use = true; rigChanged(); }
+  if (rigb.tool !== 'select') { rigb.tool = 'select'; renderRigHint(); }
+  selectRig(tr.dataset.id);
+});
+function removeRig(id) { rigb.list = rigb.list.filter((x) => x.id !== id); if (rigb.sel === id) selectRig(null); rigChanged(); }
+$('#rbCopy').addEventListener('click', () => {
+  rigb.list = fixtures.map((f) => RIG.makeFixture({ type: 'spot', pos: f.pos.toArray().map((v) => Math.round(v * 100) / 100), flip: f.flip, yaw: f.yaw, group: f.flip ? 'Overhead' : 'Floor', universe: f.patch.u, address: f.patch.a }, rigb.types));
+  rigb.use = true; rigChanged(); rbNote(`Copied ${rigb.list.length} fixtures. They are yours to move, change and add to now.`);
+});
+$('#rbPatch').addEventListener('click', () => { RIG.autoPatch(rigb.list, rigb.types); rigChanged(); rbNote(`Patched from 1.001: ${rigb.list.length} fixtures in ${rigb.list.reduce((m, f) => Math.max(m, f.universe), 0)} universe(s).`); });
+$('#rbClear').addEventListener('click', () => {
+  if ($('#rbClear').dataset.armed !== '1') { $('#rbClear').dataset.armed = '1'; $('#rbClear').textContent = 'Clear all?'; setTimeout(() => { $('#rbClear').dataset.armed = ''; $('#rbClear').textContent = 'Clear'; }, 3000); return; }
+  rigb.list = []; selectRig(null); rigChanged(); $('#rbClear').textContent = 'Clear'; $('#rbClear').dataset.armed = '';
+});
+function download(name, blob) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+$('#rbExport').addEventListener('click', () => download('my-rig.stagerig.json', new Blob([JSON.stringify(RIG.saveRig(rigb.list, rigb.types), null, 2)], { type: 'application/json' })));
+$('#rbImportBtn').addEventListener('click', () => $('#rbImport').click());
+$('#rbImport').addEventListener('change', (e) => {
+  const f = e.target.files && e.target.files[0]; if (!f) return;
+  f.text().then((t) => { const r = RIG.loadRig(JSON.parse(t)); rigb.types = r.types; rigb.list = r.fixtures; rigb.use = true; renderRigTypes(); rigChanged(); rbNote(`Loaded ${r.fixtures.length} fixtures from ${f.name}.`); })
+    .catch((err) => rbNote(`${f.name}: ${err.message || 'not a rig file'}`)).finally(() => { e.target.value = ''; });
+});
+$('#rbMvr').addEventListener('click', () => {
+  if (!rigb.list.length) { rbNote('Your rig is empty, so there is nothing to export.'); return; }
+  if (!window.fflate) { rbNote('The zip writer did not load.'); return; }
+  const zip = window.fflate.zipSync({ 'GeneralSceneDescription.xml': window.fflate.strToU8(RIG.exportMvrXml(rigb.list, rigb.types)) });
+  download('my-rig.mvr', new Blob([zip], { type: 'application/octet-stream' }));
+  rbNote('Exported as MVR with positions, hanging, GDTF names and addresses. Fixture models come from each program\'s own GDTF library.');
+});
+$('#rbGdtfBtn').addEventListener('click', () => $('#rbGdtf').click());
+$('#rbGdtf').addEventListener('change', async (e) => {
+  for (const file of [...(e.target.files || [])]) {
+    try {
+      const files = window.fflate.unzipSync(new Uint8Array(await file.arrayBuffer()));
+      const xml = files['description.xml'] || files[Object.keys(files).find((k) => /(^|\/)description\.xml$/i.test(k))];
+      if (!xml) throw new Error('no description.xml inside');
+      const g = SI.readGdtf(new TextDecoder().decode(xml)); g.file = file.name;
+      let first = null;
+      g.modes.forEach((m) => { const key = `gdtf:${g.name}:${m.name}`.replace(/[^\w: -]/g, '').slice(0, 80); rigb.types[key] = RIG.typeFromGdtf(g, m.name); first = first || key; });
+      if (!first) throw new Error('no DMX modes');
+      rigb.type = first; renderRigTypes(); saveRigLocal(); renderRigHint();
+      rbNote(`${g.manufacturer} ${g.name}: ${g.modes.length} mode${g.modes.length === 1 ? '' : 's'} added${g.beamAngle ? `, ${g.beamAngle}° beam` : ''}. Pick a mode under Fixture, then place it.`);
+    } catch (err) { rbNote(`${file.name}: could not read it as GDTF (${err.message}).`); }
+  }
+  e.target.value = '';
+});
+canvas.addEventListener('pointerup', (e) => {
+  if (!rigb.tool || walk.on || e.button !== 0 || Math.hypot(e.clientX - pickDown.x, e.clientY - pickDown.y) > 4 || (custom.gizmo && custom.gizmo.dragging)) return;
+  rigClick(e);
+});
+addEventListener('keydown', (e) => {
+  if (typing(document.activeElement) || walk.on || !rigb.tool) return;
+  if (e.key === 'Escape') { if (rigb.sel) selectRig(null); else setRigTool(rigb.tool); }
+  else if ((e.key === 'Delete' || e.key === 'Backspace') && rigb.sel) { e.preventDefault(); removeRig(rigb.sel); }
+  else if ((e.key === 'r' || e.key === 'R') && rigb.sel && custom.gizmo) { custom.gizmo.setMode('rotate'); custom.gizmo.showX = custom.gizmo.showZ = false; }
+  else if ((e.key === 'g' || e.key === 'G') && rigb.sel && custom.gizmo) { custom.gizmo.setMode('translate'); custom.gizmo.showX = custom.gizmo.showY = custom.gizmo.showZ = true; }
+});
+renderRigTypes();
+renderRig();
 
 /* ---------- Audio reactive mixer ---------- */
 // app/audio.js does the listening (bands, hits, tempo, builds and drops) and runs the links; this part feeds it
@@ -4051,7 +4333,15 @@ const SHAPE = [
 ];
 const pct = (v) => `${v > 0 ? '+' : ''}${Math.round(v * 100)}%`;
 const shapeSum = (m) => `Response · attack ${Math.round(m.attack)} ms · release ${Math.round(m.release)} ms${m.gate ? ` · gate ${Math.round(m.gate * 100)}%` : ''}`;
-const groupOpts = (m) => SA.DEST_BY_ID[m.dst].groups.map((g) => `<option value="${g}">${GROUP_LABEL[g]}</option>`).join('');
+// Rig destinations can also target a fixture type or one of your rig builder groups.
+const FIXTURE_KIND = { head: 'spots', beam: 'beams', wash: 'washes', blinder: 'blinders', strobe: 'strobes', bar: 'LED bars', par: 'pars' };
+function rigGroups() {
+  const out = new Map();
+  fixtures.forEach((f) => { out.set(`t:${f.def.kind}`, `Type: ${FIXTURE_KIND[f.def.kind] || f.def.kind}`); if (f.group) out.set(`g:${f.group}`, `Group: ${f.group}`); });
+  return [...out];
+}
+const groupOpts = (m) => SA.DEST_BY_ID[m.dst].groups.map((g) => `<option value="${g}">${GROUP_LABEL[g]}</option>`).join('')
+  + (m.dst.startsWith('rig.') && SA.DEST_BY_ID[m.dst].groups.length > 1 ? [...new Map([...(/^[gt]:/.test(m.group) ? [[m.group, m.group.replace(/^t:/, 'Type: ').replace(/^g:/, 'Group: ')]] : []), ...rigGroups()])].map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join('') : '');
 function linkRow(m) {
   return `<div class="link${m.on ? '' : ' off'}" data-id="${m.id}" aria-current="${rx.sel === m.id}">
   <div class="lk-top"><input type="checkbox" data-k="on"${m.on ? ' checked' : ''} aria-label="Link on"><select data-k="src" aria-label="Listen to">${SRC_OPTS}</select><span class="arrow">→</span><select data-k="dst" aria-label="Drive">${DST_OPTS}</select><button type="button" class="lk-del" data-act="del" aria-label="Remove link">×</button></div>
@@ -4096,7 +4386,7 @@ function onLinkInput(e) {
   else if (k === 'src' || k === 'dst' || k === 'group') m[k] = e.target.value;
   else { const v = parseFloat(e.target.value); if (!Number.isFinite(v)) return; m[k] = v; }
   if (k === 'on') row.classList.toggle('off', !m.on);
-  if (k === 'dst') { const g = row.querySelector('[data-k="group"]'); g.innerHTML = groupOpts(m); if (!SA.DEST_BY_ID[m.dst].groups.includes(m.group)) m.group = 'all'; g.value = m.group; }
+  if (k === 'dst') { const g = row.querySelector('[data-k="group"]'); if (!SA.DEST_BY_ID[m.dst].groups.includes(m.group) && !(m.dst.startsWith('rig.') && /^[gt]:/.test(m.group))) m.group = 'all'; g.innerHTML = groupOpts(m); g.value = m.group; }
   if (k === 'src') row.querySelector('[data-band]').hidden = m.src !== 'band';
   if ((k === 'lo' || k === 'hi') && e.type === 'change') { m.lo = SA.clamp(Math.min(m.lo, m.hi), 20, 20000); m.hi = SA.clamp(Math.max(m.lo, m.hi), 20, 20000); }
   const o = row.querySelector(`[data-o="${k}"]`);
@@ -4236,7 +4526,7 @@ $('#spec').addEventListener('pointerup', () => { if (specDrag.on) { specDrag.on 
 loadReact();
 syncKnobs();
 renderLinks();
-if (window.stageDebug) Object.assign(window.stageDebug, { rx, audio, custom, importFile });
+if (window.stageDebug) Object.assign(window.stageDebug, { rx, audio, custom, importFile, rigb, fixtures: () => fixtures });
 
 /* ---------- Readouts, patch, scene data ---------- */
 function updateReadouts() {
@@ -4248,11 +4538,11 @@ function updateReadouts() {
   $('#wallOut').textContent = `${s.wallW.toFixed(1)} × ${s.wallH.toFixed(1)} m · ${px(s.wallW)} × ${px(s.wallH)} px · ${Math.round(s.wallW / 0.5) * Math.round(s.wallH / 0.5)} cabinets (500 mm)`;
   $('#pitchOut').textContent = `${s.pitch} mm pitch`;
 }
-function addr(i) { const a = i * 16; return { u: Math.floor(a / 512) + 1, a: (a % 512) + 1 }; }
+function addr(i) { const p = fixtures[i].patch; return { u: p.u, a: p.a }; }
 function renderPatch() {
-  const rows = fixtures.map((f, i) => { const { u, a } = addr(i); return `<tr><td>${f.id}</td><td>${esc(f.truss)}${f.flip ? '' : ' (floor)'}</td><td>${u}.${String(a).padStart(3, '0')}</td><td>${f.gdtf ? esc(f.gdtf.replace(/\.gdtf$/i, '')) : 'Spot 16ch'}</td></tr>`; });
+  const rows = fixtures.map((f, i) => { const { u, a } = addr(i); return `<tr><td>${f.id}</td><td>${esc(f.truss)}${f.flip ? '' : ' (floor)'}</td><td>${u}.${String(a).padStart(3, '0')}</td><td>${esc(f.gdtf ? f.gdtf.replace(/\.gdtf$/i, '') : `${f.def.label.replace(/ moving head| \(.*\)/g, '')} ${f.def.footprint}ch`)}</td></tr>`; });
   $('#patchBody').innerHTML = rows.join('');
-  const last = fixtures.length ? addr(fixtures.length - 1).u : 0;
+  const last = fixtures.reduce((m, f) => Math.max(m, f.patch.u), 0);
   $('#patchSum').textContent = `${fixtures.length} fixtures · ${last} universe${last === 1 ? '' : 's'}`;
 }
 function sceneJSON() {
@@ -4262,7 +4552,7 @@ function sceneJSON() {
     venue: { template: s.tpl, stage: { width: s.W, depth: s.D, deckHeight: s.H }, trimAboveDeck: s.trim, site: s.venueMeta },
     layers: [
       { name: 'Truss', objects: trussList.map((t) => ({ type: 'Truss', name: t.name, from: t.from, to: t.to, section: t.section })) },
-      { name: 'Fixtures', objects: fixtures.map((f, i) => { const { u, a } = addr(i); return { type: 'Fixture', fixtureId: f.id, gdtfSpec: 'Generic@Spot_16ch.gdtf', gdtfMode: 'Standard 16ch', address: { universe: u, channel: a }, position: f.pos.toArray().map(r2), hanging: f.flip, focus: f.truss }; }) },
+      { name: 'Fixtures', objects: fixtures.map((f, i) => { const { u, a } = addr(i); return { type: 'Fixture', fixtureId: f.id, gdtfSpec: f.def.gdtf || f.gdtf || `Generic@${f.def.label.replace(/\W+/g, '_')}.gdtf`, gdtfMode: f.def.mode || `${f.def.footprint}ch`, address: { universe: u, channel: a }, position: f.pos.toArray().map(r2), hanging: f.flip, focus: f.truss }; }) },
       { name: 'Lasers', objects: lasers.map((L, i) => ({ type: 'Laser', name: `Laser ${i + 1}`, position: L.root.position.toArray().map(r2), beams: LASER_BEAMS })) },
       { name: 'Video', objects: screens.map((sc) => ({ type: 'VideoScreen', name: sc.name, size: [sc.w, sc.h].map(r2), position: sc.mesh.position.toArray().map(r2), pixelPitchMm: s.pitch, source: s.visual })) },
     ],
