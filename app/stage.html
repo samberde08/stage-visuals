@@ -71,6 +71,11 @@ input[type="file"] { font: 12px var(--body); color: var(--muted); width: 100%; }
 .badge { display: inline-block; font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; padding: 1px 6px; border-radius: 8px; border: 1px solid currentColor; margin-right: 6px; }
 .badge.sourced { color: #4fd18b; } .badge.partial { color: #e8b84a; } .badge.estimated { color: var(--muted); }
 .btns { display: flex; gap: 8px; }
+.fxpad { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.fxpad .btn { padding: 10px 4px; font-size: 11px; touch-action: none; user-select: none; -webkit-user-select: none; }
+.fxpad .btn[aria-pressed="true"], .fxpad .btn.firing { background: var(--amber); color: #111; border-color: var(--amber); }
+.fxpad .btn kbd { opacity: .6; font: inherit; margin-right: 4px; }
+.fxpad:empty::before { content: 'No effects in this rig. Turn on built-in FX or place some with the rig builder.'; grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
 .btns .btn { flex: 1; padding: 9px 6px; }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 .btn.drop { background: var(--amber); color: var(--amber-ink); border-color: var(--amber); font-weight: 600; }
@@ -308,14 +313,48 @@ details .btn { margin: 0 10px 10px; }
       <div class="row"><label for="bpm">Tempo</label><input id="bpm" type="range" min="60" max="180" step="1" value="124"><output for="bpm"></output></div>
       <div class="row"><label for="zoom">Beam angle</label><input id="zoom" type="range" min="3" max="35" step="1" value="9"><output for="zoom"></output></div>
       <div class="row"><label for="haze">Haze</label><input id="haze" type="range" min="0" max="1" step="0.05" value="0.55"><output for="haze"></output></div>
-      <div class="row two"><label for="lasers">Lasers</label>
-        <select id="lasers">
-          <option value="off">Off</option>
-          <option value="fan">Fan</option>
-          <option value="sweep">Sweep</option>
-          <option value="scan">Crowd scan</option>
+    </section>
+
+    <section class="group" id="laserSec">
+      <div class="eyebrow"><span>Lasers</span><span id="laserSum"></span></div>
+      <div class="row two"><label for="lasers">Pattern</label><select id="lasers"></select></div>
+      <div class="row two"><label for="laserDrop">On a drop</label><select id="laserDrop"></select></div>
+      <div class="row two"><label for="laserColMode">Colour</label>
+        <select id="laserColMode">
+          <option value="one">One colour</option>
+          <option value="two">Two colours, beams alternate</option>
+          <option value="lasers">Two colours, lasers alternate</option>
+          <option value="beat">Two colours, swap on the beat</option>
+          <option value="rainbow">Rainbow</option>
         </select></div>
-      <div class="row two"><label for="laserCol">Laser colour</label><input id="laserCol" type="color" value="#22ff66"></div>
+      <div class="colors"><input id="laserCol" type="color" value="#22ff66" aria-label="Laser colour A"><input id="laserColB" type="color" value="#ff2bd6" aria-label="Laser colour B"></div>
+      <div class="row"><label for="laserBeams">Beams</label><input id="laserBeams" type="range" min="1" max="24" step="1" value="9"><output for="laserBeams">9</output></div>
+      <div class="row"><label for="laserSize">Size</label><input id="laserSize" type="range" min="0.2" max="2" step="0.05" value="1"><output for="laserSize">100%</output></div>
+      <div class="row"><label for="laserSpeed">Speed</label><input id="laserSpeed" type="range" min="0.25" max="4" step="0.05" value="1"><output for="laserSpeed">1.0×</output></div>
+      <div class="row"><label for="laserHeight">Height</label><input id="laserHeight" type="range" min="-10" max="10" step="0.5" value="0"><output for="laserHeight">0°</output></div>
+      <p class="note">Add more lasers, on truss or on the deck, with the rig builder. Audio FX links can drive their intensity, spread, speed, height and colour.</p>
+    </section>
+
+    <section class="group" id="fxSec">
+      <div class="eyebrow"><span>Performance FX</span><span id="fxSum"></span></div>
+      <label class="check"><input type="checkbox" id="fxArm" checked> Armed: pyro, flames, CO2 and cannons can fire</label>
+      <div class="fxpad" id="fxPad" role="group" aria-label="Fire effects"></div>
+      <p class="note" id="fxHint">Hold a button to fire jets, tap it for cannons and pyro; fog, snow and bubbles switch on and off. Keys 1 to 9 work too.</p>
+      <div class="row two"><label for="fxBuiltIn">Built-in FX</label>
+        <select id="fxBuiltIn">
+          <option value="on">Flames, CO2, sparks and confetti on the stage</option>
+          <option value="off">None (only what you place)</option>
+        </select></div>
+      <label class="check"><input type="checkbox" id="fxDrop"> Fire everything on each drop</label>
+      <div class="row"><label for="fxSize">Size</label><input id="fxSize" type="range" min="0.5" max="1.5" step="0.05" value="1"><output for="fxSize">100%</output></div>
+      <div class="row two"><label for="fxPaper">Confetti</label>
+        <select id="fxPaper">
+          <option value="mix">Mixed colours</option>
+          <option value="gold">Gold and silver</option>
+          <option value="show">Show colours (A and B)</option>
+          <option value="white">White</option>
+        </select></div>
+      <p class="note" id="fxNote" role="status"></p>
     </section>
 
     <section class="group">
@@ -431,6 +470,7 @@ details .btn { margin: 0 10px 10px; }
 <script src="audio.js"></script>
 <script src="importer.js"></script>
 <script src="rig.js"></script>
+<script src="fx.js"></script>
 <script>
 (() => {
 const $ = (s) => document.querySelector(s);
@@ -464,7 +504,7 @@ function venueMeta(tpl, v) {
   if (!v) return { id: null, name: NAMES[tpl], setting: INDOOR_TPL[tpl] ? 'indoor' : tpl === 'arch' ? 'tent' : 'outdoor', indoor: !!INDOOR_TPL[tpl], lat: null, lon: null, elevationM: null, bearing: null, capacity: null, tz: null, season: null, showHours: null };
   return { id: v.id, name: v.name, city: v.city, region: v.region, setting: v.setting, indoor: v.setting === 'indoor', lat: v.lat, lon: v.lon, elevationM: v.elevationM, bearing: v.audienceFacing, capacity: v.capacity, tz: v.tz, season: v.season, showHours: v.showHours };
 }
-const state = { tpl: 'festival', venue: null, room: {}, venueMeta: null, ...pick(TEMPLATES.festival), program: 'fan', dimfx: 'steady', colorMode: 'alt', colA: '#ff7a1a', colB: '#2f6bff', bpm: 124, zoom: 9, haze: 0.55, visual: 'plasma', text: 'STAGE VISUALS', pitch: 3.9, control: 'effects', lasers: 'fan', laserCol: '#22ff66', quality: 'high', tod: 21.5, density: 1, surround: 'on', g3d: 'off', lens: 'eye', sound: 'room' };
+const state = { tpl: 'festival', venue: null, room: {}, venueMeta: null, ...pick(TEMPLATES.festival), program: 'fan', dimfx: 'steady', colorMode: 'alt', colA: '#ff7a1a', colB: '#2f6bff', bpm: 124, zoom: 9, haze: 0.55, visual: 'plasma', text: 'STAGE VISUALS', pitch: 3.9, control: 'effects', lasers: 'fan', laserCol: '#22ff66', laserColB: '#ff2bd6', laserColMode: 'one', laserBeams: 9, laserSize: 1, laserSpeed: 1, laserHeight: 0, laserDrop: 'same', quality: 'high', tod: 21.5, density: 1, surround: 'on', g3d: 'off', lens: 'eye', sound: 'room' };
 if (matchMedia('(max-width: 760px)').matches || (navigator.hardwareConcurrency || 8) < 4) state.quality = 'fast';
 state.venueMeta = venueMeta(state.tpl, null);
 function pick(t) { return { W: t.W, D: t.D, H: t.H, trim: t.trim, wallW: t.wallW, wallH: t.wallH, count: t.count }; }
@@ -2824,51 +2864,365 @@ function distribute(n) {
 }
 
 /* ---------- Lasers ---------- */
-const LASER_LEN = 70, LASER_BEAMS = 9;
+// A laser head carries up to MAX_BEAMS beams, each with its own colour. app/fx.js lays out the pattern for a frame;
+// this part points the beams, colours them and sets their level from the haze, the audio links and the console.
+const FXL = window.StageFx;
+const LASER_LEN = 70, LASER_MAX = FXL.MAX_BEAMS;
 const laserGeo = new THREE.CylinderGeometry(0.06, 0.008, 1, 6, 1, true); laserGeo.translate(0, 0.5, 0);
+const laserMat = () => new THREE.ShaderMaterial({
+  uniforms: { uColor: { value: new THREE.Color() }, uIntensity: { value: 0 }, uLen: { value: LASER_LEN }, ...shared },
+  vertexShader: beamVert, fragmentShader: beamFrag,
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+});
 function makeLaser(spot) {
-  const root = new THREE.Group(); root.position.copy(spot.pos); root.rotation.y = spot.yaw;
+  const root = new THREE.Group(); root.position.copy(spot.pos); root.rotation.set(0, spot.yaw || 0, spot.flip ? Math.PI : 0);
   const body = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.22, 0.35), M.body); body.position.y = 0.11; root.add(body);
   const tilt = new THREE.Group(); tilt.position.set(0, 0.16, 0.18); root.add(tilt);
-  const mat = new THREE.ShaderMaterial({
-    uniforms: { uColor: { value: new THREE.Color() }, uIntensity: { value: 0 }, uLen: { value: LASER_LEN }, ...shared },
-    vertexShader: beamVert, fragmentShader: beamFrag,
-    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
-  });
-  const holders = [];
-  for (let b = 0; b < LASER_BEAMS; b++) {
-    const h = new THREE.Group(), m = new THREE.Mesh(laserGeo, mat);
+  const holders = [], mats = [];
+  for (let b = 0; b < LASER_MAX; b++) {
+    const h = new THREE.Group(), mat = laserMat(), m = new THREE.Mesh(laserGeo, mat);
     m.rotation.x = Math.PI / 2; m.scale.set(1, LASER_LEN, 1); m.frustumCulled = false;
-    h.add(m); tilt.add(h); holders.push(h);
+    h.add(m); tilt.add(h); holders.push(h); mats.push(mat);
   }
   venue.add(root);
-  return { root, tilt, holders, mat };
+  return { root, tilt, holders, mats, flip: !!spot.flip, rigId: spot.rigId, group: spot.group, patch: spot.patch || null, def: spot.def || RIG.TYPES.laser, clock: 0, frame: null };
 }
-const laserCol = new THREE.Color();
-function animateLasers(beat, drop) {
-  const mode = drop === 'on' && state.lasers === 'off' ? 'fan' : state.lasers, sync = beat;
-  beat = fx.laserBeat;
-  laserCol.set(state.laserCol);
+const laserA = new THREE.Color(), laserB = new THREE.Color(), laserTmp = new THREE.Color();
+function animateLasers(beat, drop, db) {
+  const dropPat = state.laserDrop === 'same' ? (state.lasers === 'off' ? 'fan' : state.lasers) : state.laserDrop;
+  const base = drop === 'on' ? dropPat : state.lasers;
+  laserA.set(state.laserCol); laserB.set(state.laserColB);
+  const nl = lasers.length;
   lasers.forEach((L, li) => {
-    const on = mode !== 'off' && drop !== 'pre';
+    const G = L.grp;
+    let pattern = base, size = state.laserSize, tiltOff = state.laserHeight * DEG, dim = 1, lb = fx.laserBeat, dmx = null;
+    // On a console a laser with an address takes its pattern, size, speed, height and colour from its channels.
+    if (state.control === 'live' && L.patch) {
+      const data = live.unis.get(L.patch.u);
+      dmx = data ? FXL.decodeLaser(data, L.patch.a) : { dim: 0 };
+      if (data) { pattern = dmx.pattern; size = dmx.size; tiltOff = dmx.tilt; L.clock += db * dmx.speed; lb = L.clock; }
+      dim = dmx.dim;
+    }
+    const on = pattern !== 'off' && drop !== 'pre' && dim > 0.002;
     L.tilt.visible = on;
     if (!on) return;
-    let spread, tilt, sweep = 0, flick = 1;
-    if (mode === 'fan') { spread = (14 + 22 * (0.5 + 0.5 * Math.sin(beat * Math.PI / 8))) * DEG; tilt = -(3 + 5 * Math.sin(beat * Math.PI / 4 + li)) * DEG; }
-    else if (mode === 'sweep') { spread = 3 * DEG; sweep = 45 * DEG * Math.sin(beat * Math.PI / 4 + li * 0.9); tilt = -4 * DEG; }
-    else { spread = 32 * DEG; tilt = (1.5 + 1.5 * Math.sin(beat * Math.PI / 2 + li)) * DEG; flick = ((sync * 2) % 1) < 0.5 ? 1 : 0.15; }
-    const G = L.grp;
-    spread *= Math.max(0, 1 + mod('laser.spread', G));
-    tilt -= mod('laser.tilt', G) * 10 * DEG;
-    L.tilt.rotation.x = tilt;
-    const nb = L.holders.length;
-    L.holders.forEach((h, b) => { h.rotation.y = sweep + (b / (nb - 1) - 0.5) * 2 * spread; });
+    const F = L.frame = FXL.laserFrame(pattern, lb, beat, li, nl, state.laserBeams, L.frame);
+    const spread = Math.max(0, size * (1 + mod('laser.spread', G))), sx = L.flip ? -1 : 1;
+    // Hung heads are upside down, so their tilt and pitch turn the other way to look the same.
+    L.tilt.rotation.x = (F.tilt + tiltOff - mod('laser.tilt', G) * 10 * DEG) * sx;
     const hue = mod('laser.hue', G);
-    L.mat.uniforms.uColor.value.copy(laserCol);
-    if (hue) L.mat.uniforms.uColor.value.offsetHSL(hue, 0, 0);
-    L.mat.uniforms.uIntensity.value = 2.6 * (0.12 + fx.haze) * flick * (drop === 'on' ? 1.3 : 1) * (1 - 0.75 * look.day) * mod('laser.dim', G);
+    const I = 2.6 * (0.12 + fx.haze) * F.flick * (drop === 'on' ? 1.3 : 1) * (1 - 0.75 * look.day) * mod('laser.dim', G) * dim;
+    const mode = state.laserColMode, swap = Math.floor(beat) % 2 === 1;
+    L.holders.forEach((h, b) => {
+      const vis = b < F.n && F.on[b] > 0.01; h.visible = vis;
+      if (!vis) return;
+      h.rotation.set(F.pitch[b] * sx * (pattern === 'tunnel' ? spread : 1), F.yaw[b] * spread, 0, 'YXZ');
+      if (dmx && dmx.r !== undefined) laserTmp.setRGB(dmx.r, dmx.g, dmx.b);
+      else if (mode === 'two') laserTmp.copy(b % 2 ? laserB : laserA);
+      else if (mode === 'lasers') laserTmp.copy(li % 2 ? laserB : laserA);
+      else if (mode === 'beat') laserTmp.copy(swap ? laserB : laserA);
+      else if (mode === 'rainbow') laserTmp.setHSL((b / F.n + lb * 0.03 + li * 0.13) % 1, 1, 0.5);
+      else laserTmp.copy(laserA);
+      if (hue) laserTmp.offsetHSL(hue, 0, 0);
+      const u = L.mats[b].uniforms; u.uColor.value.copy(laserTmp); u.uIntensity.value = I * F.on[b];
+    });
   });
 }
+
+/* ---------- Performance FX ---------- */
+// Flame jets, CO2, sparkulars, confetti and streamer cannons, gerbs, comets, mines, firework airbursts, smoke jets,
+// low fog, snow and bubbles. Units come from your rig or the built-in set; app/fx.js fires them and runs the
+// particles, which draw here as three layers: glowing points (fire, sparks), soft puffs (gas, fog, snow, bubbles)
+// and lit paper (confetti, streamers).
+const FXK = FXL.KINDS;
+const fxPools = { glow: FXL.createPool(16000), puff: FXL.createPool(7000), paper: FXL.createPool(14000) };
+const fxPrefs = { armed: true, builtIn: 'on', onDrop: false, size: 1, paper: 'mix' };
+const fxs = { units: [], pad: new Set(), latch: new Set(), keys: new Map(), wasDrop: false, dropAt: -9, flashes: [], grid: new Map() };
+try {
+  const d = JSON.parse(localStorage.getItem('stageFx') || 'null');
+  if (d) {
+    Object.assign(fxPrefs, d.fx || {});
+    ['laserCol', 'laserColB', 'laserColMode', 'laserBeams', 'laserSize', 'laserSpeed', 'laserHeight', 'laserDrop'].forEach((k) => { if (d.laser && d.laser[k] !== undefined) state[k] = d.laser[k]; });
+  }
+} catch (_) { /* defaults */ }
+function saveFxPrefs() {
+  const laser = {}; ['laserCol', 'laserColB', 'laserColMode', 'laserBeams', 'laserSize', 'laserSpeed', 'laserHeight', 'laserDrop'].forEach((k) => { laser[k] = state[k]; });
+  try { localStorage.setItem('stageFx', JSON.stringify({ fx: fxPrefs, laser })); } catch (_) { /* this visit only */ }
+}
+
+const PT_VERT = `
+attribute vec4 aCol; attribute float aSize; attribute float aShape;
+uniform float uScale; varying vec4 vCol; varying float vShape;
+void main(){
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  gl_Position = projectionMatrix * mv;
+  float px = aSize * uScale / max(0.05, -mv.z);
+  gl_PointSize = clamp(px, 2.0, 320.0);
+  // A point smaller than 2 px keeps its brightness by fading rather than vanishing.
+  vCol = aCol; vCol.a *= min(1.0, px * px / 4.0); vShape = aShape;
+}`;
+const GLOW_FRAG = `
+uniform float uLinear; varying vec4 vCol;
+void main(){
+  vec2 q = gl_PointCoord * 2.0 - 1.0; float d = dot(q, q);
+  if (d > 1.0) discard;
+  float a = max(0.0, exp(-d * 3.5) - 0.03);
+  vec3 c = mix(vCol.rgb, pow(vCol.rgb, vec3(2.2)) * 1.3, uLinear);
+  gl_FragColor = vec4(c * vCol.a * a * 2.2, 1.0);
+}`;
+const PUFF_FRAG = `
+uniform vec3 uTint; uniform float uLinear; varying vec4 vCol; varying float vShape;
+void main(){
+  vec2 q = gl_PointCoord * 2.0 - 1.0; float d = length(q);
+  if (d > 1.0) discard;
+  vec3 c = vCol.rgb * uTint; float a;
+  if (vShape < 0.5) a = exp(-d * d * 3.0) * (1.0 - d);
+  else if (vShape < 1.5) {
+    // A bubble: a thin film rim with oil-slick colours and one highlight.
+    a = smoothstep(0.72, 0.93, d) * (1.0 - smoothstep(0.93, 1.0, d)) * 0.8 + exp(-dot(q - vec2(-0.35, 0.4), q - vec2(-0.35, 0.4)) * 60.0);
+    c *= 0.65 + 0.35 * cos(6.2832 * (d * 1.6 + q.x * 0.3 + vec3(0.0, 0.33, 0.67)));
+  } else a = 1.0 - smoothstep(0.45, 1.0, d);
+  c = mix(c, pow(c, vec3(2.2)) * 1.2, uLinear);
+  gl_FragColor = vec4(c, vCol.a * a);
+}`;
+const PAPER_VERT = `
+attribute vec3 aOff; attribute vec4 aRot; attribute vec3 aDim; attribute vec3 aCol;
+varying vec3 vCol; varying float vA; varying float vShine;
+vec3 rot(vec3 v, vec3 k, float a){ float c = cos(a), s = sin(a); return v * c + cross(k, v) * s + k * dot(k, v) * (1.0 - c); }
+void main(){
+  vec3 p = rot(vec3(position.x * aDim.x, position.y * aDim.y, 0.0), aRot.xyz, aRot.w);
+  vec3 n = rot(vec3(0.0, 0.0, 1.0), aRot.xyz, aRot.w);
+  vec4 wp = modelMatrix * vec4(aOff + p, 1.0);
+  vShine = abs(dot(n, normalize(cameraPosition - wp.xyz)));
+  vCol = aCol; vA = aDim.z;
+  gl_Position = projectionMatrix * viewMatrix * wp;
+}`;
+const PAPER_FRAG = `
+uniform vec3 uTint; uniform float uLinear; varying vec3 vCol; varying float vA; varying float vShine;
+void main(){
+  // Flat pieces turning in the light: dim edge-on, bright face-on, with a glint when one faces the viewer square.
+  vec3 c = vCol * uTint * (0.3 + 0.7 * vShine) + uTint * pow(vShine, 14.0) * 0.9;
+  c = mix(c, pow(c, vec3(2.2)) * 1.2, uLinear);
+  if (vA < 0.02) discard;
+  gl_FragColor = vec4(c, vA);
+}`;
+function pointsLayer(pool, frag, blending) {
+  const g = new THREE.BufferGeometry(), n = pool.max;
+  const attr = (name, k) => { const a = new THREE.BufferAttribute(new Float32Array(n * k), k); a.setUsage(THREE.DynamicDrawUsage); g.setAttribute(name, a); return a; };
+  const L = { pool, g, pos: attr('position', 3), col: attr('aCol', 4), size: attr('aSize', 1), shape: attr('aShape', 1) };
+  g.setDrawRange(0, 0);
+  L.mat = new THREE.ShaderMaterial({ uniforms: { uScale: { value: 1 }, uTint: { value: new THREE.Color(1, 1, 1) }, ...shared }, vertexShader: PT_VERT, fragmentShader: frag, transparent: true, depthWrite: false, blending });
+  L.obj = new THREE.Points(g, L.mat); L.obj.frustumCulled = false; L.obj.renderOrder = 2; scene.add(L.obj);
+  return L;
+}
+function paperLayer(pool) {
+  const base = new THREE.PlaneGeometry(1, 1), g = new THREE.InstancedBufferGeometry(), n = pool.max;
+  g.index = base.index; g.setAttribute('position', base.getAttribute('position'));
+  const attr = (name, k) => { const a = new THREE.InstancedBufferAttribute(new Float32Array(n * k), k); a.setUsage(THREE.DynamicDrawUsage); g.setAttribute(name, a); return a; };
+  const L = { pool, g, off: attr('aOff', 3), rot: attr('aRot', 4), dim: attr('aDim', 3), col: attr('aCol', 3) };
+  g.instanceCount = 0;
+  L.mat = new THREE.ShaderMaterial({ uniforms: { uTint: { value: new THREE.Color(1, 1, 1) }, ...shared }, vertexShader: PAPER_VERT, fragmentShader: PAPER_FRAG, transparent: true, side: THREE.DoubleSide });
+  L.obj = new THREE.Mesh(g, L.mat); L.obj.frustumCulled = false; scene.add(L.obj);
+  return L;
+}
+const fxLayers = { glow: pointsLayer(fxPools.glow, GLOW_FRAG, THREE.AdditiveBlending), puff: pointsLayer(fxPools.puff, PUFF_FRAG, THREE.NormalBlending), paper: paperLayer(fxPools.paper) };
+// Two lights follow the brightest fire so flames and pyro light the stage and the crowd.
+const fxLights = [0, 1].map(() => { const l = new THREE.PointLight(0xff8833, 0, 45, 2); scene.add(l); return l; });
+
+// Built-in effects for the template stage: jets and sparks along the front lip, cannons behind them, and fireworks
+// behind the stage at open-air sites. Your rig's effects replace these.
+const FX_BODY = {
+  flame: [0.45, 0.3, 0.45, 0.06, 0.32], co2: [0.26, 0.2, 0.26, 0.035, 0.5], smoke: [0.32, 0.26, 0.32, 0.05, 0.36], spark: [0.36, 0.22, 0.36, 0, 0],
+  confetti: [0, 0, 0, 0.1, 0.9], streamer: [0, 0, 0, 0.11, 0.95], gerb: [0.3, 0.03, 0.3, 0.035, 0.22], comet: [0.3, 0.03, 0.3, 0.035, 0.22], mine: [0.3, 0.03, 0.3, 0.05, 0.3],
+  firework: [0.5, 0.05, 0.5, 0.09, 0.6], fog: [0.7, 0.4, 0.45, 0, 0], snow: [0.6, 0.3, 0.4, 0, 0], bubble: [0.42, 0.3, 0.32, 0, 0],
+};
+function defaultFx() {
+  if (fxPrefs.builtIn !== 'on' || custom.tplShow !== 'all') return [];
+  const { W, D, H, tpl } = state, out = [];
+  const add = (kind, x, z, o = {}) => out.push({ def: RIG.TYPES[kind], pos: V(x, o.y ?? H, z), yaw: o.yaw || 0, aim: o.aim, flip: false, group: o.group || '' });
+  if (tpl === 'booth' || tpl === 'arena') {
+    [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(([a, b]) => add('co2', a * (W / 2 - 0.5), b * (D / 2 - 0.5)));
+    [-1, 1].forEach((a) => { add('spark', a * (W / 2 - 0.4), 0); add('confetti', 0, a * (D / 2 - 0.6), { aim: 0 }); });
+    return out;
+  }
+  const fz = tpl === 'proscenium' ? 1.2 : -0.35, big = W >= 12;
+  if (big) [-0.46, -0.36, 0.36, 0.46].forEach((u) => add('flame', u * W, fz));
+  (big ? [-0.41, -0.29, 0.29, 0.41] : [-0.42, 0.42]).forEach((u) => add('co2', u * W, fz));
+  (big ? [-0.22, -0.1, 0.1, 0.22] : [-0.25, 0.25]).forEach((u) => add('spark', u * W, fz));
+  [-0.32, 0.32].forEach((u) => add('confetti', u * W, fz - 1.2, { aim: 35 }));
+  if (W >= 18) [-0.16, 0.16].forEach((u) => add('mine', u * W, fz));
+  const indoor = state.venueMeta && state.venueMeta.indoor;
+  if (!indoor && (OUTDOOR[tpl] || tpl === 'amphi')) [-0.3, 0, 0.3].forEach((u) => add('firework', u * W, -D - 4, { y: activePack() ? packGroundY(activePack(), u * W, -D - 4) ?? 0 : 0 }));
+  return out;
+}
+function makeFxUnit(spec) {
+  const def = spec.def, kind = def.fx, B = FX_BODY[kind] || FX_BODY.co2;
+  const root = new THREE.Group(); root.position.copy(spec.pos); root.rotation.set(0, spec.yaw || 0, spec.flip ? Math.PI : 0);
+  const aimer = new THREE.Group(); aimer.rotation.x = (spec.aim ?? def.aim ?? 0) * DEG; root.add(aimer);
+  const [w, h, d, r, len] = B;
+  if (w) { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), M.body); b.position.y = h / 2; root.add(b); }
+  if (r) { const t = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.1, len, 12), M.body); t.position.y = (w ? h : 0) + len / 2; aimer.add(t); }
+  const nozzle = new THREE.Object3D(); aimer.add(nozzle);
+  // Fog leaves the front of the machine, along the floor; everything else leaves the top of its nozzle.
+  if (kind === 'fog') nozzle.position.set(0, 0.15, d / 2 + 0.05); else nozzle.position.y = (w ? h : 0) + (r ? len : 0.02);
+  venue.add(root);
+  return { kind, def, root, nozzle, rigId: spec.rigId, group: spec.group || '', patch: spec.patch || null, flip: !!spec.flip,
+    st: FXL.createUnitState(), e: { kind, pos: [0, 0, 0], dir: [0, 1, 0], level: 1, scale: 1, carry: 0 } };
+}
+const fxQ = new THREE.Quaternion(), fxV = new THREE.Vector3(), FX_UP = new THREE.Vector3(0, 1, 0), FX_FWD = new THREE.Vector3(0, 0, 1);
+function fxAim(u) {
+  u.nozzle.updateWorldMatrix(true, false);
+  u.nozzle.getWorldPosition(fxV); u.e.pos[0] = fxV.x; u.e.pos[1] = fxV.y; u.e.pos[2] = fxV.z;
+  u.nozzle.getWorldQuaternion(fxQ); fxV.copy(u.kind === 'fog' ? FX_FWD : FX_UP).applyQuaternion(fxQ);
+  u.e.dir[0] = fxV.x; u.e.dir[1] = fxV.y; u.e.dir[2] = fxV.z;
+}
+
+// The first surface under a point: cast once per square metre and remember it, so confetti lands on the deck, the
+// floor, rows of seats or your own stage rather than falling through them.
+const fxRay = new THREE.Raycaster(), FX_DOWN = new THREE.Vector3(0, -1, 0);
+function fxGround(x, z, y) {
+  const cx = Math.floor(x), cz = Math.floor(z), key = cx * 100003 + cz;
+  let hs = fxs.grid.get(key);
+  if (!hs) {
+    if (fxs.grid.size > 40000) fxs.grid.clear();
+    fxRay.set(fxV.set(cx + 0.5, 120, cz + 0.5), FX_DOWN); fxRay.far = 240;
+    hs = fxRay.intersectObjects(receivers, false).map((h) => h.point.y);
+    const site = activePack(), g = site ? packGroundY(site, cx + 0.5, cz + 0.5) : null;
+    hs.push(g ?? 0); hs.sort((a, b) => b - a);
+    fxs.grid.set(key, hs);
+  }
+  for (const h of hs) if (h <= y) return h;
+  return -1e3;
+}
+const PAPER_COLS = { gold: [[1, 0.78, 0.25], [0.86, 0.88, 0.94], [1, 0.84, 0.4]], white: [[1, 1, 1]] };
+const fxLook = new Float32Array(5), fxTint = new THREE.Color(), fxGlow = new THREE.Color();
+function stepFx(dt, nowS, drop) {
+  // Paused, everything holds still, cues included.
+  if (paused) { drawFx(); return; }
+  const dropOn = drop === 'on';
+  if (dropOn && !fxs.wasDrop) fxs.dropAt = nowS;
+  fxs.wasDrop = dropOn;
+  const dropFire = fxPrefs.onDrop && nowS - fxs.dropAt < 1.2;
+  const paper = fxPrefs.paper === 'show' ? [colA.toArray(), colB.toArray()] : PAPER_COLS[fxPrefs.paper] || null;
+  let heat = 0; fxGlow.setRGB(0, 0, 0);
+  const hot = [];
+  fxs.units.forEach((u) => {
+    const K = FXK[u.kind];
+    let want = fxs.pad.has(u.kind) || fxs.latch.has(u.kind) || mod(K.trigger, u.grp) >= 0.5;
+    if (dropFire && K.mode !== 'latch' && u.kind !== 'smoke') want = true;
+    let level = 1;
+    if (state.control === 'live' && u.patch) {
+      const data = live.unis.get(u.patch.u);
+      if (data) { const d = FXL.decodeFx(u.kind, data, u.patch.a); want = want || d.fire; if (d.fire) level = d.level; }
+    }
+    const started = FXL.stepUnit(u.st, u.kind, want, nowS, fxPrefs.armed);
+    if (!u.st.active && !started) return;
+    if (started) fxAim(u);
+    u.e.level = level; u.e.scale = fxPrefs.size; u.e.colors = u.kind === 'confetti' || u.kind === 'streamer' ? paper : null;
+    FXL.emit(fxPools, u.e, dt, Math.random, started);
+    if (K.light) {
+      const k = { flame: 9, gerb: 4, spark: 1.6, comet: 2, mine: 6, firework: 0 }[u.kind] ?? 1;
+      const w = k * (u.kind === 'mine' || u.kind === 'comet' ? Math.exp(-(nowS - u.st.since) * 4) : 1);
+      hot.push({ w, pos: u.e.pos, col: K.light }); heat += w; fxGlow.r += K.light[0] * w; fxGlow.g += K.light[1] * w; fxGlow.b += K.light[2] * w;
+    }
+  });
+  // Firework bursts flash for a moment where they open.
+  fxs.flashes = fxs.flashes.filter((f) => nowS - f.t < 1.2);
+  fxs.flashes.forEach((f) => { const w = 14 * Math.exp(-(nowS - f.t) * 4); hot.push({ w, pos: f.pos, col: f.col }); heat += w; fxGlow.r += f.col[0] * w; fxGlow.g += f.col[1] * w; fxGlow.b += f.col[2] * w; });
+  FXL.step(fxPools, dt, { ground: fxGround, time, onBurst: (pos, col) => fxs.flashes.push({ t: nowS, pos, col }) });
+  hot.sort((a, b) => b.w - a.w);
+  const night = 1 - look.day;
+  fxLights.forEach((l, i) => {
+    const h = hot[i];
+    l.intensity = h ? Math.min(30, h.w) * night : 0;
+    if (h) { l.position.set(h.pos[0], h.pos[1] + 2, h.pos[2] + 0.5); l.color.setRGB(...h.col); }
+  });
+  // Smoke and paper are seen by the light around them: the rig, the LED wall and the fire.
+  fxTint.setRGB(0.22, 0.22, 0.26).add(rimSum.clone().multiplyScalar(0.5 / Math.max(1, fixtures.length))).add(fxGlow.clone().multiplyScalar(0.012)).add(wallLight.color.clone().multiplyScalar(0.15));
+  fxTint.lerp(WHITE, look.day * 0.85);
+  fxs.heat = heat; fxs.glow = fxGlow;
+  drawFx();
+}
+function drawFx() {
+  const scale = renderer.domElement.height / (2 * Math.tan(camera.fov * DEG / 2));
+  for (const name of ['glow', 'puff']) {
+    const L = fxLayers[name], P = L.pool, pos = L.pos.array, col = L.col.array, size = L.size.array, shp = L.shape.array;
+    for (let i = 0; i < P.n; i++) {
+      FXL.look(P, i, fxLook);
+      pos[i * 3] = P.p[i * 3]; pos[i * 3 + 1] = P.p[i * 3 + 1]; pos[i * 3 + 2] = P.p[i * 3 + 2];
+      col[i * 4] = fxLook[0]; col[i * 4 + 1] = fxLook[1]; col[i * 4 + 2] = fxLook[2]; col[i * 4 + 3] = fxLook[3];
+      size[i] = fxLook[4]; shp[i] = P.shape[i];
+    }
+    L.g.setDrawRange(0, P.n);
+    for (const a of [L.pos, L.col, L.size, L.shape]) { a.updateRange.count = P.n * a.itemSize; a.needsUpdate = true; }
+    L.obj.visible = P.n > 0;
+    L.mat.uniforms.uScale.value = scale; L.mat.uniforms.uTint.value.copy(fxTint);
+  }
+  const L = fxLayers.paper, P = L.pool, off = L.off.array, rot = L.rot.array, dim = L.dim.array, col = L.col.array;
+  for (let i = 0; i < P.n; i++) {
+    FXL.look(P, i, fxLook);
+    off[i * 3] = P.p[i * 3]; off[i * 3 + 1] = P.p[i * 3 + 1]; off[i * 3 + 2] = P.p[i * 3 + 2];
+    rot[i * 4] = P.axis[i * 3]; rot[i * 4 + 1] = P.axis[i * 3 + 1]; rot[i * 4 + 2] = P.axis[i * 3 + 2];
+    // Landed pieces lie flat.
+    rot[i * 4 + 3] = P.landed[i] ? 0 : P.ang[i];
+    if (P.landed[i]) { rot[i * 4] = 1; rot[i * 4 + 1] = 0; rot[i * 4 + 2] = 0; rot[i * 4 + 3] = -Math.PI / 2; }
+    dim[i * 3] = P.w[i]; dim[i * 3 + 1] = P.h[i]; dim[i * 3 + 2] = fxLook[3];
+    col[i * 3] = fxLook[0]; col[i * 3 + 1] = fxLook[1]; col[i * 3 + 2] = fxLook[2];
+  }
+  L.g.instanceCount = P.n; L.obj.visible = P.n > 0;
+  for (const a of [L.off, L.rot, L.dim, L.col]) { a.updateRange.count = P.n * a.itemSize; a.needsUpdate = true; }
+  // Foil and paper catch the beams and the wall, so they read brighter than the haze around them.
+  L.mat.uniforms.uTint.value.copy(fxTint).multiplyScalar(2.6);
+}
+
+// The fire pad: one button per kind of effect in the rig. Hold to fire jets, tap for cues, click to switch atmosphere.
+function fxKindsHere() { const have = new Set(fxs.units.map((u) => u.kind)); return FXL.KIND_IDS.filter((k) => have.has(k)); }
+function renderFxPad() {
+  const kinds = fxKindsHere();
+  $('#fxPad').innerHTML = kinds.map((k, i) => `<button type="button" class="btn" data-fx="${k}" aria-pressed="${FXK[k].mode === 'latch' ? fxs.latch.has(k) : false}"${!fxPrefs.armed && FXK[k].armed ? ' disabled' : ''}>${i < 9 ? `<kbd>${i + 1}</kbd>` : ''}${esc(FXK[k].label.replace(/ \(.*\)/, '').replace(/ machine| cannon/, ''))}</button>`).join('');
+  const n = fxs.units.length;
+  $('#fxSum').textContent = n ? `${n} unit${n === 1 ? '' : 's'}${fxPrefs.armed ? ' · armed' : ''}` : 'none';
+  $('#laserSum').textContent = `${lasers.length} head${lasers.length === 1 ? '' : 's'}`;
+}
+function fxPress(kind, down) {
+  if (!FXK[kind]) return;
+  if (FXK[kind].mode === 'latch') { if (down) { if (fxs.latch.has(kind)) fxs.latch.delete(kind); else fxs.latch.add(kind); } }
+  else if (down) fxs.pad.add(kind); else fxs.pad.delete(kind);
+  const b = $(`#fxPad [data-fx="${kind}"]`);
+  if (b) { b.classList.toggle('firing', fxs.pad.has(kind)); if (FXK[kind].mode === 'latch') b.setAttribute('aria-pressed', String(fxs.latch.has(kind))); }
+}
+$('#fxPad').addEventListener('pointerdown', (e) => { const b = e.target.closest('[data-fx]'); if (!b || b.disabled) return; e.preventDefault(); b.setPointerCapture(e.pointerId); fxPress(b.dataset.fx, true); });
+['pointerup', 'pointercancel', 'lostpointercapture'].forEach((t) => $('#fxPad').addEventListener(t, (e) => { const b = e.target.closest('[data-fx]'); if (b && FXK[b.dataset.fx].mode !== 'latch') fxPress(b.dataset.fx, false); }));
+$('#fxPad').addEventListener('keydown', (e) => { const b = e.target.closest('[data-fx]'); if (b && (e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); fxPress(b.dataset.fx, true); } });
+$('#fxPad').addEventListener('keyup', (e) => { const b = e.target.closest('[data-fx]'); if (b && (e.key === ' ' || e.key === 'Enter') && FXK[b.dataset.fx].mode !== 'latch') fxPress(b.dataset.fx, false); });
+addEventListener('keydown', (e) => {
+  if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || typing(document.activeElement) || walk.on || !/^Digit[1-9]$/.test(e.code)) return;
+  const k = fxKindsHere()[Number(e.code.slice(5)) - 1];
+  if (k && (fxPrefs.armed || !FXK[k].armed)) { fxs.keys.set(e.code, k); fxPress(k, true); }
+});
+addEventListener('keyup', (e) => { const k = fxs.keys.get(e.code); if (k) { fxs.keys.delete(e.code); if (FXK[k].mode !== 'latch') fxPress(k, false); } });
+addEventListener('blur', () => { fxs.pad.clear(); fxs.keys.clear(); document.querySelectorAll('#fxPad .firing').forEach((b) => b.classList.remove('firing')); });
+
+function renderFxPrefs() {
+  $('#fxArm').checked = fxPrefs.armed; $('#fxBuiltIn').value = fxPrefs.builtIn; $('#fxDrop').checked = fxPrefs.onDrop; $('#fxPaper').value = fxPrefs.paper;
+  $('#fxSize').value = fxPrefs.size; $('#fxSize').nextElementSibling.textContent = `${Math.round(fxPrefs.size * 100)}%`;
+  const pats = FXL.LASER_PATTERNS.map((p) => `<option value="${p.id}">${esc(p.label)}</option>`).join('');
+  $('#lasers').innerHTML = pats; $('#lasers').value = state.lasers;
+  $('#laserDrop').innerHTML = `<option value="same">Same pattern, brighter</option>${pats}`; $('#laserDrop').value = state.laserDrop;
+  $('#laserColMode').value = state.laserColMode; $('#laserCol').value = state.laserCol; $('#laserColB').value = state.laserColB;
+  [['laserBeams', (v) => String(v)], ['laserSize', (v) => `${Math.round(v * 100)}%`], ['laserSpeed', (v) => `${v.toFixed(1)}×`], ['laserHeight', (v) => `${v > 0 ? '+' : ''}${v}°`]].forEach(([k, f]) => { $('#' + k).value = state[k]; $('#' + k).nextElementSibling.textContent = f(state[k]); });
+}
+$('#fxArm').addEventListener('change', (e) => { fxPrefs.armed = e.target.checked; if (!fxPrefs.armed) fxs.pad.clear(); saveFxPrefs(); renderFxPad(); $('#fxNote').textContent = fxPrefs.armed ? '' : 'Disarmed: flames, CO2, cannons and pyro will not fire from the pad, the audio mixer or the console.'; });
+$('#fxBuiltIn').addEventListener('change', (e) => { fxPrefs.builtIn = e.target.value; saveFxPrefs(); scheduleBuild(false); });
+$('#fxDrop').addEventListener('change', (e) => { fxPrefs.onDrop = e.target.checked; saveFxPrefs(); });
+$('#fxPaper').addEventListener('change', (e) => { fxPrefs.paper = e.target.value; saveFxPrefs(); });
+$('#fxSize').addEventListener('input', (e) => { fxPrefs.size = parseFloat(e.target.value); e.target.nextElementSibling.textContent = `${Math.round(fxPrefs.size * 100)}%`; saveFxPrefs(); });
+$('#laserDrop').addEventListener('change', (e) => { state.laserDrop = e.target.value; saveFxPrefs(); });
+$('#laserColMode').addEventListener('change', (e) => { state.laserColMode = e.target.value; saveFxPrefs(); });
+$('#laserColB').addEventListener('input', (e) => { state.laserColB = e.target.value; saveFxPrefs(); });
+[['laserBeams', parseInt, (v) => String(v)], ['laserSize', parseFloat, (v) => `${Math.round(v * 100)}%`], ['laserSpeed', parseFloat, (v) => `${v.toFixed(1)}×`], ['laserHeight', parseFloat, (v) => `${v > 0 ? '+' : ''}${v}°`]].forEach(([k, p, f]) => {
+  $('#' + k).addEventListener('input', (e) => { state[k] = p(e.target.value, 10); e.target.nextElementSibling.textContent = f(state[k]); saveFxPrefs(); });
+});
 
 /* ---------- Build ---------- */
 function build() {
@@ -2899,7 +3253,10 @@ function build() {
   djRig = null;
   djBooth(camSet.djAt || V(0, state.H, -state.D * 0.38), camSet.djYaw || 0, state.W >= 14);
   hideTemplate();
-  (customRig() || (rigb.use ? rigSpecs() : custom.tplShow === 'none' ? [] : distribute(state.count))).forEach((s, i) => fixtures.push(makeFixture(s, i)));
+  // Your rig can hold lights, lasers and effects. Lasers and effects fall back to the built-in ones when it has none.
+  const mine = rigb.use ? rigSpecs() : null, mineOf = (f) => mine && mine.filter(f);
+  const mineLasers = mineOf((s) => s.def.fx === 'laser'), mineFx = mineOf((s) => s.def.fx && s.def.fx !== 'laser');
+  (customRig() || mineOf((s) => !s.def.fx) || (custom.tplShow === 'none' ? [] : distribute(state.count))).forEach((s, i) => fixtures.push(makeFixture(s, i)));
   // Patch: your rig and MVR files carry addresses; anything without one follows on consecutively.
   let nextAt = 0;
   fixtures.forEach((f) => {
@@ -2908,7 +3265,15 @@ function build() {
     f.patch = { u: Math.floor(nextAt / 512) + 1, a: (nextAt % 512) + 1 }; nextAt += f.def.footprint;
   });
   if (!laserSpots.length) [-0.3, 0.3].forEach((u) => laser(u * state.W, state.H, -0.3, 0));
-  lasers = custom.tplShow === 'none' ? [] : laserSpots.map(makeLaser);
+  lasers = mineLasers && mineLasers.length ? mineLasers.map(makeLaser) : custom.tplShow === 'none' ? [] : laserSpots.map(makeLaser);
+  fxs.units = (mineFx && mineFx.length ? mineFx : defaultFx()).map(makeFxUnit);
+  // Effects without an address follow the fixtures, so a console can fire the built-in ones too.
+  fxs.units.forEach((u) => {
+    if (u.patch) return;
+    const n = u.def.footprint;
+    if (nextAt % 512 + n > 512) nextAt = Math.ceil(nextAt / 512) * 512;
+    u.patch = { u: Math.floor(nextAt / 512) + 1, a: (nextAt % 512) + 1 }; nextAt += n;
+  });
   custom.items.forEach((it) => { if (it.root.visible) receivers.push(...it.meshes); });
   // Groups the audio mixer can target. Left and right are as the audience sees the stage.
   const mid = state.W * 0.15;
@@ -2917,7 +3282,13 @@ function build() {
     f.grp[`t:${f.def.kind}`] = true;
     if (f.group) f.grp[`g:${f.group}`] = true;
   });
-  lasers.forEach((L) => { const x = L.root.position.x; L.grp = { left: x < -0.5, right: x > 0.5 }; });
+  lasers.forEach((L) => { const x = L.root.position.x; L.grp = { left: x < -0.5, right: x > 0.5, 't:laser': true }; if (L.group) L.grp[`g:${L.group}`] = true; });
+  fxs.units.forEach((u) => {
+    const x = u.root.position.x; u.grp = { left: x < -mid, right: x > mid, centre: Math.abs(x) <= mid, [`t:${u.kind}`]: true };
+    if (u.group) u.grp[`g:${u.group}`] = true;
+    fxAim(u);
+  });
+  fxs.grid.clear();
   const mw = mainWall;
   const n = new THREE.Vector3(0, 0, 1).applyQuaternion(mw.quaternion);
   wallLight.position.copy(mw.position).addScaledVector(n, 3);
@@ -2933,6 +3304,7 @@ function build() {
   renderPatch();
   if ($('#sceneDetails').open) $('#sceneJson').textContent = sceneJSON();
   reattachRig();
+  renderFxPad();
   if (!$('#mixer').hidden) renderLinks();
 }
 
@@ -3250,7 +3622,7 @@ function tick(now) {
   const beat = beatClock, drop = dropPhase(beat);
   const db = Math.abs(beat - fx.lastBeat) < 1 ? beat - fx.lastBeat : 0; fx.lastBeat = beat;
   fx.rigBeat += db * Math.max(0, 1 + 2 * mod('rig.speed'));
-  fx.laserBeat += db * Math.max(0, 1 + 2 * mod('laser.speed'));
+  fx.laserBeat += db * state.laserSpeed * Math.max(0, 1 + 2 * mod('laser.speed'));
   if (!paused) fx.wallTime += dt * Math.max(0, 1 + 2 * mod('led.speed'));
   fx.haze = Math.min(1, Math.max(0, state.haze + mod('haze')));
   colA.set(state.colA); colB.set(state.colB);
@@ -3315,7 +3687,8 @@ function tick(now) {
       f.pool.material.color.copy(tmpC).multiplyScalar(dim * (0.55 - fx.haze * 0.2));
     } else f.pool.visible = false;
   });
-  animateLasers(beat, drop);
+  animateLasers(beat, drop, db * state.laserSpeed);
+  stepFx(dt, time, drop);
   const energy = Math.max(0, (drop === 'on' ? 1.6 : drop === 'pre' ? 0.15 : rx.live ? 0.4 + 0.8 * rx.f.level : 0.5) + mod('crowd'));
   animateDJ(beat, energy, drop);
   crowdU.uBeat.value = beat; crowdU.uEnergy.value = energy; crowdU.uLift.value = Math.min(1, Math.max(0, energy - 0.35));
@@ -3323,7 +3696,7 @@ function tick(now) {
   drawWall(fx.wallTime, beat, drop);
   // Rim light on the crowd from what the stage is doing: the LED wall plus the rig's average colour and level.
   const nf = Math.max(1, n), night = 1 - look.day;
-  crowdU.uRim.value.copy(wallLight.color).multiplyScalar(0.3).add(rimSum.multiplyScalar(1.2 / nf)).multiplyScalar(night * (highOn() ? 1 : 0.7));
+  crowdU.uRim.value.copy(wallLight.color).multiplyScalar(0.3).add(rimSum.multiplyScalar(1.2 / nf)).add(fxGlow.clone().multiplyScalar(0.05)).multiplyScalar(night * (highOn() ? 1 : 0.7));
   toCam.copy(camSet.target).sub(camera.position).setY(0).normalize().setY(0.1).normalize();
   crowdU.uStageDir.value.copy(toCam).transformDirection(camera.matrixWorldInverse);
   crowdU.uCam.value.set(camera.position.x, camera.position.y, camera.position.z, 1);
@@ -4064,7 +4437,8 @@ function rigSpecs() {
 }
 function rbNote(t) { $('#rbNote').textContent = t || ''; }
 function renderRigTypes() {
-  $('#rbType').innerHTML = `<optgroup label="Built in">${Object.entries(RIG.TYPES).map(([k, t]) => `<option value="${k}">${esc(t.label)}</option>`).join('')}</optgroup>`
+  const opts = (f) => Object.entries(RIG.TYPES).filter(([, t]) => f(t)).map(([k, t]) => `<option value="${k}">${esc(t.label)}</option>`).join('');
+  $('#rbType').innerHTML = `<optgroup label="Lights">${opts((t) => !t.fx)}</optgroup><optgroup label="Lasers and effects">${opts((t) => t.fx)}</optgroup>`
     + (Object.keys(rigb.types).some((k) => !RIG.TYPES[k]) ? `<optgroup label="GDTF">${Object.entries(rigb.types).filter(([k]) => !RIG.TYPES[k]).map(([k, t]) => `<option value="${esc(k)}">${esc(t.label)} · ${t.footprint}ch</option>`).join('')}</optgroup>` : '');
   $('#rbType').value = rigb.type;
 }
@@ -4132,9 +4506,10 @@ const lineMark = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 8), new THREE
 function rigClick(e) {
   if (rigb.tool === 'select') {
     rbRay.setFromCamera(rbNdc.set((e.clientX - canvas.getBoundingClientRect().left) / canvas.clientWidth * 2 - 1, -(e.clientY - canvas.getBoundingClientRect().top) / canvas.clientHeight * 2 + 1), camera);
-    const hit = rbRay.intersectObjects(fixtures.map((f) => f.root), true).find((h) => h.object.isMesh && !h.object.material.isShaderMaterial);
-    const f = hit && fixtures.find((x) => isChild(hit.object, x.root));
-    if (f && !f.rigId) { rbNote('That is a built-in fixture. "Copy built-in" copies them into your rig so you can edit them.'); return; }
+    const objs = rigObjects();
+    const hit = rbRay.intersectObjects(objs.map((f) => f.root), true).find((h) => h.object.isMesh && !h.object.material.isShaderMaterial);
+    const f = hit && objs.find((x) => isChild(hit.object, x.root));
+    if (f && !f.rigId) { rbNote('That is part of the built-in rig. "Copy built-in" copies it into your rig so you can edit it.'); return; }
     selectRig(f ? f.rigId : null);
     return;
   }
@@ -4156,6 +4531,8 @@ function rigClick(e) {
     rbNote(`Added ${fs.length} fixtures${fs[0].universe ? ` at ${fs[0].universe}.${String(fs[0].address).padStart(3, '0')} onward` : ''}.`);
   }
 }
+// Everything the rig builder can pick and move: fixtures, lasers and effect units.
+const rigObjects = () => [...fixtures, ...lasers, ...fxs.units];
 function setRigTool(t) {
   rigb.tool = rigb.tool === t ? null : t; rigb.lineStart = null; lineMark.visible = false;
   if (rigb.tool && custom.sel) selectItem(null);
@@ -4164,7 +4541,7 @@ function setRigTool(t) {
 }
 function selectRig(id) {
   rigb.sel = id;
-  const f = fixtures.find((x) => x.rigId === id);
+  const f = id && rigObjects().find((x) => x.rigId === id);
   if (custom.gizmo) {
     if (f) { custom.sel = null; $('#impEdit').hidden = true; custom.gizmo.attach(f.root); custom.gizmo.setMode(custom.mode === 'rotate' ? 'rotate' : 'translate'); }
     else if (!custom.sel) custom.gizmo.detach();
@@ -4176,7 +4553,7 @@ function selectRig(id) {
 // After dragging the handle: read the fixture's new place and facing back into the list.
 const rbZ = new THREE.Vector3();
 function rigCommitMove() {
-  const f = fixtures.find((x) => x.rigId === rigb.sel), r = rigb.list.find((x) => x.id === rigb.sel);
+  const f = rigObjects().find((x) => x.rigId === rigb.sel), r = rigb.list.find((x) => x.id === rigb.sel);
   if (!f || !r) return;
   r.pos = f.root.position.toArray().map((v) => Math.round(v * 100) / 100);
   rbZ.set(0, 0, 1).applyQuaternion(f.root.quaternion);
@@ -4184,7 +4561,7 @@ function rigCommitMove() {
   rigChanged();
 }
 // The gizmo follows the selected fixture through rebuilds.
-function reattachRig() { if (rigb.sel) { const f = fixtures.find((x) => x.rigId === rigb.sel); if (f && custom.gizmo) custom.gizmo.attach(f.root); else if (!f) rigb.sel = null; } }
+function reattachRig() { if (rigb.sel) { const f = rigObjects().find((x) => x.rigId === rigb.sel); if (f && custom.gizmo) custom.gizmo.attach(f.root); else if (!f) rigb.sel = null; } }
 
 document.querySelectorAll('[data-rtool]').forEach((b) => b.addEventListener('click', () => setRigTool(b.dataset.rtool)));
 $('#rbUse').addEventListener('change', (e) => {
@@ -4192,7 +4569,13 @@ $('#rbUse').addEventListener('change', (e) => {
   if (rigb.use && !rigb.list.length) rbNote('Your rig is empty: place fixtures, run a line, or start from the built-in rig.');
   rigChanged();
 });
-$('#rbType').addEventListener('change', (e) => { rigb.type = e.target.value; saveRigLocal(); renderRigHint(); });
+$('#rbType').addEventListener('change', (e) => {
+  rigb.type = e.target.value;
+  // Each static type starts at its own usual aim: blinders at the crowd, flames straight up, cannons over the crowd.
+  const t = rigb.types[rigb.type] || {};
+  if (!t.move && t.aim != null) { rigb.aim = t.aim; $('#rbAim').value = t.aim; $('#rbAim').nextElementSibling.textContent = `${t.aim}°`; }
+  saveRigLocal(); renderRigHint();
+});
 $('#rbMount').addEventListener('change', (e) => { rigb.mount = e.target.value; });
 $('#rbCount').addEventListener('input', (e) => { rigb.count = parseInt(e.target.value, 10); e.target.nextElementSibling.textContent = String(rigb.count); renderRigHint(); });
 $('#rbSag').addEventListener('input', (e) => { rigb.sag = parseFloat(e.target.value); e.target.nextElementSibling.textContent = `${rigb.sag.toFixed(1)} m`; });
@@ -4200,7 +4583,8 @@ $('#rbAim').addEventListener('input', (e) => {
   rigb.aim = parseInt(e.target.value, 10); e.target.nextElementSibling.textContent = `${rigb.aim}°`;
   const r = rigb.list.find((x) => x.id === rigb.sel); if (r && !rigFixtureDef(r.id).move) { r.aim = rigb.aim; const f = fixtures.find((x) => x.rigId === r.id); if (f) f.aim = r.aim; }
 });
-$('#rbAim').addEventListener('change', () => { if (rigb.sel) saveRigLocal(); });
+// Effects and lasers are rebuilt to take a new aim; lights follow it live.
+$('#rbAim').addEventListener('change', () => { if (rigb.sel) { saveRigLocal(); if (rigFixtureDef(rigb.sel).fx) scheduleBuild(false); } });
 $('#rbGroup').addEventListener('change', (e) => {
   rigb.group = e.target.value.replace(/[^\w -]/g, '').slice(0, 24); e.target.value = rigb.group;
   const r = rigb.list.find((x) => x.id === rigb.sel); if (r) { r.group = rigb.group; rigChanged(); }
@@ -4214,8 +4598,13 @@ $('#rbList').addEventListener('click', (e) => {
 });
 function removeRig(id) { rigb.list = rigb.list.filter((x) => x.id !== id); if (rigb.sel === id) selectRig(null); rigChanged(); }
 $('#rbCopy').addEventListener('click', () => {
-  rigb.list = fixtures.map((f) => RIG.makeFixture({ type: 'spot', pos: f.pos.toArray().map((v) => Math.round(v * 100) / 100), flip: f.flip, yaw: f.yaw, group: f.flip ? 'Overhead' : 'Floor', universe: f.patch.u, address: f.patch.a }, rigb.types));
-  rigb.use = true; rigChanged(); rbNote(`Copied ${rigb.list.length} fixtures. They are yours to move, change and add to now.`);
+  const r2c = (v) => v.toArray().map((x) => Math.round(x * 100) / 100);
+  rigb.list = fixtures.map((f) => RIG.makeFixture({ type: 'spot', pos: r2c(f.pos), flip: f.flip, yaw: f.yaw, group: f.flip ? 'Overhead' : 'Floor', universe: f.patch.u, address: f.patch.a }, rigb.types));
+  const nLights = rigb.list.length;
+  lasers.forEach((L) => rigb.list.push(RIG.makeFixture({ type: 'laser', pos: r2c(L.root.position), yaw: L.root.rotation.y, flip: L.flip, group: 'Lasers' }, rigb.types)));
+  fxs.units.forEach((u) => rigb.list.push(RIG.makeFixture({ type: u.kind, pos: r2c(u.root.position), yaw: u.root.rotation.y, flip: u.flip, aim: Math.round(u.nozzle.parent.rotation.x / DEG), universe: u.patch && u.patch.u, address: u.patch && u.patch.a }, rigb.types)));
+  patchNew(rigb.list.filter((f) => f.type === 'laser'));
+  rigb.use = true; rigChanged(); rbNote(`Copied ${nLights} lights, ${lasers.length} lasers and ${fxs.units.length} effects. They are yours to move, change and add to now.`);
 });
 $('#rbPatch').addEventListener('click', () => { RIG.autoPatch(rigb.list, rigb.types); rigChanged(); rbNote(`Patched from 1.001: ${rigb.list.length} fixtures in ${rigb.list.reduce((m, f) => Math.max(m, f.universe), 0)} universe(s).`); });
 $('#rbClear').addEventListener('click', () => {
@@ -4322,8 +4711,8 @@ $('#meters').innerHTML = METERS.map(([k, l, hit]) => `<div${hit ? ' class="hit"'
 const meterEls = [...document.querySelectorAll('#meters b')].map((el) => [el, el.dataset.m]);
 const GROUP_LABEL = { all: 'All', hang: 'Overhead', floor: 'Floor', odd: 'Odd', even: 'Even', left: 'Left', right: 'Right', centre: 'Centre' };
 const SRC_OPTS = SA.SOURCES.map((x) => `<option value="${x.id}">${esc(x.label)}</option>`).join('');
-const DST_SETS = [['Lights', 'rig.'], ['Lasers', 'laser.'], ['LED wall', 'led.'], ['Atmosphere and camera', '']];
-const DST_OPTS = DST_SETS.map(([label, pre]) => `<optgroup label="${label}">${SA.DESTS.filter((d) => (pre ? d.id.startsWith(pre) : !/^(rig|laser|led)\./.test(d.id))).map((d) => `<option value="${d.id}">${esc(d.label)}</option>`).join('')}</optgroup>`).join('');
+const DST_SETS = [['Lights', 'rig.'], ['Lasers', 'laser.'], ['LED wall', 'led.'], ['Performance FX', 'fx.'], ['Atmosphere and camera', '']];
+const DST_OPTS = DST_SETS.map(([label, pre]) => `<optgroup label="${label}">${SA.DESTS.filter((d) => (pre ? d.id.startsWith(pre) : !/^(rig|laser|led|fx)\./.test(d.id))).map((d) => `<option value="${d.id}">${esc(d.label)}</option>`).join('')}</optgroup>`).join('');
 const SHAPE = [
   ['gain', 'Gain', 0, 4, 0.05, (v) => `×${v.toFixed(2)}`],
   ['gate', 'Gate', 0, 0.95, 0.01, (v) => `${Math.round(v * 100)}%`],
@@ -4334,14 +4723,16 @@ const SHAPE = [
 const pct = (v) => `${v > 0 ? '+' : ''}${Math.round(v * 100)}%`;
 const shapeSum = (m) => `Response · attack ${Math.round(m.attack)} ms · release ${Math.round(m.release)} ms${m.gate ? ` · gate ${Math.round(m.gate * 100)}%` : ''}`;
 // Rig destinations can also target a fixture type or one of your rig builder groups.
-const FIXTURE_KIND = { head: 'spots', beam: 'beams', wash: 'washes', blinder: 'blinders', strobe: 'strobes', bar: 'LED bars', par: 'pars' };
-function rigGroups() {
+const FIXTURE_KIND = { head: 'spots', beam: 'beams', wash: 'washes', blinder: 'blinders', strobe: 'strobes', bar: 'LED bars', par: 'pars', laser: 'lasers',
+  flame: 'flame jets', co2: 'CO2 jets', spark: 'sparkulars', confetti: 'confetti cannons', streamer: 'streamer cannons', gerb: 'gerbs', comet: 'comets', mine: 'mines', firework: 'fireworks', smoke: 'smoke jets' };
+function rigGroups(m) {
   const out = new Map();
-  fixtures.forEach((f) => { out.set(`t:${f.def.kind}`, `Type: ${FIXTURE_KIND[f.def.kind] || f.def.kind}`); if (f.group) out.set(`g:${f.group}`, `Group: ${f.group}`); });
+  const pre = m.dst.split('.')[0], list = pre === 'laser' ? lasers : pre === 'fx' ? fxs.units : fixtures;
+  list.forEach((f) => { const k = f.kind || f.def.kind; out.set(`t:${k}`, `Type: ${FIXTURE_KIND[k] || k}`); if (f.group) out.set(`g:${f.group}`, `Group: ${f.group}`); });
   return [...out];
 }
 const groupOpts = (m) => SA.DEST_BY_ID[m.dst].groups.map((g) => `<option value="${g}">${GROUP_LABEL[g]}</option>`).join('')
-  + (m.dst.startsWith('rig.') && SA.DEST_BY_ID[m.dst].groups.length > 1 ? [...new Map([...(/^[gt]:/.test(m.group) ? [[m.group, m.group.replace(/^t:/, 'Type: ').replace(/^g:/, 'Group: ')]] : []), ...rigGroups()])].map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join('') : '');
+  + (/^(rig|laser|fx)\./.test(m.dst) && SA.DEST_BY_ID[m.dst].groups.length > 1 ? [...new Map([...(/^[gt]:/.test(m.group) ? [[m.group, m.group.replace(/^t:/, 'Type: ').replace(/^g:/, 'Group: ')]] : []), ...rigGroups(m)])].map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join('') : '');
 function linkRow(m) {
   return `<div class="link${m.on ? '' : ' off'}" data-id="${m.id}" aria-current="${rx.sel === m.id}">
   <div class="lk-top"><input type="checkbox" data-k="on"${m.on ? ' checked' : ''} aria-label="Link on"><select data-k="src" aria-label="Listen to">${SRC_OPTS}</select><span class="arrow">→</span><select data-k="dst" aria-label="Drive">${DST_OPTS}</select><button type="button" class="lk-del" data-act="del" aria-label="Remove link">×</button></div>
@@ -4386,7 +4777,7 @@ function onLinkInput(e) {
   else if (k === 'src' || k === 'dst' || k === 'group') m[k] = e.target.value;
   else { const v = parseFloat(e.target.value); if (!Number.isFinite(v)) return; m[k] = v; }
   if (k === 'on') row.classList.toggle('off', !m.on);
-  if (k === 'dst') { const g = row.querySelector('[data-k="group"]'); if (!SA.DEST_BY_ID[m.dst].groups.includes(m.group) && !(m.dst.startsWith('rig.') && /^[gt]:/.test(m.group))) m.group = 'all'; g.innerHTML = groupOpts(m); g.value = m.group; }
+  if (k === 'dst') { const g = row.querySelector('[data-k="group"]'); if (!SA.DEST_BY_ID[m.dst].groups.includes(m.group) && !(/^(rig|laser|fx)\./.test(m.dst) && /^[gt]:/.test(m.group))) m.group = 'all'; g.innerHTML = groupOpts(m); g.value = m.group; }
   if (k === 'src') row.querySelector('[data-band]').hidden = m.src !== 'band';
   if ((k === 'lo' || k === 'hi') && e.type === 'change') { m.lo = SA.clamp(Math.min(m.lo, m.hi), 20, 20000); m.hi = SA.clamp(Math.max(m.lo, m.hi), 20, 20000); }
   const o = row.querySelector(`[data-o="${k}"]`);
@@ -4526,7 +4917,8 @@ $('#spec').addEventListener('pointerup', () => { if (specDrag.on) { specDrag.on 
 loadReact();
 syncKnobs();
 renderLinks();
-if (window.stageDebug) Object.assign(window.stageDebug, { rx, audio, custom, importFile, rigb, fixtures: () => fixtures });
+if (window.stageDebug) Object.assign(window.stageDebug, { rx, audio, custom, importFile, rigb, fixtures: () => fixtures, fxs, fxPools, fxPrefs, lasers: () => lasers, fxPress, triggerDrop,
+  fxRun: (sec, drop = null) => { for (let t = 0; t < sec; t += 1 / 60) { time += 1 / 60; stepFx(1 / 60, time, drop); } } });
 
 /* ---------- Readouts, patch, scene data ---------- */
 function updateReadouts() {
@@ -4541,9 +4933,12 @@ function updateReadouts() {
 function addr(i) { const p = fixtures[i].patch; return { u: p.u, a: p.a }; }
 function renderPatch() {
   const rows = fixtures.map((f, i) => { const { u, a } = addr(i); return `<tr><td>${f.id}</td><td>${esc(f.truss)}${f.flip ? '' : ' (floor)'}</td><td>${u}.${String(a).padStart(3, '0')}</td><td>${esc(f.gdtf ? f.gdtf.replace(/\.gdtf$/i, '') : `${f.def.label.replace(/ moving head| \(.*\)/g, '')} ${f.def.footprint}ch`)}</td></tr>`; });
+  // Lasers with an address and every effect unit, numbered on from the fixtures.
+  let id = 100 + fixtures.length;
+  [...lasers.filter((L) => L.patch), ...fxs.units].forEach((x) => { const d = x.def, at = `${x.patch.u}.${String(x.patch.a).padStart(3, '0')}`; rows.push(`<tr><td>${++id}</td><td>${esc(x.group || d.label)}</td><td>${at}</td><td>${esc(d.label.replace(/ \(.*\)/, ''))} ${d.footprint}ch</td></tr>`); });
   $('#patchBody').innerHTML = rows.join('');
-  const last = fixtures.reduce((m, f) => Math.max(m, f.patch.u), 0);
-  $('#patchSum').textContent = `${fixtures.length} fixtures · ${last} universe${last === 1 ? '' : 's'}`;
+  const last = [...fixtures, ...fxs.units, ...lasers.filter((L) => L.patch)].reduce((m, f) => Math.max(m, f.patch.u), 0), nfx = fxs.units.length;
+  $('#patchSum').textContent = `${fixtures.length} fixtures${nfx ? ` · ${nfx} effects` : ''} · ${last} universe${last === 1 ? '' : 's'}`;
 }
 function sceneJSON() {
   const s = state;
@@ -4553,7 +4948,8 @@ function sceneJSON() {
     layers: [
       { name: 'Truss', objects: trussList.map((t) => ({ type: 'Truss', name: t.name, from: t.from, to: t.to, section: t.section })) },
       { name: 'Fixtures', objects: fixtures.map((f, i) => { const { u, a } = addr(i); return { type: 'Fixture', fixtureId: f.id, gdtfSpec: f.def.gdtf || f.gdtf || `Generic@${f.def.label.replace(/\W+/g, '_')}.gdtf`, gdtfMode: f.def.mode || `${f.def.footprint}ch`, address: { universe: u, channel: a }, position: f.pos.toArray().map(r2), hanging: f.flip, focus: f.truss }; }) },
-      { name: 'Lasers', objects: lasers.map((L, i) => ({ type: 'Laser', name: `Laser ${i + 1}`, position: L.root.position.toArray().map(r2), beams: LASER_BEAMS })) },
+      { name: 'Lasers', objects: lasers.map((L, i) => ({ type: 'Laser', name: `Laser ${i + 1}`, position: L.root.position.toArray().map(r2), beams: state.laserBeams, pattern: state.lasers })) },
+      { name: 'Effects', objects: fxs.units.map((u, i) => ({ type: 'SpecialEffect', kind: u.kind, name: `${u.def.label} ${i + 1}`, position: u.root.position.toArray().map(r2), address: { universe: u.patch.u, channel: u.patch.a } })) },
       { name: 'Video', objects: screens.map((sc) => ({ type: 'VideoScreen', name: sc.name, size: [sc.w, sc.h].map(r2), position: sc.mesh.position.toArray().map(r2), pixelPitchMm: s.pitch, source: s.visual })) },
     ],
   };
@@ -4598,6 +4994,7 @@ Object.keys(fmt).forEach((k) => {
   });
 });
 ['program', 'dimfx', 'colorMode', 'lasers'].forEach((k) => $('#' + k).addEventListener('change', (e) => { state[k] = e.target.value; }));
+renderFxPrefs();
 $('#quality').addEventListener('change', (e) => { setQuality(e.target.value); build(); });
 $('#surround').addEventListener('change', (e) => { state.surround = e.target.value; build(); });
 $('#g3d').addEventListener('change', (e) => { state.g3d = e.target.value; $('#g3dKeyRow').hidden = state.g3d !== 'on'; g3dSync(); });
@@ -4612,7 +5009,7 @@ $('#control').addEventListener('change', (e) => { state.control = e.target.value
 $('#visual').addEventListener('change', (e) => { state.visual = e.target.value; tdFeed.touched = true; syncInputs(); sizeWallCanvas(state.wallW / state.wallH); if ($('#sceneDetails').open) $('#sceneJson').textContent = sceneJSON(); });
 $('#colA').addEventListener('input', (e) => { state.colA = e.target.value; });
 $('#colB').addEventListener('input', (e) => { state.colB = e.target.value; });
-$('#laserCol').addEventListener('input', (e) => { state.laserCol = e.target.value; });
+$('#laserCol').addEventListener('input', (e) => { state.laserCol = e.target.value; saveFxPrefs(); });
 $('#wallText').addEventListener('input', (e) => { state.text = e.target.value; });
 $('#pitch').addEventListener('change', (e) => { state.pitch = parseFloat(e.target.value); screens.forEach((sc) => sc.mesh.material.uniforms.uPixels.value.set(sc.w * 1000 / state.pitch, sc.h * 1000 / state.pitch)); updateReadouts(); });
 const venuePick = $('#venuePick');
