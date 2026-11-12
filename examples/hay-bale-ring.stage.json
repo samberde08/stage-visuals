@@ -1,0 +1,413 @@
+{
+  "format": "stage-visuals/stage",
+  "version": 1,
+  "name": "Hay bale ring",
+  "notes": "Built from Sam's friend's reference photos (2026-11-12). Estimated, no measurements given: round bales 1.5 m across and 1.2 m tall, stacked two high (2.4 m). About 46 bales: 37 in the outer ring (bale centres on a 10.5 m radius, so about 19.5 m across inside) and 9 in an inner arc that overlaps the gap to make a snail-shell entrance at the back left. Low performance riser at the far side, white chairs in two curved blocks with a centre aisle, warm uplights at the foot of every outer bale. Give one real measurement (ring width or bale size) and everything rescales from it.",
+  "parts": [
+    {
+      "type": "scenic",
+      "id": "bale-ring",
+      "kind": "colonnade",
+      "material": "hay",
+      "arc": {
+        "center": [
+          0,
+          6
+        ],
+        "radius": 10.5,
+        "from": 0,
+        "to": 300
+      },
+      "diameter": 1.5,
+      "height": 1.2,
+      "stack": 2,
+      "fixtures": {
+        "type": "par",
+        "every": 1,
+        "side": "inside",
+        "inset": 0.35,
+        "aim": 10
+      }
+    },
+    {
+      "type": "scenic",
+      "id": "bale-entrance",
+      "kind": "colonnade",
+      "material": "hay",
+      "arc": {
+        "center": [
+          0,
+          6
+        ],
+        "radius": 7.2,
+        "from": 250,
+        "to": 350
+      },
+      "diameter": 1.5,
+      "height": 1.2,
+      "stack": 2,
+      "fixtures": {
+        "type": "par",
+        "every": 2,
+        "side": "inside",
+        "inset": 0.35,
+        "aim": 10
+      }
+    },
+    {
+      "type": "deck",
+      "id": "stage",
+      "shape": {
+        "kind": "rect",
+        "width": 7,
+        "depth": 3
+      },
+      "height": 0.4,
+      "material": "deck"
+    },
+    {
+      "type": "scenic",
+      "id": "pa-pole-l",
+      "kind": "column",
+      "at": [
+        -4.4,
+        -0.6
+      ],
+      "radius": 0.035,
+      "height": 1.7,
+      "material": "metal"
+    },
+    {
+      "type": "scenic",
+      "id": "pa-pole-r",
+      "kind": "column",
+      "at": [
+        4.4,
+        -0.6
+      ],
+      "radius": 0.035,
+      "height": 1.7,
+      "material": "metal"
+    },
+    {
+      "type": "scenic",
+      "id": "pa-l",
+      "kind": "panel",
+      "at": [
+        -4.4,
+        -0.6
+      ],
+      "width": 0.5,
+      "thickness": 0.4,
+      "bottom": 1.7,
+      "height": 0.8,
+      "material": "black"
+    },
+    {
+      "type": "scenic",
+      "id": "pa-r",
+      "kind": "panel",
+      "at": [
+        4.4,
+        -0.6
+      ],
+      "width": 0.5,
+      "thickness": 0.4,
+      "bottom": 1.7,
+      "height": 0.8,
+      "material": "black"
+    },
+    {
+      "type": "audience",
+      "id": "chairs",
+      "seating": "chairs",
+      "outline": [
+        [
+          0.0,
+          14.7
+        ],
+        [
+          0.91,
+          14.65
+        ],
+        [
+          1.81,
+          14.51
+        ],
+        [
+          2.69,
+          14.27
+        ],
+        [
+          3.54,
+          13.95
+        ],
+        [
+          4.35,
+          13.53
+        ],
+        [
+          5.11,
+          13.04
+        ],
+        [
+          5.82,
+          12.47
+        ],
+        [
+          6.47,
+          11.82
+        ],
+        [
+          7.04,
+          11.11
+        ],
+        [
+          7.53,
+          10.35
+        ],
+        [
+          7.95,
+          9.54
+        ],
+        [
+          8.27,
+          8.69
+        ],
+        [
+          8.51,
+          7.81
+        ],
+        [
+          8.65,
+          6.91
+        ],
+        [
+          8.7,
+          6.0
+        ],
+        [
+          8.65,
+          5.09
+        ],
+        [
+          8.51,
+          4.19
+        ],
+        [
+          8.27,
+          3.31
+        ],
+        [
+          7.95,
+          2.46
+        ],
+        [
+          7.53,
+          1.65
+        ],
+        [
+          7.04,
+          1.4
+        ],
+        [
+          6.47,
+          1.4
+        ],
+        [
+          5.82,
+          1.4
+        ],
+        [
+          5.11,
+          1.4
+        ],
+        [
+          4.35,
+          1.4
+        ],
+        [
+          3.54,
+          1.4
+        ],
+        [
+          2.69,
+          1.4
+        ],
+        [
+          1.81,
+          1.4
+        ],
+        [
+          0.91,
+          1.4
+        ],
+        [
+          0.0,
+          1.4
+        ],
+        [
+          -0.91,
+          1.4
+        ],
+        [
+          -1.81,
+          1.4
+        ],
+        [
+          -2.69,
+          1.4
+        ],
+        [
+          -3.54,
+          1.4
+        ],
+        [
+          -4.35,
+          1.4
+        ],
+        [
+          -5.11,
+          1.4
+        ],
+        [
+          -5.82,
+          1.4
+        ],
+        [
+          -6.47,
+          1.4
+        ],
+        [
+          -7.04,
+          1.4
+        ],
+        [
+          -5.28,
+          2.95
+        ],
+        [
+          -5.57,
+          3.52
+        ],
+        [
+          -5.8,
+          4.11
+        ],
+        [
+          -5.97,
+          4.73
+        ],
+        [
+          -6.07,
+          5.36
+        ],
+        [
+          -6.1,
+          6.0
+        ],
+        [
+          -6.07,
+          6.64
+        ],
+        [
+          -5.97,
+          7.27
+        ],
+        [
+          -5.8,
+          7.89
+        ],
+        [
+          -5.57,
+          8.48
+        ],
+        [
+          -5.28,
+          9.05
+        ],
+        [
+          -4.94,
+          9.59
+        ],
+        [
+          -4.53,
+          10.08
+        ],
+        [
+          -4.08,
+          10.53
+        ],
+        [
+          -3.59,
+          10.94
+        ],
+        [
+          -3.05,
+          11.28
+        ],
+        [
+          -2.48,
+          11.57
+        ],
+        [
+          -1.89,
+          11.8
+        ],
+        [
+          -1.27,
+          11.97
+        ],
+        [
+          -0.64,
+          12.07
+        ]
+      ],
+      "facing": [
+        0,
+        -1.5
+      ],
+      "aisle": 1.4,
+      "rowPitch": 0.9,
+      "seatPitch": 0.58
+    },
+    {
+      "type": "scenic",
+      "id": "loose-bales",
+      "kind": "colonnade",
+      "material": "hay",
+      "path": [
+        [
+          -15,
+          -9
+        ],
+        [
+          -12.5,
+          -9.5
+        ]
+      ],
+      "count": 2,
+      "diameter": 1.5,
+      "height": 1.2
+    },
+    {
+      "type": "scenic",
+      "id": "loose-bales-2",
+      "kind": "colonnade",
+      "material": "hay",
+      "path": [
+        [
+          16,
+          3
+        ],
+        [
+          17,
+          8
+        ]
+      ],
+      "count": 3,
+      "diameter": 1.5,
+      "height": 1.2
+    }
+  ]
+}

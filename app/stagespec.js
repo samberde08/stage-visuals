@@ -26,7 +26,15 @@
  *             ring    a hoop: at, radius, tube, centerHeight, facing ('audience' | 'up').
  *             pyramid a stepped or plain pyramid: at, width, depth, height, steps (0 = smooth).
  *             extrude any outline (shape or outline) pushed straight up: bottom, height.
+ *             colonnade  a row of cylinders along an arc { center, radius, from, to } or a path: hay bales, pillars,
+ *                     speaker stacks. diameter (1.5), height of one piece (1.2), stack (pieces high, 1), spacing
+ *                     (centre to centre; default the diameter, so they touch) or count. fixtures { type, every (1),
+ *                     side ('inside' | 'outside' for arcs, 'left' | 'right' for paths), inset, aim } puts floor
+ *                     lights at their feet, aimed up the face.
  *           led: true makes its front an LED surface.
+ *   audience  where the crowd goes: shape or outline; seating 'standing' (density per m², 2) or 'chairs' (rows
+ *           curved round facing [x, z], rowPitch 0.95, seatPitch 0.6, aisle: width of a centre aisle, occupancy 0..1).
+ *           With any audience part the template's own crowd is replaced.
  *   Shapes (plan outlines, centred on at unless noted):
  *     { kind: 'rect', width, depth, anchor?: 'front' | 'center' }   anchor front puts the front edge at z = 0 (default
  *                                                                  for decks: the stage's front line)
@@ -44,9 +52,9 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
   const FORMAT = 'stage-visuals/stage';
-  const TYPES = ['deck', 'riser', 'steps', 'booth', 'led', 'truss', 'scenic'];
-  const SCENIC = ['panel', 'column', 'arch', 'ring', 'pyramid', 'extrude'];
-  const MATERIALS = ['deck', 'black', 'metal', 'mirror', 'wood', 'concrete', 'white', 'fabric', 'rock', 'led'];
+  const TYPES = ['deck', 'riser', 'steps', 'booth', 'led', 'truss', 'scenic', 'audience'];
+  const SCENIC = ['panel', 'column', 'arch', 'ring', 'pyramid', 'extrude', 'colonnade'];
+  const MATERIALS = ['deck', 'black', 'metal', 'mirror', 'wood', 'concrete', 'white', 'fabric', 'rock', 'hay', 'led'];
   const MAX_PARTS = 400, MAX_SIZE = 400;
   const DEG = Math.PI / 180;
   const num = (x, d) => (typeof x === 'number' && Number.isFinite(x) ? x : d);
@@ -187,7 +195,7 @@
   function layout(input) {
     const { spec, warnings } = input && input.format === FORMAT && Array.isArray(input.parts) ? { spec: input, warnings: [] } : normalize(input);
     const { top, baseOf } = tops(spec);
-    const out = { name: spec.name, prisms: [], boxes: [], screens: [], floors: [], cylinders: [], tori: [], truss: [], fixtures: [], warnings: warnings.slice() };
+    const out = { name: spec.name, prisms: [], boxes: [], screens: [], floors: [], cylinders: [], tori: [], truss: [], fixtures: [], audience: [], warnings: warnings.slice() };
     const mat = (p, d) => p.material || d;
     for (const p of spec.parts) {
       const base = baseOf(p);
@@ -238,9 +246,10 @@
         const f = p.fixtures;
         if (f && typeof f === 'object' && f.type) {
           const n = clamp(Math.round(num(f.count, 6)), 1, 200);
-          along(pts, n, !!p.closed).forEach((pos) => out.fixtures.push({ type: String(f.type), pos, truss: p.id }));
+          along(pts, n, !!p.closed).forEach((pos) => out.fixtures.push({ type: String(f.type), pos, truss: p.id, mount: 'hang' }));
         }
       } else if (p.type === 'scenic') scenic(p, base, out);
+      else if (p.type === 'audience') audience(p, base, out);
     }
     return out;
   }
@@ -291,13 +300,99 @@
         const f = 1 - i / steps, sh = h / steps;
         out.boxes.push({ id: `${p.id}#${i}`, center: [at[0], r4(base + sh * (i + 0.5)), at[1]], size: [r4(w * f), r4(sh), r4(d * f)], yaw, material: m, color: p.color, led: led ? 'front' : null });
       } else out.prisms.push({ id: p.id, outline: place(orient([[-w / 2, -d / 2], [-w / 2, d / 2], [w / 2, d / 2], [w / 2, -d / 2]]), at, yaw), y0: base, y1: r4(base + h), apex: true, material: m, color: p.color, led });
-    } else if (p.kind === 'extrude') {
+    } else if (p.kind === 'colonnade') colonnade(p, base, out, m, led);
+    else if (p.kind === 'extrude') {
       const ol = planOutline(p, 'center');
       if (!ol) { out.warnings.push(`${p.id}: needs a shape or outline`); return; }
       const y0 = base + num(p.bottom, 0);
       out.prisms.push({ id: p.id, outline: ol, y0: r4(y0), y1: r4(y0 + size(p.height, 2)), material: m, color: p.color, led, skirt: false });
     }
   }
+  // Cylinders in a row along an arc or a path, stacked, with optional floor lights at their feet.
+  function colonnade(p, base, out, m, led) {
+    const dia = size(p.diameter, 1.5, 0.05), h = size(p.height, 1.2, 0.05), stack = clamp(Math.round(num(p.stack, 1)), 1, 20);
+    let pts = null, center = null;
+    if (p.arc && typeof p.arc === 'object') {
+      center = pt2(p.arc.center) || [0, 0];
+      const r = size(p.arc.radius, 10), a0 = num(p.arc.from, 0), a1 = num(p.arc.to, 360);
+      const len = Math.abs(a1 - a0) * DEG * r;
+      const n = clamp(Math.round(num(p.count, Math.floor(len / size(p.spacing, dia)) + 1)), 1, 2000);
+      pts = arcPoints(center[0], center[1], r, a0, a1, Math.max(2, n));
+      if (n === 1) pts = pts.slice(0, 1);
+      pts = place(pts, p.at, p.rotate);
+      if (center) center = place([center], p.at, p.rotate)[0];
+    } else if (Array.isArray(p.path)) {
+      const path = p.path.map(pt2).filter(Boolean);
+      if (path.length < 2) { out.warnings.push(`${p.id}: a colonnade needs an arc or a path`); return; }
+      const p3 = place(path, p.at, p.rotate).map(([x, z]) => [x, 0, z]);
+      let len = 0; for (let i = 1; i < p3.length; i++) len += Math.hypot(p3[i][0] - p3[i - 1][0], p3[i][2] - p3[i - 1][2]);
+      const n = clamp(Math.round(num(p.count, Math.floor(len / size(p.spacing, dia)) + 1)), 1, 2000);
+      pts = n === 1 ? [[p3[0][0], p3[0][2]]] : alongEnds(p3, n).map((q) => [q[0], q[2]]);
+    } else { out.warnings.push(`${p.id}: a colonnade needs an arc or a path`); return; }
+    pts.forEach(([x, z], i) => {
+      for (let k = 0; k < stack; k++) out.cylinders.push({ id: `${p.id}#${i}.${k}`, center: [r4(x), r4(base + h * k + h / 2), r4(z)], radius: r4(dia / 2 - 0.01), height: r4(h - 0.02), material: m, color: p.color, led });
+    });
+    const f = p.fixtures;
+    if (!f || typeof f !== 'object' || !f.type) return;
+    const every = clamp(Math.round(num(f.every, 1)), 1, 100), inset = num(f.inset, 0.4), side = f.side || (center ? 'inside' : 'left');
+    pts.forEach(([x, z], i) => {
+      if (i % every) return;
+      // Which way is "inside" here: toward the arc's centre, or to the left or right of the path.
+      let nx, nz;
+      if (center) { nx = center[0] - x; nz = center[1] - z; if (side === 'outside') { nx = -nx; nz = -nz; } }
+      else {
+        const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)], tx = b[0] - a[0], tz = b[1] - a[1];
+        // Walking the path, left is (tz, -tx) with x to the audience's right and z toward them.
+        [nx, nz] = side === 'right' ? [-tz, tx] : [tz, -tx];
+      }
+      const l = Math.hypot(nx, nz) || 1; nx /= l; nz /= l;
+      const d = dia / 2 + inset, fx = x + nx * d, fz = z + nz * d;
+      out.fixtures.push({ type: String(f.type), pos: [r4(fx), r4(base), r4(fz)], mount: 'floor', yaw: r4(Math.atan2(x - fx, z - fz) / DEG), aim: num(f.aim, 12), truss: p.id });
+    });
+  }
+  // n points from the first point of a polyline to the last, evenly spaced.
+  function alongEnds(pts, n) {
+    let total = 0; const seg = [];
+    for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][2] - pts[i - 1][2]); seg.push(l); total += l; }
+    const out = [];
+    for (let k = 0; k < n; k++) {
+      let d = total * k / (n - 1), i = 0;
+      while (i < seg.length - 1 && d > seg[i]) { d -= seg[i]; i++; }
+      const t = seg[i] ? Math.min(1, d / seg[i]) : 0, a = pts[i], b = pts[i + 1];
+      out.push([0, 1, 2].map((j) => a[j] + (b[j] - a[j]) * t));
+    }
+    return out;
+  }
+  const inside = (pt, poly) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, zi] = poly[i], [xj, zj] = poly[j]; if ((zi > pt[1]) !== (zj > pt[1]) && pt[0] < (xj - xi) * (pt[1] - zi) / (zj - zi) + xi) c = !c; } return c; };
+  // An audience area: chairs in rows curved round the stage, or a standing area with a density.
+  function audience(p, base, out) {
+    const ol = planOutline(p, 'center');
+    if (!ol) { out.warnings.push(`${p.id}: an audience needs a shape or outline`); return; }
+    const a = Math.abs(area(ol));
+    if (p.seating !== 'chairs') {
+      const density = clamp(num(p.density, 2), 0.1, 4);
+      out.audience.push({ id: p.id, outline: ol, y: r4(base), standing: true, area: r4(a), capacity: Math.round(a * density), seats: [] });
+      return;
+    }
+    const f = pt2(p.facing) || [0, -2], rowP = clamp(num(p.rowPitch, 0.95), 0.6, 3), seatP = clamp(num(p.seatPitch, 0.6), 0.4, 3);
+    const aisle = clamp(num(p.aisle, 0), 0, 20), occ = clamp(num(p.occupancy, 1), 0, 1);
+    const dists = ol.map(([x, z]) => Math.hypot(x - f[0], z - f[1]));
+    const r0 = Math.max(rowP, Math.min(...dists)), r1 = Math.max(...dists), seats = [];
+    for (let r = r0; r <= r1 && seats.length < 6000; r += rowP) {
+      const step = seatP / r;
+      // Seats run along the row symmetrically about the centre line so the aisle stays straight.
+      for (let k = 0; k * step <= Math.PI && seats.length < 6000; k++) {
+        for (const sgn of k ? [1, -1] : [1]) {
+          const ang = sgn * (k * step + (aisle ? 0 : 0)), x = f[0] + Math.sin(ang) * r, z = f[1] + Math.cos(ang) * r;
+          if (aisle && Math.abs(x - f[0]) < aisle / 2 + seatP / 2) continue;
+          if (!inside([x, z], ol)) continue;
+          seats.push([r4(x), r4(z), r4(Math.atan2(f[0] - x, f[1] - z) / DEG)]);
+        }
+      }
+    }
+    out.audience.push({ id: p.id, outline: ol, y: r4(base), standing: false, area: r4(a), capacity: Math.round(seats.length * occ), occupancy: occ, seats, facing: f });
+  }
+
   // The footprint: x/z extents of everything, and the highest point.
   function bounds(lay) {
     const b = { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity, maxY: 0 };
@@ -379,10 +474,12 @@
     'Risers, booths, LED and scenic pieces take on: "<deck or riser id>" to stand on it, at: [x, z], rotate (degrees, 0 faces the audience).',
     'LED walls: width + at, or path [[x, z], ...], or arc { center, radius, from, to } (angles: 0 = toward the audience, 180 = upstage), with bottom and height; shape rect | arch | gable. They face the audience (facing: "back" turns one round). LED floor: floor: true with a shape.',
     'Truss: path of [x, y, z], size, closed, and fixtures { type: spot | beam | wash | blinder | strobe | bar | par | laser, count }.',
-    'Materials: deck, black, metal, mirror, wood, concrete, white, fabric, rock, led. color "#rrggbb" tints.',
+    'Rows of round things (hay bales, pillars, barrels): scenic kind colonnade along arc { center, radius, from, to } or path, with diameter, height per piece and stack; fixtures { type, every, side, aim } for uplights at their feet.',
+    'Audience: type audience with a shape or outline, seating "standing" (density) or "chairs" (facing [x, z], aisle width, rowPitch, seatPitch). Include one whenever the venue has a defined crowd area.',
+    'Materials: deck, black, metal, mirror, wood, concrete, white, fabric, rock, hay, led. color "#rrggbb" tints.',
     'Give every part a short readable id. Keep sizes real: decks 0.6 to 2.5 m high, LED walls up to 40 m wide, truss trims 6 to 20 m.',
     'From photos: work out the plan shape first (look for the deck edge and its corners), then heights against a person (1.75 m) or a known measurement, then LED surfaces and scenic pieces, then truss. Say in notes what was estimated.',
   ].join('\n');
 
-  return { FORMAT, TYPES, SCENIC, MATERIALS, GUIDE, shapeOutline, normalize, layout, bounds, along, applyEdits, describe, starter, area };
+  return { FORMAT, TYPES, SCENIC, MATERIALS, GUIDE, shapeOutline, normalize, layout, bounds, along, applyEdits, describe, starter, area, inside };
 });

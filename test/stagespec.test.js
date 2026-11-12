@@ -163,3 +163,26 @@ test('design: a Claude reply becomes a clean description; refusals and long runs
   await assert.rejects(D.design({ prompt: 'x' }, { client: fake({ stop_reason: 'refusal', content: [] }) }), /declined/);
   await assert.rejects(D.design({ prompt: 'x' }, { client: fake({ stop_reason: 'max_tokens', content: [] }) }), /too long/);
 });
+
+test('colonnades: stacked bales along an arc, with floor uplights aimed at them', () => {
+  const lay = S.layout({ parts: [{ type: 'scenic', kind: 'colonnade', id: 'ring', material: 'hay', arc: { center: [0, 6], radius: 10, from: 0, to: 180 }, diameter: 1.5, height: 1.2, stack: 2, fixtures: { type: 'par', every: 2, side: 'inside' } }] });
+  const n = lay.cylinders.length / 2;
+  assert.ok(Number.isInteger(n) && n > 15, `${lay.cylinders.length} pieces`);
+  const top = Math.max(...lay.cylinders.map((c) => c.center[1] + c.height / 2));
+  near(top, 2.4, 0.05);
+  assert.strictEqual(lay.fixtures.length, Math.ceil(n / 2));
+  assert.ok(lay.fixtures.every((f) => f.mount === 'floor' && Math.hypot(f.pos[0], f.pos[2] - 6) < 10), 'uplights sit inside the ring');
+});
+
+test('audience: standing areas get a capacity, chair blocks keep the centre aisle clear', () => {
+  const lay = S.layout({ parts: [
+    { type: 'audience', id: 'floor', shape: { kind: 'rect', width: 10, depth: 5 }, at: [0, 6] },
+    { type: 'audience', id: 'chairs', seating: 'chairs', shape: { kind: 'rect', width: 12, depth: 6 }, at: [0, 6], aisle: 1.4 },
+  ] });
+  const floor = lay.audience.find((a) => a.id === 'floor');
+  assert.ok(floor.standing); near(floor.capacity, 100, 1);
+  const chairs = lay.audience.find((a) => a.id === 'chairs');
+  assert.ok(chairs.seats.length > 40);
+  assert.ok(chairs.seats.every(([x]) => Math.abs(x) > 0.7), 'nobody sits in the aisle');
+  assert.ok(chairs.seats.every(([x, z]) => S.inside([x, z], chairs.outline)));
+});

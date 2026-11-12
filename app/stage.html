@@ -1045,6 +1045,8 @@ function fbmTile(seed, base, oct) {
 }
 const SURF_SIZE = 512;
 const SURF = {
+  // Straw: long fibres in two directions over a warm base, as on the face of a round bale.
+  hay(u, v, f) { const a = f.b(u * 0.35, v * 7), b = f.b(u * 6 + 3.1, v * 0.4), g = f.c(u, v); const k = (0.7 + 0.3 * a + 0.15 * b) * (0.88 + 0.24 * g); return [0.52 * k, 0.4 * k, 0.21 * k]; },
   // Poured concrete: mottled, with darker stains and a few pits.
   concrete(u, v, f) { const m = f.a(u, v), st = f.b(u, v), g = f.c(u, v); const pit = g > 0.78 ? 0.7 : 1; const c = (0.42 + 0.22 * (m - 0.5) - 0.18 * Math.max(0, st - 0.58) * 3) * pit * (0.94 + 0.12 * g); return [c, c * 0.985, c * 0.96]; },
   // Polished dark concrete floor, the usual club floor: low contrast, a few saw cuts on a 3 m grid.
@@ -1390,7 +1392,7 @@ const PERSON = (() => {
   const torso = at(new THREE.CylinderGeometry(0.2, 0.15, 0.6, 9), 0, 1.15, 0); torso.scale(1, 1, 0.58);
   const chest = at(new THREE.SphereGeometry(0.2, 9, 5, 0, Math.PI * 2, 0, Math.PI / 2), 0, 1.44, 0); chest.scale(1, 0.35, 0.58);
   const hips = at(new THREE.CylinderGeometry(0.15, 0.16, 0.14, 9), 0, 0.84, 0); hips.scale(1, 1, 0.66);
-  const leg = (x) => at(new THREE.CylinderGeometry(0.075, 0.05, 0.82, 7), x, 0.41, 0);
+  const leg = (x) => at(new THREE.CylinderGeometry(0.075, 0.05, 0.82, 7, 2), x, 0.41, 0); // a ring at the knee, so seated people can bend
   const shoe = (x) => at(new THREE.BoxGeometry(0.1, 0.07, 0.24), x, 0.035, 0.04);
   const neck = at(new THREE.CylinderGeometry(0.045, 0.055, 0.1, 7), 0, 1.49, -0.01);
   const head = at(new THREE.SphereGeometry(0.098, 12, 9), 0, 1.6, 0.005); head.scale(0.88, 1.1, 1);
@@ -1425,7 +1427,22 @@ void crowdPose(inout vec3 p, inout vec3 n){
   float ph = aData.x, style = aData.y, phone = aData.z, e = uEnergy, b = uBeat + ph * 0.2;
   float hop = pow(abs(sin(CPI * b)), 3.0) * 0.2 * e, pump = pow(abs(cos(CPI * b)), 2.0);
   vPhone = 0.0;
-  if (aPart > 1.5) {
+  // Seated (aData.z = 2): thighs fold forward at the hip, shins hang from the knee, hands rest on the lap.
+  bool seated = phone > 1.5;
+  if (seated) {
+    hop = 0.0; e *= 0.3;
+    if (aPart < 0.5 && p.y < 0.76) {
+      if (p.y >= 0.405) { mat3 T = rotX(-CPI * 0.5); vec3 hip = vec3(0.0, 0.82, 0.0); p = hip + T * (p - hip); n = T * n; }
+      else p += vec3(0.0, 0.41, 0.41);
+    }
+    if (aPart > 1.5) {
+      float side = aPart < 2.5 ? -1.0 : 1.0;
+      vec3 piv = vec3(side * 0.22, 1.4, 0.0);
+      if (aPart > 3.5) p = piv;
+      mat3 R = rotX(-0.75) * rotZ(side * 0.06);
+      p = piv + R * (p - piv); n = R * n;
+    }
+  } else if (aPart > 1.5) {
     // Arm angle about the shoulder: 0 hangs down, -PI points straight up. Hands go up as the energy builds.
     float side = aPart < 2.5 ? -1.0 : 1.0, ax, az;
     bool holding = phone > 0.5 && aPart > 2.5;
@@ -1482,7 +1499,7 @@ function pickWeighted(list, w) { let r = Math.random() * w.reduce((a, b) => a + 
 
 // Builders call crowd() with a base head count and a function that returns a random spot (or null).
 // finishCrowds() then tops each area up towards the venue's capacity and builds the meshes.
-function crowd(n, fn, focus) { const c = { n, fn, focus: focus || null, k: 0, mesh: null }; crowds.push(c); return c; }
+function crowd(n, fn, focus, seated) { const c = { n, fn, focus: focus || null, seated: !!seated, k: 0, mesh: null }; crowds.push(c); return c; }
 const CROWD_CAP = { high: 24000, fast: 6000 };
 function finishCrowds(target) {
   const base = crowds.reduce((a, c) => a + c.n, 0) || 1, cap = CROWD_CAP[state.quality] || CROWD_CAP.fast;
@@ -1504,7 +1521,7 @@ function finishCrowds(target) {
   crowds.forEach((c) => {
     const goal = Math.round(Math.max(c.n, want * c.n / base)), pts = [];
     for (let i = 0; i < goal * 4 && pts.length < goal; i++) {
-      const p = c.fn(); if (!p || (keepOut.length && blocked(p))) continue;
+      const p = c.fn(); if (!p || (!c.seated && keepOut.length && blocked(p))) continue;
       const key = `${Math.floor(p.x / cell)},${Math.floor(p.z / cell)},${Math.round(p.y / 2)}`;
       if (taken.has(key)) continue;
       taken.add(key); pts.push(p);
@@ -1514,13 +1531,13 @@ function finishCrowds(target) {
     mesh.customDepthMaterial = crowdDepth; mesh.frustumCulled = false; mesh.userData.crowd = true;
     const skin = new Float32Array(k * 3), data = new Float32Array(k * 4);
     pts.forEach((p, i) => {
-      const yaw = Math.atan2(f.x - p.x, f.z - p.z) + (Math.random() - 0.5) * 0.5, s = 0.9 + Math.random() * 0.2;
+      const yaw = Math.atan2(f.x - p.x, f.z - p.z) + (c.seated ? 0 : (Math.random() - 0.5) * 0.5), s = c.seated ? 0.95 + Math.random() * 0.08 : 0.9 + Math.random() * 0.2;
       q.setFromAxisAngle(up, yaw); sc.set(s, s, s);
       mesh.setMatrixAt(i, m4.compose(p, q, sc));
       mesh.setColorAt(i, pickWeighted(SHIRTS, SHIRT_W));
       SKIN[Math.floor(Math.random() * SKIN.length)].toArray(skin, i * 3);
       const ph = Math.random();
-      data.set([ph, (ph * 7.31) % 1, ph < 0.1 ? 1 : 0, Math.random()], i * 4);
+      data.set([ph, (ph * 7.31) % 1, c.seated ? 2 : ph < 0.1 ? 1 : 0, Math.random()], i * 4);
     });
     mesh.geometry = PERSON.clone();
     mesh.geometry.setAttribute('aSkin', new THREE.InstancedBufferAttribute(skin, 3));
@@ -1776,7 +1793,7 @@ function barrier(x0, x1, z) {
   ]);
   const n = Math.max(1, Math.round(x1 - x0)), m = new THREE.InstancedMesh(seg, M.metal, n);
   for (let i = 0; i < n; i++) m.setMatrixAt(i, MX(x0 + (i + 0.5) * (x1 - x0) / n, 0, z));
-  venue.add(m);
+  m.userData.stagePart = true; venue.add(m);
 }
 // Front of house: a riser under a canopy with the lighting and sound desks, screens glowing.
 function fohTent(x, z) {
@@ -3272,7 +3289,7 @@ $('#laserColB').addEventListener('input', (e) => { state.laserColB = e.target.va
 /* ---------- Build ---------- */
 function build() {
   scene.remove(venue);
-  const keepGeo = new Set([beamGeo, poolGeo, lensGeo, headGeo, laserGeo, PERSON, ...Object.values(TREE_GEO).flatMap((t) => [t.trunk, t.crown])]), keepMat = new Set([...Object.values(M), ...Object.values(groundMats), ...Object.values(DJ_MAT), crowdMat, crowdDepth]);
+  const keepGeo = new Set([beamGeo, poolGeo, lensGeo, headGeo, laserGeo, PERSON, CHAIR_SEAT, CHAIR_BACK, CHAIR_LEGS, ...Object.values(TREE_GEO).flatMap((t) => [t.trunk, t.crown])]), keepMat = new Set([...Object.values(M), ...Object.values(groundMats), ...Object.values(DJ_MAT), crowdMat, crowdDepth, chairMat]);
   venue.traverse((o) => { if (o.geometry && !keepGeo.has(o.geometry)) o.geometry.dispose(); if (o.material && o.material.dispose && !keepMat.has(o.material)) o.material.dispose(); });
   venue = new THREE.Group(); scene.add(venue);
   receivers = []; fixtures = []; trussList = []; screens = []; hangLines = [];
@@ -3294,6 +3311,7 @@ function build() {
       if (camSet.fohY !== undefined) camSet.fohY += gy(0, camSet.front);
     }
   }
+  stageAudience();
   finishCrowds(camSet.target);
   djRig = null;
   djBooth(camSet.djAt || V(0, state.H, -state.D * 0.38), camSet.djYaw || 0, state.W >= 14);
@@ -4180,11 +4198,11 @@ const saveCustomPrefs = () => { try { localStorage.setItem('stageCustom', JSON.s
 function hideTemplate() {
   if (custom.tplShow === 'all') return;
   // With a described stage in place the side screens and towers go too, so the zone reaches further out.
-  const wide = custom.items.some((it) => it.kind === 'stage' && it.root.visible) ? 14 : 6;
-  const { W, D } = state, zone = new THREE.Box3(V(-W / 2 - wide, -0.5, -D - 8), V(W / 2 + wide, 80, 3)), b = new THREE.Box3();
+  const wide = custom.items.some((it) => it.kind === 'stage' && it.root.visible) ? (custom.tplShow === 'none' ? 30 : 14) : 6;
+  const { W, D } = state, zone = new THREE.Box3(V(-W / 2 - wide, -0.5, -D - 8), V(W / 2 + wide, 80, wide > 6 ? 4 : 3)), b = new THREE.Box3();
   const hidden = new Set();
   venue.children.forEach((o) => {
-    if (o.isInstancedMesh || o.name === 'Scenery') return;
+    if ((o.isInstancedMesh && !o.userData.stagePart) || o.name === 'Scenery') return;
     b.setFromObject(o);
     if (b.isEmpty() || !zone.containsBox(b) || b.max.y < 0.05) return;
     o.visible = false; hidden.add(o);
@@ -4201,8 +4219,13 @@ function customRig() {
     if (!it.root.visible || !it.fixtures || !it.fixtures.length) return;
     it.root.updateMatrixWorld(true);
     if (it.kind === 'stage') {
-      // A described stage's truss fixtures: hung under the truss, facing the audience.
-      it.fixtures.forEach((f) => specs.push({ pos: V(f.pos[0], f.pos[1] - 0.35, f.pos[2]).applyMatrix4(it.root.matrixWorld), flip: true, yaw: 0, truss: f.truss, patch: null }));
+      // A described stage's fixtures: hung under its truss facing the audience, or standing on the floor aimed
+      // where the description says (uplights at the foot of a wall).
+      const turn = new THREE.Euler().setFromQuaternion(it.root.quaternion, 'YXZ').y;
+      it.fixtures.forEach((f) => {
+        const floor = f.mount === 'floor', def = RIG.TYPES[f.type] || RIG.TYPES.spot;
+        specs.push({ def, pos: V(f.pos[0], floor ? f.pos[1] : f.pos[1] - 0.35, f.pos[2]).applyMatrix4(it.root.matrixWorld), flip: !floor, yaw: floor ? (f.yaw || 0) * DEG + turn : 0, aim: floor ? f.aim : undefined, truss: f.truss, patch: null });
+      });
       return;
     }
     it.fixtures.forEach((f) => {
@@ -4287,7 +4310,7 @@ function specMat(name, color) {
   const key = `${name}|${color || ''}`;
   if (SPEC_MATS[key]) return SPEC_MATS[key];
   const base = {
-    deck: M.deck, black: M.frame, metal: M.metal, wood: M.wood, concrete: M.concrete, fabric: M.fabric, rock: M.sandstone,
+    deck: M.deck, black: M.frame, metal: M.metal, wood: M.wood, concrete: M.concrete, fabric: M.fabric, rock: M.sandstone, hay: surf('hay', 1.6, { roughness: 1, bump: 1.4, rvar: 0.1 }),
     mirror: new THREE.MeshStandardMaterial({ color: 0xd8dce4, roughness: 0.06, metalness: 1 }),
     white: new THREE.MeshStandardMaterial({ color: 0xd9d9d6, roughness: 0.7 }),
   }[name] || M.frame;
@@ -4381,6 +4404,11 @@ function buildSpecContent(spec) {
 }
 const specFile = (spec) => new File([JSON.stringify(spec, null, 2)], `${(spec.name || 'stage').replace(/[^\w -]+/g, '').trim().replace(/\s+/g, '-').toLowerCase() || 'stage'}.stage.json`, { type: 'application/json' });
 // Swap a described stage's geometry for a new description, keeping where it stands.
+// A described stage replaces the built-in deck. When it brings its own lights it replaces the built-in rig and lasers too.
+function stageTemplate(it) {
+  const want = it.fixtures && it.fixtures.length ? 'none' : 'rig';
+  if (custom.tplShow === 'all' || (want === 'none' && custom.tplShow === 'rig')) { custom.tplShow = want; saveCustomPrefs(); const sel = $('#tplShow'); if (sel) sel.value = want; }
+}
 function setItemSpec(it, spec, opts = {}) {
   const built = buildSpecContent(spec);
   it.root.remove(it.content);
@@ -4389,7 +4417,7 @@ function setItemSpec(it, spec, opts = {}) {
   it.spec = spec; it.layout = built.layout; it.name = spec.name || it.name; it.root.name = it.name;
   it.fixtures = built.layout.fixtures; it.file = specFile(spec);
   if (opts.history !== false) { it.history = (it.history || []).slice(0, (it.hpos ?? -1) + 1); it.history.push(spec); if (it.history.length > 60) it.history.shift(); it.hpos = it.history.length - 1; }
-  prepItem(it); setLed(it, it.led);
+  prepItem(it); setLed(it, it.led); stageTemplate(it);
   storeItem(it); renderImports(); renderDesign(); scheduleBuild(false);
 }
 const IMPORT_RE = /\.(glb|gltf|obj|mvr|json)$/i;
@@ -4425,7 +4453,7 @@ async function importFile(file, saved) {
     addItem(it);
     if (saved) {
       it.root.position.fromArray(saved.pos); it.root.quaternion.fromArray(saved.quat); it.root.scale.fromArray(saved.scale); it.root.visible = saved.visible !== false;
-    } else if (it.kind === 'stage') { putOnGround(it); if (custom.tplShow === 'all') { custom.tplShow = 'rig'; saveCustomPrefs(); } }
+    } else if (it.kind === 'stage') { putOnGround(it); stageTemplate(it); }
     else if (kind !== 'mvr') placeOnStage(it);
     setLed(it, it.led);
     if (!saved) { storeItem(it); selectItem(it.id); }
@@ -4595,6 +4623,48 @@ function restoreImports() {
     if (recs && recs.length) impNote(`Restored ${recs.length} import${recs.length === 1 ? '' : 's'} from your last visit.`);
   }).catch(() => {});
 }
+/* Audience areas in a described stage replace the template's crowd: chairs in rows, or a standing area. */
+const CHAIR_SEAT = new THREE.BoxGeometry(0.46, 0.06, 0.44); CHAIR_SEAT.translate(0, 0.44, 0);
+const CHAIR_BACK = new THREE.BoxGeometry(0.46, 0.42, 0.05); CHAIR_BACK.translate(0, 0.68, -0.2);
+const CHAIR_LEGS = (() => {
+  const legs = [[-0.2, 0.18], [0.2, 0.18], [-0.2, -0.18], [0.2, -0.18]].map(([x, z]) => new THREE.BoxGeometry(0.035, 0.42, 0.035).translate(x, 0.21, z).toNonIndexed());
+  const g = new THREE.BufferGeometry();
+  ['position', 'normal', 'uv'].forEach((k) => {
+    const arrs = legs.map((l) => l.attributes[k].array), out = new Float32Array(arrs.reduce((a, b) => a + b.length, 0));
+    let o = 0; arrs.forEach((a) => { out.set(a, o); o += a.length; });
+    g.setAttribute(k, new THREE.BufferAttribute(out, legs[0].attributes[k].itemSize));
+  });
+  return g;
+})();
+const chairMat = new THREE.MeshStandardMaterial({ color: 0xe9ebee, roughness: 0.55 });
+function stageAudience() {
+  const areas = [];
+  custom.items.forEach((it) => { if (it.kind === 'stage' && it.root.visible && it.layout && it.layout.audience.length) { it.root.updateMatrixWorld(true); it.layout.audience.forEach((a) => areas.push([it, a])); } });
+  if (!areas.length) return;
+  crowds.forEach((c) => { if (c.mesh) venue.remove(c.mesh); });
+  crowds = [];
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), one = V(1, 1, 1);
+  areas.forEach(([it, a]) => {
+    const W = it.root.matrixWorld, toW = (x, y, z) => V(x, y, z).applyMatrix4(W);
+    if (a.standing) {
+      const xs = a.outline.map((p) => p[0]), zs = a.outline.map((p) => p[1]);
+      const x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
+      crowd(Math.max(1, a.capacity), () => { for (let t = 0; t < 8; t++) { const x = x0 + Math.random() * (x1 - x0), z = z0 + Math.random() * (z1 - z0); if (SS.inside([x, z], a.outline)) return toW(x, a.y, z); } return null; });
+      return;
+    }
+    // Chairs: one instanced mesh per part of the chair, then people sitting in them.
+    const turn = new THREE.Euler().setFromQuaternion(it.root.quaternion, 'YXZ').y;
+    [CHAIR_SEAT, CHAIR_BACK, CHAIR_LEGS].forEach((g, gi) => {
+      const mesh = new THREE.InstancedMesh(g, chairMat, a.seats.length);
+      a.seats.forEach(([x, z, yaw], i) => { q.setFromAxisAngle(V(0, 1, 0), yaw * DEG + turn); mesh.setMatrixAt(i, m4.compose(toW(x, a.y, z), q, one)); });
+      mesh.castShadow = gi < 2; mesh.receiveShadow = true; venue.add(mesh);
+    });
+    const seats = a.seats.filter(() => Math.random() < (a.occupancy ?? 1));
+    let k = 0;
+    crowd(Math.max(1, seats.length), () => { if (k >= seats.length) return null; const [x, z] = seats[k++]; return toW(x, a.y - 0.4, z); }, toW(a.facing[0], 1, a.facing[1]), true);
+  });
+}
+
 /* Design with Claude */
 // Write or change a described stage in words, or from reference photos. The bridge (npm start) asks Claude and
 // returns a new description; every result is one step in the stage's undo history. The JSON stays editable by hand.
