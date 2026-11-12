@@ -1,0 +1,15 @@
+{ "format": "stage-visuals/stage", "version": 1, "name": "Hex stage with runway",
+  "parts": [
+    { "type": "deck", "id": "deck", "shape": { "kind": "polygon", "sides": 6, "radius": 8 }, "height": 1.6 },
+    { "type": "deck", "id": "runway", "shape": { "kind": "rect", "width": 3, "depth": 8, "anchor": "center" }, "at": [0, 3.5], "height": 1.6 },
+    { "type": "led", "id": "floor", "floor": true, "on": "runway", "shape": { "kind": "rect", "width": 2.6, "depth": 7.6, "anchor": "center" }, "at": [0, 3.5] },
+    { "type": "riser", "id": "booth-riser", "shape": { "kind": "circle", "radius": 2.2 }, "at": [0, -8], "height": 0.8 },
+    { "type": "booth", "id": "booth", "on": "booth-riser", "at": [0, -7.6], "width": 2.6, "face": "led" },
+    { "type": "led", "id": "curve-wall", "on": "deck", "arc": { "center": [0, -4], "radius": 11, "from": 140, "to": 220 }, "bottom": 0.5, "height": 7, "shape": "arch" },
+    { "type": "scenic", "id": "portal", "kind": "arch", "at": [0, -1], "width": 14, "height": 11, "depth": 0.6, "material": "metal" },
+    { "type": "scenic", "id": "halo", "kind": "ring", "at": [0, -6], "radius": 3, "tube": 0.2, "centerHeight": 9, "led": true },
+    { "type": "scenic", "id": "col-l", "kind": "column", "at": [-6, -3], "radius": 0.35, "height": 6, "on": "deck", "material": "mirror" },
+    { "type": "scenic", "id": "col-r", "kind": "column", "at": [6, -3], "radius": 0.35, "height": 6, "on": "deck", "material": "mirror" },
+    { "type": "scenic", "id": "pyr", "kind": "pyramid", "at": [-10, -4], "width": 4, "height": 3, "steps": 4, "material": "concrete" },
+    { "type": "truss", "id": "front", "path": [[-8, 12, -2], [8, 12, -2]], "fixtures": { "type": "beam", "count": 10 } }
+  ] }

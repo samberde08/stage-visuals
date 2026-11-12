@@ -148,6 +148,21 @@ details .btn { margin: 0 10px 10px; }
 .lk-band input { width: 76px; font: 12px var(--mono); color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 3px; padding: 3px 5px; }
 @media (max-width: 760px) { .mixer { top: 8px; right: 8px; left: 8px; width: auto; max-height: calc(100% - 56px); } }
 /* Custom stage import */
+.design { display: grid; gap: 8px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.dz-label { font: 600 12px var(--body); color: var(--fg); }
+.design textarea { box-sizing: border-box; width: 100%; min-width: 0; resize: vertical; font: 13px/1.4 var(--body); color: var(--fg); background: var(--rack-2); border: 1px solid var(--line); border-radius: 4px; padding: 7px 8px; }
+#dzJson { font: 11.5px/1.45 var(--mono); margin: 0 0 8px; }
+.design details { border: 1px solid var(--line); border-radius: 4px; }
+.design details summary { padding: 7px 10px; font: 500 12px var(--mono); cursor: pointer; }
+.design details textarea { width: calc(100% - 20px); margin: 0 10px 8px; }
+.design details .btns { margin: 0 10px 10px; }
+.dz-photos { display: flex; flex-wrap: wrap; gap: 6px; }
+.dz-photos:empty { display: none; }
+.dz-photos figure { position: relative; margin: 0; width: 64px; height: 48px; border-radius: 3px; overflow: hidden; border: 1px solid var(--line); }
+.dz-photos img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dz-photos button { position: absolute; top: 1px; right: 1px; width: 18px; height: 18px; padding: 0; font: 12px/1 var(--mono); color: var(--fg); background: rgba(0,0,0,.7); border: 0; border-radius: 2px; cursor: pointer; }
+.btn.primary { background: var(--amber); color: var(--amber-ink); border-color: var(--amber); font-weight: 600; }
+.btn:disabled { opacity: .45; cursor: default; }
 .imports { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .imports li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 6px 8px; background: var(--rack-2); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
 .imports li[aria-current="true"] { border-color: var(--amber); }
@@ -234,8 +249,22 @@ details .btn { margin: 0 10px 10px; }
 
     <section class="group" id="customSec">
       <div class="eyebrow"><span>Custom stage</span><span id="customSum">none</span></div>
+      <div class="design" id="designBox">
+        <label for="dzPrompt" class="dz-label">Design with Claude</label>
+        <textarea id="dzPrompt" rows="3" spellcheck="true" placeholder="Describe a stage or a change. “Hexagon deck 14 m wide with a 4 m thrust and a curved LED wall behind the booth.” Or add photos of a real stage."></textarea>
+        <div class="dz-photos" id="dzPhotos"></div>
+        <div class="row two"><label for="dzMeasure">Known size</label><input type="text" id="dzMeasure" placeholder="e.g. the deck is 12 m wide"></div>
+        <div class="btns"><button type="button" class="btn" id="dzPhotoBtn">Add photos…</button><button type="button" class="btn primary" id="dzGo">Build</button></div>
+        <input type="file" id="dzFile" accept="image/jpeg,image/png,image/webp" multiple hidden>
+        <div class="btns"><button type="button" class="btn" id="dzNew">New stage</button><button type="button" class="btn" id="dzUndo" title="Cmd/Ctrl+Z">Undo</button><button type="button" class="btn" id="dzRedo" title="Shift+Cmd/Ctrl+Z">Redo</button></div>
+        <details id="dzJsonBox"><summary>Stage description (JSON)</summary>
+          <textarea id="dzJson" rows="12" spellcheck="false"></textarea>
+          <div class="btns"><button type="button" class="btn" id="dzApply">Apply</button><button type="button" class="btn" id="dzSave">Download</button></div>
+        </details>
+        <p class="note" id="dzNote" role="status"></p>
+      </div>
       <button type="button" class="btn" id="impBtn">Import a 3D stage or set…</button>
-      <input type="file" id="impFile" accept=".glb,.gltf,.obj,.mvr" multiple hidden>
+      <input type="file" id="impFile" accept=".glb,.gltf,.obj,.mvr,.json" multiple hidden>
       <p class="note">GLB, glTF, OBJ or MVR, or drop files on the view. It stays where you put it when you change venue, so any stage can go at any location. Surfaces named LED or screen play the wall content.</p>
       <ul class="imports" id="impList"></ul>
       <div id="impEdit" hidden>
@@ -248,7 +277,7 @@ details .btn { margin: 0 10px 10px; }
         <div class="btns" style="margin-top:6px"><button type="button" class="btn" id="impGround">Put on the ground</button><button type="button" class="btn" id="impCentre">Centre on stage</button></div>
       </div>
       <div class="row two"><label for="tplShow">Built-in stage</label><select id="tplShow"><option value="all">Show stage and rig</option><option value="rig">Hide stage, keep rig and lasers</option><option value="none">Hide stage, rig and lasers</option></select></div>
-      <label class="check" id="mvrRigRow" hidden><input type="checkbox" id="mvrRig" checked> Use the MVR file's fixtures as the rig</label>
+      <label class="check" id="mvrRigRow" hidden><input type="checkbox" id="mvrRig" checked> Use the custom stage's fixtures as the rig</label>
       <p class="note" id="impNote" role="status"></p>
     </section>
 
@@ -471,6 +500,7 @@ details .btn { margin: 0 10px 10px; }
 <script src="importer.js"></script>
 <script src="rig.js"></script>
 <script src="fx.js"></script>
+<script src="stagespec.js"></script>
 <script>
 (() => {
 const $ = (s) => document.querySelector(s);
@@ -1287,6 +1317,12 @@ function box(w, h, d, x, y, z, mat, recv) {
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
 function truss(name, a, b, s = 0.3, opts = {}) {
+  venue.add(trussMesh(a, b, s));
+  trussList.push({ name, from: a.toArray().map(r2), to: b.toArray().map(r2), section: s });
+  if (opts.hang) hangLines.push({ name, a: a.clone().add(V(0, -s / 2 - 0.02, 0)), b: b.clone().add(V(0, -s / 2 - 0.02, 0)), flip: true, yaw: opts.yaw || 0, radial: !!opts.radial });
+}
+// A box truss from a to b: four chords and zig-zag lacing, s metres square.
+function trussMesh(a, b, s = 0.3) {
   const g = new THREE.Group();
   const dir = new THREE.Vector3().subVectors(b, a);
   const len = dir.length(); dir.normalize();
@@ -1307,9 +1343,7 @@ function truss(name, a, b, s = 0.3, opts = {}) {
   g.add(new THREE.LineSegments(lg, M.lacing));
   g.position.copy(a);
   g.quaternion.setFromUnitVectors(V(1, 0, 0), dir);
-  venue.add(g);
-  trussList.push({ name, from: a.toArray().map(r2), to: b.toArray().map(r2), section: s });
-  if (opts.hang) hangLines.push({ name, a: a.clone().add(V(0, -s / 2 - 0.02, 0)), b: b.clone().add(V(0, -s / 2 - 0.02, 0)), flip: true, yaw: opts.yaw || 0, radial: !!opts.radial });
+  return g;
 }
 function floorLine(name, a, b) { hangLines.push({ name, a, b, flip: false, yaw: 0 }); }
 const r2 = (v) => Math.round(v * 100) / 100;
@@ -1456,10 +1490,21 @@ function finishCrowds(target) {
   // People keep at least 0.55 m apart, about 3.3 per square metre at the barrier, so a small area fills up and stops.
   const taken = new Set(), cell = 0.55;
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
+  // Nobody stands on a described stage's decks, or within 1.5 m of them (the barrier gap).
+  const keepOut = [];
+  custom.items.forEach((it) => {
+    if (it.kind !== 'stage' || !it.root.visible || !it.layout) return;
+    it.root.updateMatrixWorld(true);
+    it.layout.prisms.forEach((pr) => {
+      const w = pr.outline.map(([x, z]) => V(x, 0, z).applyMatrix4(it.root.matrixWorld));
+      keepOut.push([Math.min(...w.map((v) => v.x)) - 1.5, Math.max(...w.map((v) => v.x)) + 1.5, Math.min(...w.map((v) => v.z)) - 1.5, Math.max(...w.map((v) => v.z)) + 1.5]);
+    });
+  });
+  const blocked = (p) => keepOut.some(([x0, x1, z0, z1]) => p.x > x0 && p.x < x1 && p.z > z0 && p.z < z1);
   crowds.forEach((c) => {
     const goal = Math.round(Math.max(c.n, want * c.n / base)), pts = [];
     for (let i = 0; i < goal * 4 && pts.length < goal; i++) {
-      const p = c.fn(); if (!p) continue;
+      const p = c.fn(); if (!p || (keepOut.length && blocked(p))) continue;
       const key = `${Math.floor(p.x / cell)},${Math.floor(p.z / cell)},${Math.round(p.y / 2)}`;
       if (taken.has(key)) continue;
       taken.add(key); pts.push(p);
@@ -4134,7 +4179,9 @@ const saveCustomPrefs = () => { try { localStorage.setItem('stageCustom', JSON.s
 // ceilings, crowds and the ground reach past it, so they stay.
 function hideTemplate() {
   if (custom.tplShow === 'all') return;
-  const { W, D } = state, zone = new THREE.Box3(V(-W / 2 - 6, -0.5, -D - 8), V(W / 2 + 6, 80, 3)), b = new THREE.Box3();
+  // With a described stage in place the side screens and towers go too, so the zone reaches further out.
+  const wide = custom.items.some((it) => it.kind === 'stage' && it.root.visible) ? 14 : 6;
+  const { W, D } = state, zone = new THREE.Box3(V(-W / 2 - wide, -0.5, -D - 8), V(W / 2 + wide, 80, 3)), b = new THREE.Box3();
   const hidden = new Set();
   venue.children.forEach((o) => {
     if (o.isInstancedMesh || o.name === 'Scenery') return;
@@ -4153,6 +4200,11 @@ function customRig() {
   custom.items.forEach((it) => {
     if (!it.root.visible || !it.fixtures || !it.fixtures.length) return;
     it.root.updateMatrixWorld(true);
+    if (it.kind === 'stage') {
+      // A described stage's truss fixtures: hung under the truss, facing the audience.
+      it.fixtures.forEach((f) => specs.push({ pos: V(f.pos[0], f.pos[1] - 0.35, f.pos[2]).applyMatrix4(it.root.matrixWorld), flip: true, yaw: 0, truss: f.truss, patch: null }));
+      return;
+    }
     it.fixtures.forEach((f) => {
       fxM.fromArray(f.matrix).premultiply(it.root.matrixWorld);
       const p = SI.fixturePose(fxM.elements);
@@ -4225,14 +4277,138 @@ function addItem(it) {
   custom.items.push(it);
   prepItem(it);
 }
-const IMPORT_RE = /\.(glb|gltf|obj|mvr)$/i;
+/* ---------- Described stages (app/stagespec.js) ---------- */
+// A stage written as a description (by hand, from the Design panel or by Claude) becomes an import like a 3D file,
+// built here from the description's layout. Its JSON is the file that is kept between visits, so it can be edited,
+// undone, downloaded and loaded again.
+const SS = window.StageSpec;
+const SPEC_MATS = {};
+function specMat(name, color) {
+  const key = `${name}|${color || ''}`;
+  if (SPEC_MATS[key]) return SPEC_MATS[key];
+  const base = {
+    deck: M.deck, black: M.frame, metal: M.metal, wood: M.wood, concrete: M.concrete, fabric: M.fabric, rock: M.sandstone,
+    mirror: new THREE.MeshStandardMaterial({ color: 0xd8dce4, roughness: 0.06, metalness: 1 }),
+    white: new THREE.MeshStandardMaterial({ color: 0xd9d9d6, roughness: 0.7 }),
+  }[name] || M.frame;
+  let m = base;
+  if (color) { m = base.clone(); m.color = new THREE.Color(color); if (base.onBeforeCompile) { m.onBeforeCompile = base.onBeforeCompile; m.customProgramCacheKey = base.customProgramCacheKey; } }
+  return (SPEC_MATS[key] = m);
+}
+const ledName = (id) => `LED ${id}`;
+// A plan outline pushed up from y0 to y1. Shape space is (x, -z) so rotating it flat lands it at the plan's z.
+function specPrism(p) {
+  const shape = new THREE.Shape(p.outline.map(([x, z]) => new THREE.Vector2(x, -z)));
+  const h = Math.max(0.01, p.y1 - p.y0);
+  let geo;
+  if (p.apex) {
+    const xs = p.outline.map((q) => q[0]), zs = p.outline.map((q) => q[1]);
+    const w = Math.max(...xs) - Math.min(...xs), d = Math.max(...zs) - Math.min(...zs);
+    geo = new THREE.ConeGeometry(Math.SQRT1_2, h, 4, 1); geo.rotateY(Math.PI / 4); geo.scale(w, 1, d);
+    geo.translate((Math.max(...xs) + Math.min(...xs)) / 2, p.y0 + h / 2, (Math.max(...zs) + Math.min(...zs)) / 2);
+  } else {
+    geo = new THREE.ExtrudeGeometry(shape, { depth: h, bevelEnabled: false, curveSegments: 1 });
+    geo.rotateX(-Math.PI / 2); geo.translate(0, p.y0, 0);
+  }
+  const cap = p.led ? M.frame : specMat(p.material, p.color);
+  const side = p.material === 'deck' && p.skirt && h > 0.3 ? M.skirt : cap;
+  const mesh = new THREE.Mesh(geo, p.apex ? cap : [cap, side]);
+  mesh.name = p.led ? ledName(p.id) : p.id;
+  return mesh;
+}
+function specBox(o) {
+  const g = new THREE.Group();
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(...o.size), specMat(o.material, o.color));
+  mesh.name = o.id; g.add(mesh);
+  if (o.led === 'front') {
+    const [w, h, d] = o.size, face = new THREE.Mesh(new THREE.PlaneGeometry(Math.max(0.05, w - 0.04), Math.max(0.05, h - 0.04)), M.frame);
+    face.name = ledName(o.id); face.position.z = d / 2 + 0.006; g.add(face);
+  }
+  g.position.set(...o.center);
+  g.rotation.set(0, (o.yaw || 0) * DEG, (o.roll || 0) * DEG, 'YZX');
+  return g;
+}
+// A screen along a plan path, from y0 up to its profile: columns every half metre or so, UVs 0..1 over the whole.
+function specScreen(s) {
+  const cols = [];
+  for (let i = 0; i < s.path.length - 1; i++) {
+    const [ax, az] = s.path[i], [bx, bz] = s.path[i + 1], n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 0.5));
+    for (let k = i ? 1 : 0; k <= n; k++) cols.push([ax + (bx - ax) * k / n, az + (bz - az) * k / n]);
+  }
+  let total = 0; const dist = [0];
+  for (let i = 1; i < cols.length; i++) { total += Math.hypot(cols[i][0] - cols[i - 1][0], cols[i][1] - cols[i - 1][1]); dist.push(total); }
+  const H = s.y1 - s.y0, top = (u) => s.profile === 'arch' ? s.y0 + H * (0.55 + 0.45 * Math.sqrt(Math.max(0, 1 - (2 * u - 1) ** 2))) : s.profile === 'gable' ? s.y0 + H * (0.55 + 0.45 * (1 - Math.abs(2 * u - 1))) : s.y1;
+  const pos = [], uv = [], idx = [];
+  cols.forEach(([x, z], i) => {
+    const u = total ? dist[i] / total : 0, t = top(u);
+    pos.push(x, s.y0, z, x, t, z); uv.push(u, 0, u, (t - s.y0) / H);
+    if (i) { const a = (i - 1) * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+  });
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geo.setIndex(idx); geo.computeVertexNormals();
+  const g = new THREE.Group();
+  const face = new THREE.Mesh(geo, M.frame); face.name = ledName(s.id); face.material.side = THREE.FrontSide; g.add(face);
+  // A black back so the screen reads as a solid panel from behind.
+  const back = new THREE.Mesh(geo, specMat('black')); back.name = `${s.id} back`;
+  back.material = back.material.clone(); back.material.side = THREE.BackSide; g.add(back);
+  return g;
+}
+function specFloor(f) {
+  const geo = new THREE.ShapeGeometry(new THREE.Shape(f.outline.map(([x, z]) => new THREE.Vector2(x, -z))));
+  geo.rotateX(-Math.PI / 2); geo.translate(0, f.y, 0);
+  geo.computeBoundingBox();
+  const bb = geo.boundingBox, p = geo.attributes.position, uv = new Float32Array(p.count * 2);
+  for (let i = 0; i < p.count; i++) { uv[i * 2] = (p.getX(i) - bb.min.x) / Math.max(0.01, bb.max.x - bb.min.x); uv[i * 2 + 1] = (p.getZ(i) - bb.min.z) / Math.max(0.01, bb.max.z - bb.min.z); }
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  const m = new THREE.Mesh(geo, M.frame); m.name = ledName(f.id); return m;
+}
+// The whole description to a group in its own space (front line at z = 0).
+function buildSpecContent(spec) {
+  const lay = SS.layout(spec), g = new THREE.Group();
+  lay.prisms.forEach((p) => g.add(specPrism(p)));
+  lay.boxes.forEach((o) => g.add(specBox(o)));
+  lay.screens.forEach((s) => g.add(specScreen(s)));
+  lay.floors.forEach((f) => g.add(specFloor(f)));
+  lay.cylinders.forEach((c) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(c.radius, c.radius, c.height, 32), c.led ? M.frame : specMat(c.material, c.color)); m.name = c.led ? ledName(c.id) : c.id; m.position.set(...c.center); g.add(m); });
+  lay.tori.forEach((t) => {
+    const m = new THREE.Mesh(new THREE.TorusGeometry(t.radius, t.tube, 16, 96), t.led ? M.frame : specMat(t.material, t.color)); m.name = t.led ? ledName(t.id) : t.id;
+    if (t.facing === 'up') m.rotation.x = Math.PI / 2;
+    const h = new THREE.Group(); h.add(m); h.position.set(...t.center); h.rotation.y = (t.yaw || 0) * DEG; g.add(h);
+  });
+  lay.truss.forEach((t) => g.add(trussMesh(V(...t.from), V(...t.to), t.size)));
+  return { content: g, layout: lay };
+}
+const specFile = (spec) => new File([JSON.stringify(spec, null, 2)], `${(spec.name || 'stage').replace(/[^\w -]+/g, '').trim().replace(/\s+/g, '-').toLowerCase() || 'stage'}.stage.json`, { type: 'application/json' });
+// Swap a described stage's geometry for a new description, keeping where it stands.
+function setItemSpec(it, spec, opts = {}) {
+  const built = buildSpecContent(spec);
+  it.root.remove(it.content);
+  it.content.traverse((o) => { if (o.isMesh && o.geometry) o.geometry.dispose(); });
+  it.content = built.content; it.root.add(it.content);
+  it.spec = spec; it.layout = built.layout; it.name = spec.name || it.name; it.root.name = it.name;
+  it.fixtures = built.layout.fixtures; it.file = specFile(spec);
+  if (opts.history !== false) { it.history = (it.history || []).slice(0, (it.hpos ?? -1) + 1); it.history.push(spec); if (it.history.length > 60) it.history.shift(); it.hpos = it.history.length - 1; }
+  prepItem(it); setLed(it, it.led);
+  storeItem(it); renderImports(); renderDesign(); scheduleBuild(false);
+}
+const IMPORT_RE = /\.(glb|gltf|obj|mvr|json)$/i;
 async function importFile(file, saved) {
-  if (!IMPORT_RE.test(file.name)) { impNote(`${file.name}: use a GLB, glTF, OBJ or MVR file.`); return null; }
+  if (!IMPORT_RE.test(file.name)) { impNote(`${file.name}: use a GLB, glTF, OBJ or MVR file, or a stage description (.stage.json).`); return null; }
   impNote(`Loading ${file.name}…`);
   try {
     const buf = await file.arrayBuffer(), kind = file.name.split('.').pop().toLowerCase();
     const it = { id: saved ? saved.id : `i${Date.now().toString(36)}${custom.nextId++}`, name: file.name, kind, file, units: 'm', led: true, info: '' };
-    if (kind === 'mvr') {
+    if (kind === 'json') {
+      // A stage description: built from its parts, standing on the stage's front line.
+      const n = SS.normalize(new TextDecoder().decode(buf));
+      it.kind = 'stage'; it.spec = n.spec; it.name = n.spec.name;
+      const built = buildSpecContent(n.spec); it.content = built.content; it.layout = built.layout; it.fixtures = built.layout.fixtures;
+      it.history = [n.spec]; it.hpos = 0;
+      const d = SS.describe(n.spec);
+      it.info = `${n.spec.name}: ${d.summary}.${n.warnings.length ? ` Fixed: ${n.warnings.slice(0, 3).join('; ')}${n.warnings.length > 3 ? '…' : ''}.` : ''}`;
+      it.file = specFile(n.spec);
+    } else if (kind === 'mvr') {
       const r = await parseMvr(buf); it.content = r.content; it.fixtures = r.fixtures; it.info = r.info;
     } else {
       // Plain models: sit them on the floor, centred, and guess their units from their size.
@@ -4244,12 +4420,13 @@ async function importFile(file, saved) {
       wrap.scale.setScalar(SI.UNITS[it.units]);
       it.content = wrap; it.rawSize = sz;
     }
-    if (it.content.children.length === 0) throw new Error('nothing to show');
+    if (it.content.children.length === 0 && it.kind !== 'stage') throw new Error('nothing to show');
     if (saved) it.led = saved.led !== false;
     addItem(it);
     if (saved) {
       it.root.position.fromArray(saved.pos); it.root.quaternion.fromArray(saved.quat); it.root.scale.fromArray(saved.scale); it.root.visible = saved.visible !== false;
-    } else if (kind !== 'mvr') placeOnStage(it);
+    } else if (it.kind === 'stage') { putOnGround(it); if (custom.tplShow === 'all') { custom.tplShow = 'rig'; saveCustomPrefs(); } }
+    else if (kind !== 'mvr') placeOnStage(it);
     setLed(it, it.led);
     if (!saved) { storeItem(it); selectItem(it.id); }
     const s = new THREE.Box3().setFromObject(it.root).getSize(new THREE.Vector3());
@@ -4272,7 +4449,7 @@ const gBox = new THREE.Box3(), gC = new THREE.Vector3();
 // so a full stage build lands on the ground rather than on top of the template stage.
 function putOnGround(it) {
   it.root.updateMatrixWorld(true);
-  gBox.setFromObject(it.content); gBox.getCenter(gC);
+  gBox.setFromObject(it.content); if (gBox.isEmpty()) return; gBox.getCenter(gC);
   const g = camSet.pack ? packGroundY(camSet.pack, gC.x, gC.z) : null;
   it.root.position.y += (g ?? 0) - gBox.min.y;
 }
@@ -4284,7 +4461,7 @@ function selectItem(id) {
   const it = curItem();
   $('#impEdit').hidden = !it;
   if (custom.gizmo) { if (it && it.root.visible) custom.gizmo.attach(it.root); else custom.gizmo.detach(); }
-  syncItemInputs(); renderImports();
+  syncItemInputs(); renderImports(); if (typeof renderDesign === 'function') renderDesign();
 }
 const curItem = () => custom.items.find((x) => x.id === custom.sel) || null;
 function syncItemInputs() {
@@ -4293,7 +4470,7 @@ function syncItemInputs() {
   $('#impX').value = r.position.x.toFixed(2); $('#impY').value = r.position.y.toFixed(2); $('#impZ').value = (-r.position.z).toFixed(2);
   $('#impRot').value = rot; $('#impRot').nextElementSibling.textContent = `${rot}°`;
   $('#impScale').value = r.scale.x; $('#impScale').nextElementSibling.textContent = `×${r.scale.x.toFixed(2)}`;
-  $('#impUnitsRow').hidden = it.kind === 'mvr'; $('#impUnits').value = it.units;
+  $('#impUnitsRow').hidden = it.kind === 'mvr' || it.kind === 'stage'; $('#impUnits').value = it.units;
   $('#impLed').checked = it.led; $('#impLed').disabled = !it.leds.length;
   $('#impLed').parentElement.title = it.leds.length ? '' : 'No surfaces in this file are named LED or screen.';
 }
@@ -4351,7 +4528,7 @@ $('#impList').addEventListener('click', (e) => {
   if (e.target.dataset.act === 'del') {
     custom.group.remove(it.root); custom.items = custom.items.filter((x) => x !== it); dropItem(it.id);
     if (custom.sel === it.id) selectItem(null);
-    renderImports(); scheduleBuild(false); return;
+    renderImports(); renderDesign(); scheduleBuild(false); return;
   }
   if (e.target.dataset.act === 'vis') { it.root.visible = e.target.checked; storeItem(it); scheduleBuild(false); }
   selectItem(it.id);
@@ -4418,6 +4595,97 @@ function restoreImports() {
     if (recs && recs.length) impNote(`Restored ${recs.length} import${recs.length === 1 ? '' : 's'} from your last visit.`);
   }).catch(() => {});
 }
+/* Design with Claude */
+// Write or change a described stage in words, or from reference photos. The bridge (npm start) asks Claude and
+// returns a new description; every result is one step in the stage's undo history. The JSON stays editable by hand.
+const dz = { photos: [], busy: false };
+const designItem = () => { const s = curItem(); if (s && s.kind === 'stage') return s; for (let i = custom.items.length - 1; i >= 0; i--) if (custom.items[i].kind === 'stage') return custom.items[i]; return null; };
+function dzNote(t) { $('#dzNote').textContent = t || ''; }
+function renderDesign() {
+  const it = designItem();
+  $('#dzUndo').disabled = !it || !(it.hpos > 0);
+  $('#dzRedo').disabled = !it || !(it.history && it.hpos < it.history.length - 1);
+  $('#dzGo').disabled = dz.busy;
+  $('#dzGo').textContent = dz.busy ? 'Building…' : it ? 'Apply change' : 'Build';
+  if (document.activeElement !== $('#dzJson')) $('#dzJson').value = it ? JSON.stringify(it.spec, null, 2) : '';
+  $('#dzSave').disabled = !it;
+  $('#dzPhotos').innerHTML = dz.photos.map((p, i) => `<figure><img src="${p.url}" alt="${esc(p.name)}"><button type="button" data-i="${i}" aria-label="Remove ${esc(p.name)}">×</button></figure>`).join('');
+}
+// Photos are sent as JPEG no bigger than 1568 px on the long side, the size Claude reads best.
+function readPhoto(file) {
+  return new Promise((res, rej) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const k = Math.min(1, 1568 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      const data = c.toDataURL('image/jpeg', 0.86);
+      res({ name: file.name, url, media_type: 'image/jpeg', data: data.slice(data.indexOf(',') + 1) });
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error(`${file.name} is not an image this browser can read.`)); };
+    img.src = url;
+  });
+}
+async function addPhotos(files) {
+  for (const f of files) {
+    if (!/^image\//.test(f.type)) continue;
+    if (dz.photos.length >= 8) { dzNote('Up to 8 photos at a time.'); break; }
+    try { dz.photos.push(await readPhoto(f)); } catch (e) { dzNote(e.message); }
+  }
+  renderDesign();
+}
+async function applySpec(spec, note) {
+  const it = designItem();
+  if (it) setItemSpec(it, spec);
+  else { const made = await importFile(specFile(spec)); if (made) selectItem(made.id); }
+  dzNote(note || '');
+}
+async function runDesign() {
+  const prompt = $('#dzPrompt').value.trim(), measurement = $('#dzMeasure').value.trim();
+  if (!prompt && !dz.photos.length) { dzNote('Describe a stage or a change, or add photos first.'); return; }
+  if (!window.STAGE_BRIDGE) { dzNote('Design with Claude runs in the local app (npm start), which keeps your Claude key on your computer. Here you can still edit the stage description by hand.'); return; }
+  const it = designItem();
+  dz.busy = true; renderDesign(); dzNote(dz.photos.length ? 'Claude is reading the photos and laying out the stage. This can take a minute or two.' : 'Claude is working on the stage…');
+  try {
+    const r = await fetch('/api/design', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt, measurement, spec: it ? it.spec : null, images: dz.photos.map(({ media_type, data }) => ({ media_type, data })) }) });
+    const out = await r.json().catch(() => ({ error: `The bridge answered ${r.status}.` }));
+    if (!r.ok || !out.spec) throw new Error(out.error || 'Design failed.');
+    await applySpec(out.spec, `${out.summary || 'Done.'}${out.warnings && out.warnings.length ? ` (Fixed: ${out.warnings.slice(0, 2).join('; ')}.)` : ''} Undo goes back a step.`);
+    $('#dzPrompt').value = '';
+  } catch (e) { dzNote(e.message || 'Design failed.'); }
+  dz.busy = false; renderDesign();
+}
+function stepHistory(d) {
+  const it = designItem(); if (!it || !it.history) return;
+  const p = it.hpos + d; if (p < 0 || p >= it.history.length) return;
+  it.hpos = p; setItemSpec(it, it.history[p], { history: false });
+  dzNote(d < 0 ? 'Undone.' : 'Redone.');
+}
+$('#dzGo').addEventListener('click', runDesign);
+$('#dzPrompt').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); runDesign(); } });
+$('#dzPhotoBtn').addEventListener('click', () => $('#dzFile').click());
+$('#dzFile').addEventListener('change', (e) => { addPhotos([...(e.target.files || [])]); e.target.value = ''; });
+$('#dzPhotos').addEventListener('click', (e) => { const i = e.target.dataset && e.target.dataset.i; if (i == null) return; URL.revokeObjectURL(dz.photos[i].url); dz.photos.splice(+i, 1); renderDesign(); });
+$('#dzNew').addEventListener('click', async () => { const made = await importFile(specFile(SS.starter())); if (made) { selectItem(made.id); dzNote('A starter stage: change it in words, with the handles, or in the JSON.'); } });
+$('#dzUndo').addEventListener('click', () => stepHistory(-1));
+$('#dzRedo').addEventListener('click', () => stepHistory(1));
+$('#dzApply').addEventListener('click', async () => {
+  try { const n = SS.normalize($('#dzJson').value); await applySpec(n.spec, n.warnings.length ? `Applied. Fixed: ${n.warnings.slice(0, 3).join('; ')}.` : 'Applied.'); }
+  catch (e) { dzNote(e.message); }
+});
+$('#dzSave').addEventListener('click', () => {
+  const it = designItem(); if (!it) return;
+  const a = document.createElement('a'), f = specFile(it.spec); a.href = URL.createObjectURL(f); a.download = f.name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+});
+addEventListener('keydown', (e) => {
+  if (typing(document.activeElement) || !(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z' || !designItem()) return;
+  e.preventDefault(); stepHistory(e.shiftKey ? 1 : -1);
+});
+// Photos dropped on the Design box go to Claude, not to the importer.
+$('#designBox').addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); });
+$('#designBox').addEventListener('drop', (e) => { e.preventDefault(); e.stopPropagation(); addPhotos([...(e.dataTransfer.files || [])]); });
+renderDesign();
 renderImports();
 
 /* ---------- Rig builder ---------- */
@@ -4926,6 +5194,13 @@ function updateReadouts() {
   $('#hudTitle').textContent = s.venueMeta && s.venueMeta.id ? s.venueMeta.name : NAMES[s.tpl];
   const px = (m) => Math.round(m * 1000 / s.pitch);
   const nScreens = screens.length;
+  // A visible described stage takes over the readout: its name and its own size.
+  const stg = custom.items.find((it) => it.kind === 'stage' && it.root.visible);
+  if (stg) {
+    const b = SS.bounds(stg.layout), place = s.venueMeta && s.venueMeta.id ? ` at ${s.venueMeta.name}` : '';
+    $('#hudTitle').textContent = `${stg.name}${place}`;
+    $('#hudSpec').textContent = `${b.width.toFixed(1)} × ${b.depth.toFixed(1)} m stage · ${b.maxY.toFixed(1)} m tall · ${stg.spec.parts.length} parts · ${fixtures.length} fixtures · ${nScreens + stg.leds.length} LED surface${nScreens + stg.leds.length === 1 ? '' : 's'} · ${peopleCount().toLocaleString()} people`;
+  } else
   $('#hudSpec').textContent = `${s.W.toFixed(1)} × ${s.D.toFixed(1)} m deck · ${s.H.toFixed(1)} m high · trim ${(s.H + s.trim).toFixed(1)} m AFF · ${fixtures.length} fixtures · ${nScreens} LED surface${nScreens === 1 ? '' : 's'} · ${peopleCount().toLocaleString()} people`;
   $('#wallOut').textContent = `${s.wallW.toFixed(1)} × ${s.wallH.toFixed(1)} m · ${px(s.wallW)} × ${px(s.wallH)} px · ${Math.round(s.wallW / 0.5) * Math.round(s.wallH / 0.5)} cabinets (500 mm)`;
   $('#pitchOut').textContent = `${s.pitch} mm pitch`;
