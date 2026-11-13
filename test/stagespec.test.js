@@ -232,3 +232,8 @@ test('the hay bale ring example: one spiral wall, a standing floor, its own fog 
   const kinds = new Set(lay.fixtures.map((f) => f.type));
   ['par', 'beam', 'fog', 'laser', 'spark'].forEach((k) => assert.ok(kinds.has(k), k));
 });
+
+test('app/examples.js is up to date with examples/ (run node tools/build-examples.js)', () => {
+  const fs = require('fs'), path = require('path');
+  assert.strictEqual(fs.readFileSync(path.join(__dirname, '..', 'app', 'examples.js'), 'utf8'), require('../tools/build-examples').bundle());
+});

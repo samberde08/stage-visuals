@@ -256,6 +256,7 @@ details .btn { margin: 0 10px 10px; }
         <div class="row two"><label for="dzMeasure">Known size</label><input type="text" id="dzMeasure" placeholder="e.g. the deck is 12 m wide"></div>
         <div class="btns"><button type="button" class="btn" id="dzPhotoBtn">Add photos…</button><button type="button" class="btn primary" id="dzGo">Build</button></div>
         <input type="file" id="dzFile" accept="image/jpeg,image/png,image/webp" multiple hidden>
+        <div class="row two"><label for="dzExample">Start from</label><select id="dzExample"><option value="">An example stage…</option></select></div>
         <div class="btns"><button type="button" class="btn" id="dzNew">New stage</button><button type="button" class="btn" id="dzUndo" title="Cmd/Ctrl+Z">Undo</button><button type="button" class="btn" id="dzRedo" title="Shift+Cmd/Ctrl+Z">Redo</button></div>
         <details id="dzJsonBox"><summary>Stage description (JSON)</summary>
           <textarea id="dzJson" rows="12" spellcheck="false"></textarea>
@@ -501,6 +502,7 @@ details .btn { margin: 0 10px 10px; }
 <script src="rig.js"></script>
 <script src="fx.js"></script>
 <script src="stagespec.js"></script>
+<script src="examples.js"></script>
 <script>
 (() => {
 const $ = (s) => document.querySelector(s);
@@ -4643,7 +4645,7 @@ function restoreImports() {
       await importFile(file, rec);
     }
     if (recs && recs.length) impNote(`Restored ${recs.length} import${recs.length === 1 ? '' : 's'} from your last visit.`);
-  }).catch(() => {});
+  }).catch(() => {}).then(() => { if (window.stageRestored) window.stageRestored(); });
 }
 /* Audience areas in a described stage replace the template's crowd: chairs in rows, or a standing area. */
 const CHAIR_SEAT = new THREE.BoxGeometry(0.46, 0.06, 0.44); CHAIR_SEAT.translate(0, 0.44, 0);
@@ -4761,6 +4763,21 @@ $('#dzPrompt').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.
 $('#dzPhotoBtn').addEventListener('click', () => $('#dzFile').click());
 $('#dzFile').addEventListener('change', (e) => { addPhotos([...(e.target.files || [])]); e.target.value = ''; });
 $('#dzPhotos').addEventListener('click', (e) => { const i = e.target.dataset && e.target.dataset.i; if (i == null) return; URL.revokeObjectURL(dz.photos[i].url); dz.photos.splice(+i, 1); renderDesign(); });
+// Example stages ship with the page (app/examples.js). #stage=<id> in the address opens one.
+const EXAMPLES = window.StageExamples || {};
+$('#dzExample').innerHTML += Object.entries(EXAMPLES).map(([id, e]) => `<option value="${esc(id)}">${esc(e.name || id)}</option>`).join('');
+$('#dzExample').closest('.row').hidden = !Object.keys(EXAMPLES).length;
+async function openExample(id) {
+  const ex = EXAMPLES[id]; if (!ex) return;
+  const made = await importFile(new File([JSON.stringify(ex, null, 2)], `${id}.stage.json`, { type: 'application/json' }));
+  if (made) { selectItem(made.id); dzNote(`${ex.name || id}: change it in words, with the handles, or in the JSON.`); }
+}
+$('#dzExample').addEventListener('change', async (e) => { const id = e.target.value; e.target.value = ''; await openExample(id); });
+{
+  const m = location.hash.match(/stage=([\w-]+)/);
+  // After last visit's imports are back, so the same stage is not opened twice.
+  if (m && EXAMPLES[m[1]]) window.stageRestored = () => { if (!custom.items.some((it) => it.name === EXAMPLES[m[1]].name)) openExample(m[1]); };
+}
 $('#dzNew').addEventListener('click', async () => { const made = await importFile(specFile(SS.starter())); if (made) { selectItem(made.id); dzNote('A starter stage: change it in words, with the handles, or in the JSON.'); } });
 $('#dzUndo').addEventListener('click', () => stepHistory(-1));
 $('#dzRedo').addEventListener('click', () => stepHistory(1));
