@@ -3318,8 +3318,11 @@ function build() {
   hideTemplate();
   // Your rig can hold lights, lasers and effects. Lasers and effects fall back to the built-in ones when it has none.
   const mine = rigb.use ? rigSpecs() : null, mineOf = (f) => mine && mine.filter(f);
-  const mineLasers = mineOf((s) => s.def.fx === 'laser'), mineFx = mineOf((s) => s.def.fx && s.def.fx !== 'laser');
-  (customRig() || mineOf((s) => !s.def.fx) || (custom.tplShow === 'none' ? [] : distribute(state.count))).forEach((s, i) => fixtures.push(makeFixture(s, i)));
+  // A described stage's own lasers and effects join (or stand in for) the rig's.
+  const cr = customRig(), crOf = (f) => (cr ? cr.filter(f) : []);
+  const crLights = crOf((s) => !s.def || !s.def.fx), crLasers = crOf((s) => s.def && s.def.fx === 'laser'), crFx = crOf((s) => s.def && s.def.fx && s.def.fx !== 'laser');
+  const mineLasers = [...(mineOf((s) => s.def.fx === 'laser') || []), ...crLasers], mineFx = [...(mineOf((s) => s.def.fx && s.def.fx !== 'laser') || []), ...crFx];
+  ((cr && crLights.length ? crLights : null) || mineOf((s) => !s.def.fx) || (custom.tplShow === 'none' ? [] : distribute(state.count))).forEach((s, i) => fixtures.push(makeFixture(s, i)));
   // Patch: your rig and MVR files carry addresses; anything without one follows on consecutively.
   let nextAt = 0;
   fixtures.forEach((f) => {
@@ -4404,8 +4407,27 @@ function buildSpecContent(spec) {
 }
 const specFile = (spec) => new File([JSON.stringify(spec, null, 2)], `${(spec.name || 'stage').replace(/[^\w -]+/g, '').trim().replace(/\s+/g, '-').toLowerCase() || 'stage'}.stage.json`, { type: 'application/json' });
 // Swap a described stage's geometry for a new description, keeping where it stands.
+// A stage's own look (haze, colours, program, lasers, fog, time), set when the stage arrives or its look changes.
+// Everything stays adjustable in the panels afterwards.
+function applyStageLook(it) {
+  const L = it.spec && it.spec.look, key = JSON.stringify(L || null);
+  if (!L || it.lookKey === key) return;
+  it.lookKey = key;
+  if (L.haze != null) state.haze = L.haze;
+  if (L.colors) { [state.colA, state.colB] = L.colors; $('#colA').value = state.colA; $('#colB').value = state.colB; }
+  if (L.program && $(`#program option[value="${L.program}"]`)) state.program = L.program;
+  if (L.lasers && FXL.LASER_IDS.includes(L.lasers)) state.lasers = L.lasers;
+  if (L.laserColors) {
+    [state.laserCol, state.laserColB] = L.laserColors; state.laserColMode = L.laserColors[0] === L.laserColors[1] ? 'one' : 'lasers';
+    $('#laserCol').value = state.laserCol; $('#laserColB').value = state.laserColB; $('#laserColMode').value = state.laserColMode; saveFxPrefs();
+  }
+  if (L.time != null) state.tod = L.time;
+  if (L.fog === true) fxs.latch.add('fog'); else if (L.fog === false) fxs.latch.delete('fog');
+  syncInputs(); updateLook();
+}
 // A described stage replaces the built-in deck. When it brings its own lights it replaces the built-in rig and lasers too.
 function stageTemplate(it) {
+  applyStageLook(it);
   const want = it.fixtures && it.fixtures.length ? 'none' : 'rig';
   if (custom.tplShow === 'all' || (want === 'none' && custom.tplShow === 'rig')) { custom.tplShow = want; saveCustomPrefs(); const sel = $('#tplShow'); if (sel) sel.value = want; }
 }
@@ -4647,9 +4669,12 @@ function stageAudience() {
   areas.forEach(([it, a]) => {
     const W = it.root.matrixWorld, toW = (x, y, z) => V(x, y, z).applyMatrix4(W);
     if (a.standing) {
+      // Everyone faces the stage: the facing point given, else the middle of the first deck.
+      const deck = it.layout.prisms[0], mid = (o) => [o.reduce((s, q) => s + q[0], 0) / o.length, o.reduce((s, q) => s + q[1], 0) / o.length];
+      const look = a.facing || (deck ? mid(deck.outline) : [0, -3]);
       const xs = a.outline.map((p) => p[0]), zs = a.outline.map((p) => p[1]);
       const x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
-      crowd(Math.max(1, a.capacity), () => { for (let t = 0; t < 8; t++) { const x = x0 + Math.random() * (x1 - x0), z = z0 + Math.random() * (z1 - z0); if (SS.inside([x, z], a.outline)) return toW(x, a.y, z); } return null; });
+      crowd(Math.max(1, a.capacity), () => { for (let t = 0; t < 8; t++) { const x = x0 + Math.random() * (x1 - x0), z = z0 + Math.random() * (z1 - z0); if (SS.inside([x, z], a.outline)) return toW(x, a.y, z); } return null; }, toW(look[0], 1, look[1]));
       return;
     }
     // Chairs: one instanced mesh per part of the chair, then people sitting in them.

@@ -30,11 +30,19 @@
  *                     speaker stacks. diameter (1.5), height of one piece (1.2), stack (pieces high, 1), spacing
  *                     (centre to centre; default the diameter, so they touch) or count. fixtures { type, every (1),
  *                     side ('inside' | 'outside' for arcs, 'left' | 'right' for paths), inset, aim } puts floor
- *                     lights at their feet, aimed up the face.
+ *                     lights at their feet, aimed up the face; with top: true they stand on top of the stack instead,
+ *                     facing that side, aim tilting them from straight up. fixtures can be a list of such blocks.
  *           led: true makes its front an LED surface.
  *   audience  where the crowd goes: shape or outline; seating 'standing' (density per m², 2) or 'chairs' (rows
  *           curved round facing [x, z], rowPitch 0.95, seatPitch 0.6, aisle: width of a centre aisle, occupancy 0..1).
  *           With any audience part the template's own crowd is replaced.
+ *   fixtures  lights, lasers or effects standing on their own: fixture (a type from app/rig.js: spot, beam, wash, par,
+ *           strobe, laser, fog, smoke, spark, flame, co2, confetti...), points [[x, z], ...] or arc { center,
+ *           radius, from, to, count }, height (m above its base), toward [x, z] (face that point) or yaw (deg),
+ *           aim (deg of tilt; for fog the nozzle points along the floor).
+ * Optional look, applied when the stage is loaded: { haze 0..1, colors [a, b] (#rrggbb), program (fan | wave |
+ * ballyhoo | ...), lasers (a laser pattern: fan, sweep, scan, tunnel, sheet, wave, chase, cross, burst, off),
+ * laserColors [a, b], fog (true starts the low fog), time (hour 0..24) }.
  *   Shapes (plan outlines, centred on at unless noted):
  *     { kind: 'rect', width, depth, anchor?: 'front' | 'center' }   anchor front puts the front edge at z = 0 (default
  *                                                                  for decks: the stage's front line)
@@ -52,7 +60,7 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
   const FORMAT = 'stage-visuals/stage';
-  const TYPES = ['deck', 'riser', 'steps', 'booth', 'led', 'truss', 'scenic', 'audience'];
+  const TYPES = ['deck', 'riser', 'steps', 'booth', 'led', 'truss', 'scenic', 'audience', 'fixtures'];
   const SCENIC = ['panel', 'column', 'arch', 'ring', 'pyramid', 'extrude', 'colonnade'];
   const MATERIALS = ['deck', 'black', 'metal', 'mirror', 'wood', 'concrete', 'white', 'fabric', 'rock', 'hay', 'led'];
   const MAX_PARTS = 400, MAX_SIZE = 400;
@@ -166,7 +174,22 @@
     });
     const byId = Object.fromEntries(parts.map((p) => [p.id, p]));
     parts.forEach((p) => { const seen = new Set([p.id]); for (let q = p; q.on; q = byId[q.on]) { if (seen.has(q.on)) { warnings.push(`${p.id}: "on" loops, cut`); delete q.on; break; } seen.add(q.on); } });
-    return { spec: { format: FORMAT, version: 1, name: String(src.name || 'Custom stage').slice(0, 80), notes: src.notes ? String(src.notes).slice(0, 2000) : undefined, parts }, warnings };
+    const look = normLook(src.look, warnings);
+    return { spec: { format: FORMAT, version: 1, name: String(src.name || 'Custom stage').slice(0, 80), notes: src.notes ? String(src.notes).slice(0, 2000) : undefined, look, parts }, warnings };
+  }
+  // The scene settings a stage asks for. Anything unreadable is left out with a note.
+  function normLook(l, warnings) {
+    if (!l || typeof l !== 'object') return undefined;
+    const hex = (c) => typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c);
+    const pair = (v, k) => { if (v == null) return undefined; const a = (Array.isArray(v) ? v : [v]).filter(hex).slice(0, 2); if (!a.length) { warnings.push(`look: ${k} must be #rrggbb colours`); return undefined; } return a.length === 1 ? [a[0], a[0]] : a; };
+    const word = (v) => (typeof v === 'string' && /^[a-z]{2,16}$/.test(v) ? v : undefined);
+    const out = {
+      haze: typeof l.haze === 'number' ? clamp(l.haze, 0, 1) : undefined,
+      colors: pair(l.colors, 'colors'), program: word(l.program), lasers: word(l.lasers), laserColors: pair(l.laserColors, 'laserColors'),
+      fog: typeof l.fog === 'boolean' ? l.fog : undefined, time: typeof l.time === 'number' ? clamp(l.time, 0, 24) : undefined,
+    };
+    Object.keys(out).forEach((k) => out[k] === undefined && delete out[k]);
+    return Object.keys(out).length ? out : undefined;
   }
 
   /* ---------- Layout: the geometry to draw ---------- */
@@ -250,6 +273,7 @@
         }
       } else if (p.type === 'scenic') scenic(p, base, out);
       else if (p.type === 'audience') audience(p, base, out);
+      else if (p.type === 'fixtures') standalone(p, base, out);
     }
     return out;
   }
@@ -332,11 +356,12 @@
     pts.forEach(([x, z], i) => {
       for (let k = 0; k < stack; k++) out.cylinders.push({ id: `${p.id}#${i}.${k}`, center: [r4(x), r4(base + h * k + h / 2), r4(z)], radius: r4(dia / 2 - 0.01), height: r4(h - 0.02), material: m, color: p.color, led });
     });
-    const f = p.fixtures;
+    (Array.isArray(p.fixtures) ? p.fixtures : [p.fixtures]).forEach((f) => {
     if (!f || typeof f !== 'object' || !f.type) return;
     const every = clamp(Math.round(num(f.every, 1)), 1, 100), inset = num(f.inset, 0.4), side = f.side || (center ? 'inside' : 'left');
+    const offset = clamp(Math.round(num(f.offset, 0)), 0, every - 1);
     pts.forEach(([x, z], i) => {
-      if (i % every) return;
+      if ((i - offset) % every) return;
       // Which way is "inside" here: toward the arc's centre, or to the left or right of the path.
       let nx, nz;
       if (center) { nx = center[0] - x; nz = center[1] - z; if (side === 'outside') { nx = -nx; nz = -nz; } }
@@ -346,8 +371,30 @@
         [nx, nz] = side === 'right' ? [-tz, tx] : [tz, -tx];
       }
       const l = Math.hypot(nx, nz) || 1; nx /= l; nz /= l;
+      if (f.top) {
+        out.fixtures.push({ type: String(f.type), pos: [r4(x), r4(base + h * stack), r4(z)], mount: 'floor', yaw: r4(Math.atan2(nx, nz) / DEG), aim: num(f.aim, 0), truss: p.id });
+        return;
+      }
       const d = dia / 2 + inset, fx = x + nx * d, fz = z + nz * d;
       out.fixtures.push({ type: String(f.type), pos: [r4(fx), r4(base), r4(fz)], mount: 'floor', yaw: r4(Math.atan2(x - fx, z - fz) / DEG), aim: num(f.aim, 12), truss: p.id });
+    });
+    });
+  }
+  // Lights, lasers and effects placed on their own, on the floor or on what they stand on.
+  function standalone(p, base, out) {
+    let pts = Array.isArray(p.points) ? p.points.map(pt2).filter(Boolean) : [];
+    if (!pts.length && p.arc && typeof p.arc === 'object') {
+      const c = pt2(p.arc.center) || [0, 0], n = clamp(Math.round(num(p.arc.count, 4)), 1, 200);
+      const a0 = num(p.arc.from, 0), a1 = num(p.arc.to, 360), full = Math.abs(Math.abs(a1 - a0) - 360) < 1e-6;
+      pts = n === 1 ? arcPoints(c[0], c[1], size(p.arc.radius, 8), a0, a0, 2).slice(0, 1) : arcPoints(c[0], c[1], size(p.arc.radius, 8), a0, full ? a1 - (a1 - a0) / n : a1, n);
+    }
+    if (!pts.length && pt2(p.at)) pts = [[0, 0]];
+    if (!pts.length) { out.warnings.push(`${p.id}: fixtures need points, an arc or at`); return; }
+    pts = place(pts, p.at, p.rotate);
+    const type = String(p.fixture || p.kind || 'spot'), y = base + num(p.height, 0), to = pt2(p.toward);
+    pts.forEach(([x, z]) => {
+      const yaw = to ? Math.atan2(to[0] - x, to[1] - z) / DEG : num(p.yaw, 180);
+      out.fixtures.push({ type, pos: [r4(x), r4(y), r4(z)], mount: 'floor', yaw: r4(yaw), aim: num(p.aim, 0), truss: p.id });
     });
   }
   // n points from the first point of a polyline to the last, evenly spaced.
@@ -371,7 +418,7 @@
     const a = Math.abs(area(ol));
     if (p.seating !== 'chairs') {
       const density = clamp(num(p.density, 2), 0.1, 4);
-      out.audience.push({ id: p.id, outline: ol, y: r4(base), standing: true, area: r4(a), capacity: Math.round(a * density), seats: [] });
+      out.audience.push({ id: p.id, outline: ol, y: r4(base), standing: true, area: r4(a), capacity: Math.round(a * density), seats: [], facing: pt2(p.facing) || undefined });
       return;
     }
     const f = pt2(p.facing) || [0, -2], rowP = clamp(num(p.rowPitch, 0.95), 0.6, 3), seatP = clamp(num(p.seatPitch, 0.6), 0.4, 3);
@@ -469,13 +516,15 @@
   const GUIDE = [
     'Write a stage-visuals/stage JSON object: { "format": "stage-visuals/stage", "version": 1, "name": "...", "parts": [...] }.',
     'Units are metres. Plan points are [x, z]: x to the audience\'s right, z toward the audience. The stage front line is z = 0 and the stage sits at z < 0. Truss points are [x, y, z] with y the height above the floor.',
-    'Part types: deck, riser, steps, booth, led, truss, scenic (kinds panel, column, arch, ring, pyramid, extrude).',
+    'Part types: deck, riser, steps, booth, led, truss, scenic (kinds panel, column, arch, ring, pyramid, extrude, colonnade), audience, fixtures.',
     'Decks take shape { kind: rect | polygon | circle | trapezoid | rounded | annulus | thrust, ... } or outline [[x, z], ...], and height. A rect deck\'s front edge sits on z = 0 unless anchor is "center".',
     'Risers, booths, LED and scenic pieces take on: "<deck or riser id>" to stand on it, at: [x, z], rotate (degrees, 0 faces the audience).',
     'LED walls: width + at, or path [[x, z], ...], or arc { center, radius, from, to } (angles: 0 = toward the audience, 180 = upstage), with bottom and height; shape rect | arch | gable. They face the audience (facing: "back" turns one round). LED floor: floor: true with a shape.',
     'Truss: path of [x, y, z], size, closed, and fixtures { type: spot | beam | wash | blinder | strobe | bar | par | laser, count }.',
     'Rows of round things (hay bales, pillars, barrels): scenic kind colonnade along arc { center, radius, from, to } or path, with diameter, height per piece and stack; fixtures { type, every, side, aim } for uplights at their feet.',
     'Audience: type audience with a shape or outline, seating "standing" (density) or "chairs" (facing [x, z], aisle width, rowPitch, seatPitch). Include one whenever the venue has a defined crowd area.',
+    'Lights and effects on their own: type fixtures with fixture (spot, beam, wash, par, strobe, laser, fog, smoke, spark, flame, co2, confetti), points [[x, z], ...] or arc { center, radius, from, to, count }, height, toward [x, z], aim. Colonnade fixtures with top: true stand on top of the stack; fixtures can be a list.',
+    'Optional "look" for the scene: { haze 0..1, colors ["#rrggbb", "#rrggbb"], program, lasers (fan | sweep | scan | tunnel | sheet | wave | chase | cross | burst | off), laserColors, fog (true starts low fog), time (hour) }.',
     'Materials: deck, black, metal, mirror, wood, concrete, white, fabric, rock, hay, led. color "#rrggbb" tints.',
     'Give every part a short readable id. Keep sizes real: decks 0.6 to 2.5 m high, LED walls up to 40 m wide, truss trims 6 to 20 m.',
     'From photos: work out the plan shape first (look for the deck edge and its corners), then heights against a person (1.75 m) or a known measurement, then LED surfaces and scenic pieces, then truss. Say in notes what was estimated.',

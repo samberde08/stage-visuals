@@ -186,3 +186,46 @@ test('audience: standing areas get a capacity, chair blocks keep the centre aisl
   assert.ok(chairs.seats.every(([x]) => Math.abs(x) > 0.7), 'nobody sits in the aisle');
   assert.ok(chairs.seats.every(([x, z]) => S.inside([x, z], chairs.outline)));
 });
+
+test('fixtures parts: lasers, fog and effects stand where asked and face their target', () => {
+  const lay = S.layout({ parts: [
+    { type: 'deck', id: 'stage', shape: { kind: 'rect', width: 6, depth: 3 }, height: 0.5 },
+    { type: 'fixtures', id: 'fog', fixture: 'fog', on: 'stage', points: [[-2, -1], [2, -1]], toward: [0, 8] },
+    { type: 'fixtures', id: 'ring', fixture: 'beam', arc: { center: [0, 5], radius: 6, from: 0, to: 360, count: 6 }, height: 2 },
+  ] });
+  const fog = lay.fixtures.filter((f) => f.truss === 'fog');
+  assert.strictEqual(fog.length, 2);
+  assert.ok(fog.every((f) => f.type === 'fog' && f.pos[1] === 0.5 && f.mount === 'floor'));
+  near(fog[0].yaw, Math.atan2(2, 9) / (Math.PI / 180));
+  const ring = lay.fixtures.filter((f) => f.truss === 'ring');
+  assert.strictEqual(ring.length, 6, 'a full circle does not double its first point');
+  assert.ok(ring.every((f) => f.pos[1] === 2));
+});
+
+test('colonnade fixtures: a list of blocks, some on top of the stack', () => {
+  const lay = S.layout({ parts: [{ type: 'scenic', kind: 'colonnade', id: 'c', arc: { center: [0, 6], radius: 10, from: 0, to: 90 }, stack: 2, height: 1.2,
+    fixtures: [{ type: 'par', every: 1 }, { type: 'beam', top: true, every: 3, offset: 1 }] }] });
+  const tops = lay.fixtures.filter((f) => f.type === 'beam'), pars = lay.fixtures.filter((f) => f.type === 'par');
+  assert.ok(pars.length > tops.length && tops.length > 0);
+  assert.ok(tops.every((f) => Math.abs(f.pos[1] - 2.4) < 1e-6 && Math.abs(Math.hypot(f.pos[0], f.pos[2] - 6) - 10) < 1e-3));
+});
+
+test('look: kept when readable, bad values dropped with a note', () => {
+  const { spec, warnings } = S.normalize({ look: { haze: 2, colors: ['#ff0000'], program: 'wave', lasers: 'sheet', fog: true, time: 22, laserColors: 'red' }, parts: [] });
+  assert.deepStrictEqual(spec.look, { haze: 1, colors: ['#ff0000', '#ff0000'], program: 'wave', lasers: 'sheet', fog: true, time: 22 });
+  assert.ok(warnings.some((w) => /laserColors/.test(w)));
+  assert.strictEqual(S.normalize({ parts: [] }).spec.look, undefined);
+});
+
+test('the hay bale ring example: one round wall, a standing floor, its own fog and lasers', () => {
+  const ex = require('../examples/hay-bale-ring.stage.json');
+  const { spec, warnings } = S.normalize(ex); const lay = S.layout(spec);
+  assert.deepStrictEqual(warnings, []); assert.deepStrictEqual(lay.warnings, []);
+  // Every bale but the few that hook inward sits on the 10.5 m circle, so the ring stays round.
+  const r = lay.cylinders.filter((c) => c.id.startsWith('bale-ring') && c.id.endsWith('.0')).map((c) => Math.hypot(c.center[0], c.center[2] - 6));
+  assert.ok(r.filter((v) => Math.abs(v - 10.5) < 0.01).length >= 40);
+  assert.ok(r.filter((v) => v < 10.49 && v > 7.65).length <= 2, 'the hook into the curl is short');
+  assert.ok(lay.audience.every((a) => a.standing));
+  const kinds = new Set(lay.fixtures.map((f) => f.type));
+  ['par', 'beam', 'fog', 'laser', 'spark'].forEach((k) => assert.ok(kinds.has(k), k));
+});
