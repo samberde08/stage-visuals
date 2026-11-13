@@ -12,6 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const { parseSacn, parseArtnet, sacnMulticastGroup, Merger, SACN_PORT, ARTNET_PORT } = require('./dmx');
 const ws = require('./ws');
+const designApi = require('./design');
 
 function parseArgs(argv) {
   const opts = { port: 8080, host: '127.0.0.1', universes: [1, 2, 3, 4], iface: undefined, artnetOffset: 1, artnet: true, quiet: false };
@@ -98,7 +99,9 @@ function start(opts) {
 
   const server = http.createServer((req, res) => {
     const url = req.url.split('?')[0];
-    if (url === '/' || url === '/index.html') {
+    if (url === '/api/design' && req.method === 'POST') {
+      designApi.handle(req, res);
+    } else if (url === '/' || url === '/index.html') {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
       res.end(renderPage());
     } else if (/^\/[\w-]+\.js$/.test(url) && fs.existsSync(path.join(APP_DIR, url.slice(1)))) {

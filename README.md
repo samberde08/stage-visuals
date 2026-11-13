@@ -28,7 +28,15 @@ With no music playing, the links react to a built-in beat at the Tempo slider, s
 
 The analysis lives in `app/audio.js`, which has no browser dependencies and is covered by `test/audio.test.js`. Kicks, snares and hats are found by spectral flux against an adaptive threshold. Tempo is a comb over kick intervals with a phase-locked beat counter, and breakdowns are spotted when the bass falls 10 dB below its recent level.
 
-**Custom stages:** **Import a 3D stage or set** in the Custom stage panel, or drop files on the view, to bring in your own build. It takes GLB, glTF (self-contained), OBJ and MVR files. An import stays where you put it when you change venue, so any stage can go at any location: your festival build at Red Rocks, a club booth in a warehouse.
+**Design a stage in words or from photos:** the **Design with Claude** box at the top of the Custom stage panel builds a stage from a written brief ("hexagon deck 14 m wide with a 4 m thrust and a curved LED wall behind the booth") or from reference photos of a real stage (Add photos, or drop them on the box). Type a change to edit what is there ("make the wall 20% taller, add two side wings"). Put one real measurement in **Known size** when working from photos, since photos show shape but not scale.
+
+- Each result is a step in the stage's history: **Undo** and **Redo** (Cmd/Ctrl+Z, Shift+Cmd/Ctrl+Z) walk it.
+- **New stage** starts from a plain festival deck you can reshape in words, with the handles, or by hand.
+- The stage is a plain JSON description (open **Stage description (JSON)** to read or edit it, and **Download** to keep it as a `.stage.json` file). The format is documented at the top of `app/stagespec.js`; `examples/hex-runway.stage.json` shows most parts. It covers decks of any shape (rectangles, polygons, circles, trapezoids, rounded, ring segments, thrusts, or any outline), risers, stairs, DJ booths, LED walls (flat, bent, curved, arched or pointed tops) and LED floors, truss runs with fixtures, set pieces (panels, columns, arches, rings, pyramids, extruded shapes, and colonnades: rows or rings of stacked pieces such as hay bales or speaker stacks, with floor uplights at their feet), and audience areas, standing (filled to a safe density) or seated in rows of chairs with a centre aisle. Example stages are also in **Start from** in the Custom stage panel, and `#stage=hay-bale-ring` at the end of the address opens one. `examples/hay-bale-ring.stage.json` is a round wall of stacked bales that curls inside itself (one curved entrance), a standing dancefloor, and its own uplights, beams, fog, lasers and sparks, built from reference photos.
+- Truss fixtures in a description become the rig, like an MVR file's fixtures. The crowd keeps clear of the decks.
+- Claude is reached through the bridge (`npm start`), so your key stays on your computer: run `npm install` once (it adds the Anthropic SDK), then set `ANTHROPIC_API_KEY`, or sign in with `ant auth login`, before starting the bridge. The model defaults to Claude Opus 5.5; `STAGE_DESIGN_MODEL` changes it. In the online preview the box can't reach Claude, but the JSON editor, New stage and undo work.
+
+**Custom stages:** **Import a 3D stage or set** in the Custom stage panel, or drop files on the view, to bring in your own build. It takes GLB, glTF (self-contained), OBJ and MVR files, and stage descriptions (`.stage.json`). An import stays where you put it when you change venue, so any stage can go at any location: your festival build at Red Rocks, a club booth in a warehouse.
 
 - **Placing it:** select an import (in the list or by clicking it in the view) to get handles: **Move**, **Rotate** (turn only) and **Scale** (uniform). The keys G, R and S switch handles, and Esc deselects. You can also type exact positions in metres, turn it, scale it, put it on the ground (the lidar ground on venue packs) or centre it on the stage.
 - **Units:** they are guessed from the model's size, and **File units** fixes a model exported in centimetres, millimetres, inches or feet.
@@ -190,6 +198,9 @@ app/audio.js         audio analysis (bands, hits, tempo, builds and drops) and t
 app/importer.js      MVR scene reader (XML, matrices, fixtures) and GDTF fixture reader for imports
 app/rig.js           rig builder model: fixture types, DMX decode, arrays, auto patch, save and MVR export
 app/fx.js            laser patterns and performance effects: firing rules, DMX layouts, particles
+app/stagespec.js     stage descriptions: the JSON format, shapes, heights, layout geometry and edits
+bridge/design.js     Design with Claude: turns a brief or photos into a stage description (POST /api/design)
+examples/            sample stage descriptions
 bridge/server.js     HTTP page + WebSocket /dmx + UDP receivers, merges sources, pushes at ~44 Hz
 bridge/dmx.js        sACN and Art-Net parsers and builders, source merge
 bridge/ws.js         minimal WebSocket server
