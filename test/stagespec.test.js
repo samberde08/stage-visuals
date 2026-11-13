@@ -217,14 +217,17 @@ test('look: kept when readable, bad values dropped with a note', () => {
   assert.strictEqual(S.normalize({ parts: [] }).spec.look, undefined);
 });
 
-test('the hay bale ring example: one round wall, a standing floor, its own fog and lasers', () => {
+test('the hay bale ring example: one spiral wall, a standing floor, its own fog and lasers', () => {
   const ex = require('../examples/hay-bale-ring.stage.json');
   const { spec, warnings } = S.normalize(ex); const lay = S.layout(spec);
   assert.deepStrictEqual(warnings, []); assert.deepStrictEqual(lay.warnings, []);
-  // Every bale but the few that hook inward sits on the 10.5 m circle, so the ring stays round.
-  const r = lay.cylinders.filter((c) => c.id.startsWith('bale-ring') && c.id.endsWith('.0')).map((c) => Math.hypot(c.center[0], c.center[2] - 6));
-  assert.ok(r.filter((v) => Math.abs(v - 10.5) < 0.01).length >= 40);
-  assert.ok(r.filter((v) => v < 10.49 && v > 7.65).length <= 2, 'the hook into the curl is short');
+  // One spiral: each bale a little nearer the centre than the last, and where the wall overlaps itself the
+  // corridor between the turns stays walkable.
+  const c = lay.cylinders.filter((x) => x.id.startsWith('bale-ring') && x.id.endsWith('.0'));
+  const r = c.map((x) => Math.hypot(x.center[0], x.center[2] - 4.6));
+  assert.ok(r.every((v, i) => i === 0 || v < r[i - 1]), 'the radius only ever shrinks');
+  let gap = 99; for (let i = 0; i < c.length; i++) for (let j = i + 3; j < c.length; j++) gap = Math.min(gap, Math.hypot(c[i].center[0] - c[j].center[0], c[i].center[2] - c[j].center[2]));
+  assert.ok(gap > 2.8, `corridor ${gap}`);
   assert.ok(lay.audience.every((a) => a.standing));
   const kinds = new Set(lay.fixtures.map((f) => f.type));
   ['par', 'beam', 'fog', 'laser', 'spark'].forEach((k) => assert.ok(kinds.has(k), k));
